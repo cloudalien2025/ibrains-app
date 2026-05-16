@@ -110,11 +110,11 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("Step 2 - Optimize Listing with AI");
     expect(html).toContain("Step 3 - Review and Publish");
     expect(html).toContain("SKU: 30066-841");
-    expect(html).toContain("Hydration + spec diagnostics");
+    expect(html).toContain("Agentic Visibility Score");
     expect(html).toContain("View validation");
     expect(html).toContain("30066-841");
     expect(html).toContain("Inventory:</span> 9");
-    expect(html).toContain("Generate AI Improvements");
+    expect(html).toContain("Optimize Listing with AI");
     expect(html).toContain(
       "Optimize title, descriptions, bullets, and search &amp; browse attributes without leaving this page."
     );

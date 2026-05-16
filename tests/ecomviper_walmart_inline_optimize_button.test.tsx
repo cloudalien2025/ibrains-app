@@ -176,10 +176,10 @@ describe("Walmart inline optimize button workflow", () => {
     });
 
     expect(optimizeButton?.disabled).toBe(true);
-    expect(optimizeButton?.textContent).toContain("Generating AI Improvements...");
+    expect(optimizeButton?.textContent).toContain("Optimizing listing with AI...");
     const loadingState =
       container.querySelector('[data-testid="ecomviper-walmart-inline-ai-panel"]')?.textContent ?? "";
-    expect(loadingState).toContain("Generating AI Improvements...");
+    expect(loadingState).toContain("Optimizing listing with AI...");
 
     const responsePayload = {
       ok: true,
@@ -242,14 +242,6 @@ describe("Walmart inline optimize button workflow", () => {
     expect(formHtml).toContain("Optimized long listing description");
     expect(formHtml).toContain("Optimized bullet 1");
     expect(formHtml).toContain('value="Optimized Brand"');
-    const attributesTab = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Search & Browse"
-    ) as HTMLButtonElement | undefined;
-    expect(attributesTab).toBeDefined();
-    await act(async () => {
-      attributesTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await flush();
     expect(container.innerHTML).toContain("Plant-based");
     expect(container.textContent).toContain("Current:");
     expect(container.textContent).toContain("Projected:");
@@ -1039,15 +1031,6 @@ describe("Walmart inline optimize button workflow", () => {
     expect(openEditorButton).toBeDefined();
     await act(async () => {
       openEditorButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await flush();
-
-    const searchBrowseTab = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Search & Browse"
-    ) as HTMLButtonElement | undefined;
-    expect(searchBrowseTab).toBeDefined();
-    await act(async () => {
-      searchBrowseTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
