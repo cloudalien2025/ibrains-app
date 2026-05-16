@@ -296,6 +296,29 @@ interface WalmartGeneratedReferenceImage {
 }
 
 type InlineAiState = "idle" | "loading" | "success" | "error" | "missing_key";
+type WalmartFieldCopywritingIntent =
+  | "agentic_visibility"
+  | "search_selection"
+  | "marketplace_compliance"
+  | "clarity_conversion"
+  | "concise_title"
+  | "detailed_description"
+  | "bullet_improvement"
+  | "search_keywords";
+type WalmartFieldCopywritingStatus =
+  | "idle"
+  | "loading"
+  | "success"
+  | "error"
+  | "missing_key"
+  | "provider_unavailable";
+type LabelFactsUiStatus =
+  | "idle"
+  | "extracting"
+  | "extracted_ready"
+  | "no_images_available"
+  | "provider_unavailable"
+  | "failed";
 type WalmartPublishResultStatus =
   | "idle"
   | "ready_for_confirmation"
@@ -330,6 +353,18 @@ interface WalmartItemReportBackfillClientState {
     source: "walmart_item_report" | "fixture" | "backfill";
     level?: "info" | "warning" | "error";
   }>;
+}
+
+interface WalmartFieldCopywritingState {
+  status: WalmartFieldCopywritingStatus;
+  message: string | null;
+}
+
+interface WalmartFieldCopywritingAgentActionProps {
+  fieldKey: string;
+  disabled?: boolean;
+  state: WalmartFieldCopywritingState;
+  onClick: () => void;
 }
 
 type WalmartItemReportRouteResponse = {
@@ -406,6 +441,40 @@ const DEFAULT_INLINE_AI_APPLY_DIAGNOSTICS = {
   faqGenerationState: "final",
   disclaimerStatus: "unknown",
   finalDecision: "accepted",
+};
+
+const DEFAULT_FIELD_COPYWRITING_STATE: WalmartFieldCopywritingState = {
+  status: "idle",
+  message: null,
+};
+
+const SEARCH_BROWSE_COPYWRITING_ALLOWLIST = new Set([
+  "product_name",
+  "product_type",
+  "supplement_type",
+  "category",
+  "target_audience",
+  "suggested_use",
+  "directions_suggested_use",
+  "safety_warnings",
+  "support_areas",
+  "search_keywords",
+  "search_terms",
+  "keywords",
+  "browse_path",
+  "category_path",
+  "walmart_category",
+  "department",
+  "subcategory",
+]);
+
+const SEARCH_BROWSE_COPYWRITING_ALIASES: Record<string, string[]> = {
+  search_keywords: ["search_terms", "keywords"],
+  search_terms: ["search_keywords", "keywords"],
+  suggested_use: ["directions_suggested_use"],
+  directions_suggested_use: ["suggested_use"],
+  safety_warnings: ["warnings", "warning_text"],
+  support_areas: ["benefits"],
 };
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -1969,6 +2038,45 @@ function resolveFieldProvenanceRows(input: {
   ];
 }
 
+function normalizeCopywritingFieldTestId(fieldKey: string): string {
+  return fieldKey
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function WalmartFieldCopywritingAgentAction({
+  fieldKey,
+  disabled = false,
+  state,
+  onClick,
+}: WalmartFieldCopywritingAgentActionProps) {
+  const statusToneClass =
+    state.status === "success"
+      ? "text-emerald-700"
+      : state.status === "error" ||
+          state.status === "missing_key" ||
+          state.status === "provider_unavailable"
+        ? "text-amber-700"
+        : "text-[#475569]";
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled || state.status === "loading"}
+        className="rounded border border-[#2563EB] bg-white px-2 py-1 text-xs font-medium text-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-50"
+        data-testid={`ecomviper-walmart-copywriting-agent-${normalizeCopywritingFieldTestId(fieldKey)}`}
+      >
+        {state.status === "loading" ? "Optimizing..." : "Copywriting Agent"}
+      </button>
+      {state.message ? <p className={`text-xs ${statusToneClass}`}>{state.message}</p> : null}
+    </div>
+  );
+}
+
 export default function ProductEditorClient({
   product,
   stagedDrafts,
@@ -2078,7 +2186,11 @@ export default function ProductEditorClient({
   const [productImageGenerationError, setProductImageGenerationError] =
     useState<GenerateProductImagesResponse["error"] | null>(null);
   const [extractingLabelFacts, setExtractingLabelFacts] = useState(false);
+  const [labelFactsUiStatus, setLabelFactsUiStatus] = useState<LabelFactsUiStatus>("idle");
   const [labelFactsMessage, setLabelFactsMessage] = useState<string | null>(null);
+  const [fieldCopywritingStates, setFieldCopywritingStates] = useState<
+    Record<string, WalmartFieldCopywritingState>
+  >({});
   const [focusedGeneratedAssetId, setFocusedGeneratedAssetId] = useState<string | null>(() => {
     const firstPending = initialForm.generatedMediaAssets.find((asset) => !asset.approved);
     return firstPending?.id ?? initialForm.generatedMediaAssets[0]?.id ?? null;
@@ -2542,6 +2654,294 @@ export default function ProductEditorClient({
     draftImageFactsMessage ||
     inlineAiDiagnostics.imageFactsMessage ||
     "Images are available, but label text has not been extracted yet.";
+  const hasAnyImagesForLabelExtraction = Boolean(
+    (preview.primaryImageUrl ?? preview.imageUrl ?? "").trim() ||
+      (preview.galleryImageUrls?.length ?? 0) > 0
+  );
+  const topLabelFactsStatusText =
+    labelFactsUiStatus === "extracting"
+      ? "extracting"
+      : labelFactsUiStatus === "extracted_ready" || resolvedImageFactsStatus === "extracted"
+        ? "extracted facts ready"
+        : labelFactsUiStatus === "no_images_available" || !hasAnyImagesForLabelExtraction
+          ? "no images available"
+          : labelFactsUiStatus === "provider_unavailable" || resolvedImageFactsStatus === "unavailable"
+            ? "provider unavailable"
+            : labelFactsUiStatus === "failed"
+              ? "failed"
+              : "ready";
+
+  function fieldCopyStateFor(fieldKey: string): WalmartFieldCopywritingState {
+    return fieldCopywritingStates[fieldKey] ?? DEFAULT_FIELD_COPYWRITING_STATE;
+  }
+
+  function updateFieldCopyState(
+    fieldKey: string,
+    next: WalmartFieldCopywritingState
+  ) {
+    setFieldCopywritingStates((current) => ({
+      ...current,
+      [fieldKey]: next,
+    }));
+  }
+
+  function formatFieldCopyIntentLabel(intent: WalmartFieldCopywritingIntent): string {
+    if (intent === "agentic_visibility") return "Agentic Visibility";
+    if (intent === "search_selection") return "Search Selection";
+    if (intent === "marketplace_compliance") return "Marketplace Compliance";
+    if (intent === "clarity_conversion") return "Clarity & Conversion";
+    if (intent === "concise_title") return "Title Clarity";
+    if (intent === "detailed_description") return "Description Depth";
+    if (intent === "bullet_improvement") return "Bullet Clarity";
+    return "Search Keywords";
+  }
+
+  function copywritingIntentForSearchBrowseField(
+    key: string
+  ): WalmartFieldCopywritingIntent {
+    if (key === "search_keywords" || key === "search_terms" || key === "keywords") {
+      return "search_keywords";
+    }
+    if (key === "safety_warnings") return "marketplace_compliance";
+    if (key === "suggested_use" || key === "directions_suggested_use") {
+      return "clarity_conversion";
+    }
+    if (key === "support_areas") return "agentic_visibility";
+    return "search_selection";
+  }
+
+  function isSearchBrowseCopywritingSupported(
+    field: WalmartSearchBrowseFieldDefinition
+  ): boolean {
+    if (field.type === "number-unit") return false;
+    if (field.type === "select") return false;
+    if (SEARCH_BROWSE_COPYWRITING_ALLOWLIST.has(field.key)) return true;
+    return field.type === "textarea";
+  }
+
+  function toCopyCandidateText(value: unknown): string {
+    if (typeof value === "string") return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+    if (Array.isArray(value)) {
+      return value
+        .map((entry) => toCopyCandidateText(entry))
+        .filter(Boolean)
+        .join(", ")
+        .trim();
+    }
+    if (value && typeof value === "object") {
+      const row = value as Record<string, unknown>;
+      return (
+        toCopyCandidateText(row.value) ||
+        toCopyCandidateText(row.label) ||
+        toCopyCandidateText(row.text) ||
+        toCopyCandidateText(row.name)
+      );
+    }
+    return "";
+  }
+
+  function resolveSearchBrowseCandidateFromSuggestion(input: {
+    fieldKey: string;
+    suggestion: WalmartAiSuggestion;
+  }): string {
+    const searchBrowse = input.suggestion.searchBrowseAttributes ?? {};
+    const suggestedAttributes = input.suggestion.suggestedAttributes ?? {};
+    const aliasKeys = [
+      input.fieldKey,
+      ...(SEARCH_BROWSE_COPYWRITING_ALIASES[input.fieldKey] ?? []),
+    ];
+    for (const alias of aliasKeys) {
+      const candidate = pickMeaningfulAiText(searchBrowse[alias] ?? suggestedAttributes[alias]);
+      if (candidate) return candidate;
+    }
+
+    if (input.fieldKey === "product_name") {
+      return (
+        pickMeaningfulAiText(input.suggestion.entitySet?.productName) ??
+        pickMeaningfulAiText(input.suggestion.suggestedTitle) ??
+        ""
+      );
+    }
+
+    if (input.fieldKey === "support_areas") {
+      const fromEntitySet = (input.suggestion.entitySet?.supportedBenefits ?? [])
+        .map((entry) => pickMeaningfulAiText(entry) ?? "")
+        .filter(Boolean);
+      if (fromEntitySet.length > 0) return unique(fromEntitySet).join(", ");
+    }
+
+    if (input.fieldKey === "search_keywords" || input.fieldKey === "search_terms") {
+      const fromSuggestion = unique([
+        toCopyCandidateText(input.suggestion.searchBrowseAttributes?.search_keywords),
+        toCopyCandidateText(input.suggestion.searchBrowseAttributes?.search_terms),
+        ...(input.suggestion.entitySet?.supportedBenefits ?? []),
+        ...(input.suggestion.entitySet?.keyIngredients ?? []),
+      ]).filter((entry) => !isLowConfidenceAiFieldValue(entry));
+      if (fromSuggestion.length > 0) {
+        return fromSuggestion.join(", ");
+      }
+    }
+
+    return "";
+  }
+
+  function cloneCompliancePayload() {
+    return {
+      ...preview,
+      bulletPoints: [...(preview.bulletPoints ?? [])],
+      searchBrowseAttributes: {
+        ...(preview.searchBrowseAttributes ?? {}),
+      },
+      attributes: {
+        ...(preview.attributes ?? {}),
+      },
+      mediaRecommendations: [...(preview.mediaRecommendations ?? [])],
+    } as Record<string, unknown>;
+  }
+
+  function buildCompliancePayloadForTopField(fieldKey: string, value: string) {
+    const next = cloneCompliancePayload();
+    if (fieldKey === "title") next.title = value;
+    if (fieldKey === "shortDescription") next.shortDescription = value;
+    if (fieldKey === "longDescription") next.longDescription = value;
+    if (fieldKey === "bulletPoints") {
+      next.bulletPoints = value
+        .split("\n")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
+    if (fieldKey === "mediaRecommendations") {
+      next.mediaRecommendations = value
+        .split("\n")
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
+    if (fieldKey === "altText") next.altText = value;
+    return next;
+  }
+
+  function buildCompliancePayloadForSearchBrowseField(fieldKey: string, value: string) {
+    const next = cloneCompliancePayload();
+    const nextSearchBrowse = {
+      ...(preview.searchBrowseAttributes ?? {}),
+      [fieldKey]: value,
+    };
+    syncAliasGroups({ attributes: nextSearchBrowse });
+    next.searchBrowseAttributes = nextSearchBrowse;
+    next.attributes = mergeAttributesWithSearchBrowse({
+      baseAttributes:
+        (next.attributes as Record<string, string>) ??
+        (preview.attributes ?? {}),
+      searchBrowseAttributes: nextSearchBrowse,
+    });
+    return next;
+  }
+
+  async function runFieldCopywritingAgent(input: {
+    stateKey: string;
+    fieldLabel: string;
+    intent: WalmartFieldCopywritingIntent;
+    maxLength?: number;
+    currentValue: string;
+    resolveCandidate: (suggestion: WalmartAiSuggestion) => string;
+    applyCandidate: (candidate: string) => void;
+    buildCompliancePayload: (candidate: string) => Record<string, unknown>;
+  }) {
+    if (!aiProviderConnected) {
+      updateFieldCopyState(input.stateKey, {
+        status: "missing_key",
+        message:
+          "Provider unavailable. Connect AI provider or use full Optimize with AI when available.",
+      });
+      return;
+    }
+
+    updateFieldCopyState(input.stateKey, {
+      status: "loading",
+      message: `Optimizing ${input.fieldLabel.toLowerCase()}...`,
+    });
+
+    try {
+      const response = await fetch("/api/ecomviper/walmart/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku: product.sku,
+          draftPayload: preview,
+          fieldKey: input.stateKey,
+          fieldLabel: input.fieldLabel,
+          fieldIntent: input.intent,
+          maxLength: input.maxLength ?? null,
+          complianceMode: "supplement_safe",
+          sourceFacts: {
+            imageFactsStatus: resolvedImageFactsStatus,
+            imageFactsMessage: resolvedImageFactsMessage,
+          },
+        }),
+      });
+
+      const payload =
+        (await response.json().catch(() => null)) as GenerateSuggestionResponse | null;
+      if (!response.ok || !payload?.suggestion) {
+        const code = payload?.error?.code?.trim().toUpperCase() ?? "";
+        const errorMessage = payload?.error?.message?.trim() ?? "";
+        const missingProvider =
+          code === "OPENAI_NOT_CONNECTED" || /openai api key/i.test(errorMessage);
+        updateFieldCopyState(input.stateKey, {
+          status: missingProvider ? "provider_unavailable" : "error",
+          message: missingProvider
+            ? "Provider unavailable. Connect AI provider or use full Optimize with AI when available."
+            : "Could not optimize this field.",
+        });
+        return;
+      }
+
+      const rawCandidate = input.resolveCandidate(payload.suggestion);
+      let candidate = normalizeWalmartTextValue(rawCandidate);
+      if (input.maxLength && candidate.length > input.maxLength) {
+        candidate = candidate.slice(0, input.maxLength).trim();
+      }
+      if (!candidate || isLowConfidenceAiFieldValue(candidate)) {
+        updateFieldCopyState(input.stateKey, {
+          status: "error",
+          message: "Could not optimize this field.",
+        });
+        return;
+      }
+
+      const beforeViolations = new Set(evaluateWalmartListingCompliance(preview).violations);
+      const afterPayload = input.buildCompliancePayload(candidate);
+      const afterViolations = evaluateWalmartListingCompliance(afterPayload).violations;
+      const newViolations = afterViolations.filter((entry) => !beforeViolations.has(entry));
+      if (newViolations.length > 0) {
+        updateFieldCopyState(input.stateKey, {
+          status: "error",
+          message: "Could not optimize this field.",
+        });
+        return;
+      }
+
+      if (candidate.trim() === input.currentValue.trim()) {
+        updateFieldCopyState(input.stateKey, {
+          status: "success",
+          message: `${input.fieldLabel} already optimized.`,
+        });
+        return;
+      }
+
+      input.applyCandidate(candidate);
+      updateFieldCopyState(input.stateKey, {
+        status: "success",
+        message: `${input.fieldLabel} optimized for ${formatFieldCopyIntentLabel(input.intent)}.`,
+      });
+    } catch {
+      updateFieldCopyState(input.stateKey, {
+        status: "error",
+        message: "Could not optimize this field.",
+      });
+    }
+  }
 
   function patchForm(patch: Partial<ProductEditorFormState>) {
     setForm((current) => ({ ...current, ...patch }));
@@ -3461,8 +3861,15 @@ export default function ProductEditorClient({
   }
 
   async function handleExtractLabelFacts() {
+    if (!hasAnyImagesForLabelExtraction) {
+      setLabelFactsUiStatus("no_images_available");
+      setLabelFactsMessage("No images available for label fact extraction.");
+      return;
+    }
+
     try {
       setExtractingLabelFacts(true);
+      setLabelFactsUiStatus("extracting");
       setLabelFactsMessage("Extracting label facts from images...");
 
       const response = await fetch("/api/ecomviper/walmart/ai/images/extract-facts", {
@@ -3476,6 +3883,13 @@ export default function ProductEditorClient({
 
       const payload = (await response.json().catch(() => null)) as ExtractLabelFactsResponse | null;
       if (!response.ok || !payload?.ok) {
+        const errorCode = payload?.error?.code?.trim().toUpperCase() ?? "";
+        const errorMessage = payload?.error?.message?.trim() ?? "";
+        const providerUnavailable =
+          errorCode === "OPENAI_NOT_CONNECTED" ||
+          /openai api key/i.test(errorMessage) ||
+          /provider unavailable/i.test(errorMessage);
+        setLabelFactsUiStatus(providerUnavailable ? "provider_unavailable" : "failed");
         setLabelFactsMessage(
           payload?.error?.message?.trim() || "Label extraction failed. Try again."
         );
@@ -3512,8 +3926,17 @@ export default function ProductEditorClient({
       const detail =
         payload.extraction?.message?.trim() ||
         "Label extraction completed.";
+      const normalizedStatus = status.toLowerCase();
+      if (normalizedStatus.includes("extract") || normalizedStatus === "available") {
+        setLabelFactsUiStatus("extracted_ready");
+      } else if (normalizedStatus === "unavailable") {
+        setLabelFactsUiStatus("provider_unavailable");
+      } else {
+        setLabelFactsUiStatus("failed");
+      }
       setLabelFactsMessage(`Label extraction status: ${status}. ${detail}`);
     } catch {
+      setLabelFactsUiStatus("failed");
       setLabelFactsMessage("Label extraction failed. Try again.");
     } finally {
       setExtractingLabelFacts(false);
@@ -5012,6 +5435,42 @@ export default function ProductEditorClient({
             </ul>
           </article>
         </div>
+        <article
+          className="mt-4 rounded-xl border border-[#93C5FD] bg-[#EFF6FF] p-3"
+          data-testid="ecomviper-walmart-top-action-area"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.12em] text-[#1D4ED8]">
+                Primary Enrichment Action
+              </p>
+              <p className="mt-1 text-sm text-[#1E293B]">
+                Extract label-backed facts from current product images before copy optimization.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleExtractLabelFacts}
+              disabled={extractingLabelFacts}
+              className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+              data-testid="ecomviper-walmart-extract-label-facts-top-button"
+              data-color-intent="primary-blue"
+            >
+              {extractingLabelFacts
+                ? "Extracting Label Facts From Images..."
+                : "Extract Label Facts From Images"}
+            </button>
+          </div>
+          <p
+            className="mt-2 text-xs font-medium text-[#1E3A8A]"
+            data-testid="ecomviper-walmart-extract-label-facts-status"
+          >
+            {topLabelFactsStatusText}
+          </p>
+          {labelFactsMessage ? (
+            <p className="mt-1 text-xs text-[#334155]">{labelFactsMessage}</p>
+          ) : null}
+        </article>
       </section>
 
       <section className="space-y-4" data-testid="ecomviper-walmart-single-docket">
@@ -5080,9 +5539,27 @@ export default function ProductEditorClient({
                   </h3>
                   <label className="text-sm text-[#334155] md:col-span-2">
                     <span className="flex items-center justify-between gap-2">
-                      <span>Title</span>
+                      <span>Product Title</span>
                       <span className="text-xs text-[#64748B]">{form.title.length}/200</span>
                     </span>
+                    <WalmartFieldCopywritingAgentAction
+                      fieldKey="title"
+                      state={fieldCopyStateFor("title")}
+                      onClick={() =>
+                        void runFieldCopywritingAgent({
+                          stateKey: "title",
+                          fieldLabel: "Title",
+                          intent: "concise_title",
+                          maxLength: 200,
+                          currentValue: form.title,
+                          resolveCandidate: (suggestion) =>
+                            pickMeaningfulAiText(suggestion.suggestedTitle) ?? "",
+                          applyCandidate: (candidate) => patchForm({ title: candidate }),
+                          buildCompliancePayload: (candidate) =>
+                            buildCompliancePayloadForTopField("title", candidate),
+                        })
+                      }
+                    />
                     <input
                       value={form.title}
                       onChange={(event) => patchForm({ title: event.target.value })}
@@ -5094,6 +5571,27 @@ export default function ProductEditorClient({
                       <span>Short description</span>
                       <span className="text-xs text-[#64748B]">{form.shortDescription.length}/500</span>
                     </span>
+                    <WalmartFieldCopywritingAgentAction
+                      fieldKey="short_description"
+                      state={fieldCopyStateFor("short_description")}
+                      onClick={() =>
+                        void runFieldCopywritingAgent({
+                          stateKey: "short_description",
+                          fieldLabel: "Short Description",
+                          intent: "clarity_conversion",
+                          maxLength: 500,
+                          currentValue: form.shortDescription,
+                          resolveCandidate: (suggestion) =>
+                            pickMeaningfulAiText(suggestion.suggestedShortDescription) ??
+                            pickMeaningfulAiText(suggestion.suggestedDescription) ??
+                            "",
+                          applyCandidate: (candidate) =>
+                            patchForm({ shortDescription: candidate }),
+                          buildCompliancePayload: (candidate) =>
+                            buildCompliancePayloadForTopField("shortDescription", candidate),
+                        })
+                      }
+                    />
                     <textarea
                       value={form.shortDescription}
                       onChange={(event) => patchForm({ shortDescription: event.target.value })}
@@ -5105,6 +5603,25 @@ export default function ProductEditorClient({
                       <span>Long description</span>
                       <span className="text-xs text-[#64748B]">{form.longDescription.length}/4000</span>
                     </span>
+                    <WalmartFieldCopywritingAgentAction
+                      fieldKey="long_description"
+                      state={fieldCopyStateFor("long_description")}
+                      onClick={() =>
+                        void runFieldCopywritingAgent({
+                          stateKey: "long_description",
+                          fieldLabel: "Long Description",
+                          intent: "detailed_description",
+                          maxLength: 4000,
+                          currentValue: form.longDescription,
+                          resolveCandidate: (suggestion) =>
+                            pickMeaningfulAiText(suggestion.suggestedDescription) ?? "",
+                          applyCandidate: (candidate) =>
+                            patchForm({ longDescription: candidate }),
+                          buildCompliancePayload: (candidate) =>
+                            buildCompliancePayloadForTopField("longDescription", candidate),
+                        })
+                      }
+                    />
                     <textarea
                       value={form.longDescription}
                       onChange={(event) => patchForm({ longDescription: event.target.value })}
@@ -5113,6 +5630,27 @@ export default function ProductEditorClient({
                   </label>
                   <label className="text-sm text-[#334155] md:col-span-2">
                     Bullet / key features (one per line)
+                    <WalmartFieldCopywritingAgentAction
+                      fieldKey="bullet_points"
+                      state={fieldCopyStateFor("bullet_points")}
+                      onClick={() =>
+                        void runFieldCopywritingAgent({
+                          stateKey: "bullet_points",
+                          fieldLabel: "Bullet Points",
+                          intent: "bullet_improvement",
+                          currentValue: form.bulletPoints,
+                          resolveCandidate: (suggestion) =>
+                            suggestion.suggestedBullets
+                              .map((entry) => pickMeaningfulAiText(entry) ?? "")
+                              .filter(Boolean)
+                              .slice(0, 10)
+                              .join("\n"),
+                          applyCandidate: (candidate) => patchForm({ bulletPoints: candidate }),
+                          buildCompliancePayload: (candidate) =>
+                            buildCompliancePayloadForTopField("bulletPoints", candidate),
+                        })
+                      }
+                    />
                     <textarea
                       value={form.bulletPoints}
                       onChange={(event) => patchForm({ bulletPoints: event.target.value })}
@@ -5829,22 +6367,12 @@ export default function ProductEditorClient({
                         ? "Image fact extraction is unavailable."
                         : "Image fact extraction is pending review."}
                     </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleExtractLabelFacts}
-                        disabled={extractingLabelFacts}
-                        className="rounded border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#0F172A] disabled:opacity-60"
-                        data-testid="ecomviper-walmart-extract-label-facts-button"
-                      >
-                        {extractingLabelFacts
-                          ? "Extracting label facts..."
-                          : "Extract label facts from images"}
-                      </button>
-                      {labelFactsMessage ? (
-                        <p className="text-xs text-[#475569]">{labelFactsMessage}</p>
-                      ) : null}
-                    </div>
+                    <p className="mt-2 text-xs text-[#475569]">
+                      Use the top action <span className="font-medium text-[#0F172A]">Extract Label Facts From Images</span> to refresh image-derived facts.
+                    </p>
+                    <p className="mt-1 text-xs text-[#475569]">
+                      Current extraction state: {topLabelFactsStatusText}.
+                    </p>
                   </div>
                   {(
                     [
@@ -5866,6 +6394,16 @@ export default function ProductEditorClient({
                         <div className="mt-2 grid gap-3 md:grid-cols-2">
                           {fields.map((field) => {
                             const value = form.searchBrowseAttributes[field.key] ?? "";
+                            const searchFieldStateKey = `search_browse_${field.key}`;
+                            const copywritingEnabled = isSearchBrowseCopywritingSupported(field);
+                            const copyFieldMaxLength =
+                              field.key === "search_keywords" || field.key === "search_terms"
+                                ? 500
+                                : field.key === "product_name"
+                                  ? 200
+                                  : field.type === "textarea"
+                                    ? 2000
+                                    : 400;
                             const invalidNumberUnit =
                               field.type === "number-unit" && !isValidNumberUnitValue(value);
                             const commonClass = `mt-1 w-full rounded-lg border px-3 py-2 text-sm ${
@@ -5878,6 +6416,33 @@ export default function ProductEditorClient({
                               return (
                                 <label key={field.key} className="text-sm text-[#334155] md:col-span-2">
                                   {field.label}
+                                  {copywritingEnabled ? (
+                                    <WalmartFieldCopywritingAgentAction
+                                      fieldKey={searchFieldStateKey}
+                                      state={fieldCopyStateFor(searchFieldStateKey)}
+                                      onClick={() =>
+                                        void runFieldCopywritingAgent({
+                                          stateKey: searchFieldStateKey,
+                                          fieldLabel: field.label,
+                                          intent: copywritingIntentForSearchBrowseField(field.key),
+                                          maxLength: copyFieldMaxLength,
+                                          currentValue: value,
+                                          resolveCandidate: (suggestion) =>
+                                            resolveSearchBrowseCandidateFromSuggestion({
+                                              fieldKey: field.key,
+                                              suggestion,
+                                            }),
+                                          applyCandidate: (candidate) =>
+                                            patchSearchBrowseField(field.key, candidate),
+                                          buildCompliancePayload: (candidate) =>
+                                            buildCompliancePayloadForSearchBrowseField(
+                                              field.key,
+                                              candidate
+                                            ),
+                                        })
+                                      }
+                                    />
+                                  ) : null}
                                   <textarea
                                     value={value}
                                     onChange={(event) =>
@@ -5926,6 +6491,33 @@ export default function ProductEditorClient({
                             return (
                               <label key={field.key} className="text-sm text-[#334155]">
                                 {field.label}
+                                {copywritingEnabled ? (
+                                  <WalmartFieldCopywritingAgentAction
+                                    fieldKey={searchFieldStateKey}
+                                    state={fieldCopyStateFor(searchFieldStateKey)}
+                                    onClick={() =>
+                                      void runFieldCopywritingAgent({
+                                        stateKey: searchFieldStateKey,
+                                        fieldLabel: field.label,
+                                        intent: copywritingIntentForSearchBrowseField(field.key),
+                                        maxLength: copyFieldMaxLength,
+                                        currentValue: value,
+                                        resolveCandidate: (suggestion) =>
+                                          resolveSearchBrowseCandidateFromSuggestion({
+                                            fieldKey: field.key,
+                                            suggestion,
+                                          }),
+                                        applyCandidate: (candidate) =>
+                                          patchSearchBrowseField(field.key, candidate),
+                                        buildCompliancePayload: (candidate) =>
+                                          buildCompliancePayloadForSearchBrowseField(
+                                            field.key,
+                                            candidate
+                                          ),
+                                      })
+                                    }
+                                  />
+                                ) : null}
                                 <input
                                   value={value}
                                   onChange={(event) =>
@@ -5952,6 +6544,29 @@ export default function ProductEditorClient({
 
                   <label className="text-sm text-[#334155] md:col-span-2">
                     Media recommendations (staged notes)
+                    <WalmartFieldCopywritingAgentAction
+                      fieldKey="media_recommendations"
+                      state={fieldCopyStateFor("media_recommendations")}
+                      onClick={() =>
+                        void runFieldCopywritingAgent({
+                          stateKey: "media_recommendations",
+                          fieldLabel: "Media Recommendations",
+                          intent: "clarity_conversion",
+                          maxLength: 2000,
+                          currentValue: form.mediaRecommendations,
+                          resolveCandidate: (suggestion) =>
+                            (suggestion.mediaRecommendations ?? [])
+                              .map((entry) => pickMeaningfulAiText(entry) ?? "")
+                              .filter(Boolean)
+                              .slice(0, 10)
+                              .join("\n"),
+                          applyCandidate: (candidate) =>
+                            patchForm({ mediaRecommendations: candidate }),
+                          buildCompliancePayload: (candidate) =>
+                            buildCompliancePayloadForTopField("mediaRecommendations", candidate),
+                        })
+                      }
+                    />
                     <textarea
                       value={form.mediaRecommendations}
                       onChange={(event) => patchForm({ mediaRecommendations: event.target.value })}
@@ -5961,6 +6576,24 @@ export default function ProductEditorClient({
                   </label>
                   <label className="text-sm text-[#334155] md:col-span-2">
                     Alt text guidance
+                    <WalmartFieldCopywritingAgentAction
+                      fieldKey="alt_text"
+                      state={fieldCopyStateFor("alt_text")}
+                      onClick={() =>
+                        void runFieldCopywritingAgent({
+                          stateKey: "alt_text",
+                          fieldLabel: "Alt Text",
+                          intent: "search_selection",
+                          maxLength: 500,
+                          currentValue: form.altText,
+                          resolveCandidate: (suggestion) =>
+                            pickMeaningfulAiText(suggestion.altText) ?? "",
+                          applyCandidate: (candidate) => patchForm({ altText: candidate }),
+                          buildCompliancePayload: (candidate) =>
+                            buildCompliancePayloadForTopField("altText", candidate),
+                        })
+                      }
+                    />
                     <input
                       value={form.altText}
                       onChange={(event) => patchForm({ altText: event.target.value })}
