@@ -8,6 +8,10 @@ import {
   detectKnownStaleDemoValue,
   sanitizeCustomerFacingText,
 } from "@/lib/ecomviper/walmart/walmart-truth-guard";
+import {
+  extractExplicitWalmartFlavorFromText,
+  normalizeWalmartFlavor,
+} from "@/lib/ecomviper/walmart/walmart-flavor-normalizer";
 
 export type ProductFactSource =
   | "label_image"
@@ -193,15 +197,7 @@ function normalizeFactObject(value: unknown): Record<string, string> {
 }
 
 function normalizeFlavor(value: string): string {
-  const cleaned = value
-    .replace(/natural\s+flavor\s*\(?/i, "")
-    .replace(/[()]/g, " ")
-    .replace(/flavor/gi, " ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-
-  if (!cleaned) return "";
-  return titleCase(cleaned);
+  return normalizeWalmartFlavor(value) ?? "";
 }
 
 function normalizeForm(value: string): string {
@@ -280,20 +276,7 @@ function findFirstObject(record: Record<string, unknown>, keys: string[]): Recor
 }
 
 function inferFlavorFromText(text: string): string {
-  const normalized = text.trim();
-  if (!normalized) return "";
-
-  const naturalFlavor = normalized.match(/natural\s+flavor\s*\(([^)]+)\)/i);
-  if (naturalFlavor?.[1]) {
-    return normalizeFlavor(naturalFlavor[1]);
-  }
-
-  const explicitFlavor = normalized.match(/\b(grape|berry|mixed berry|orange|lemon|cherry|strawberry|watermelon|apple)\b/i);
-  if (explicitFlavor?.[1]) {
-    return normalizeFlavor(explicitFlavor[1]);
-  }
-
-  return "";
+  return extractExplicitWalmartFlavorFromText(text) ?? "";
 }
 
 function inferFormFromText(text: string): string {

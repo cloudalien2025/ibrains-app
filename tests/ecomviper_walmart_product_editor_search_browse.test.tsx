@@ -125,6 +125,7 @@ describe("Walmart Search & Browse editor hydration", () => {
     expect(container.textContent).toContain("Image-derived facts status: unknown");
     expect(container.textContent).toContain("Field provenance");
     expect(container.innerHTML).toContain("Joint comfort, mobility");
+    expect(container.innerHTML).toContain('value="Unflavored"');
     expect(
       container.querySelector('[data-testid="ecomviper-walmart-search-browse-section"]')
     ).not.toBeNull();

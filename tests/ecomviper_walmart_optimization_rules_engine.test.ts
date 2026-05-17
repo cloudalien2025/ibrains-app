@@ -77,6 +77,10 @@ describe("Walmart docket optimization rules engine", () => {
     expect(result.output.content.bullets.length).toBeGreaterThanOrEqual(5);
     expect(result.output.content.bullets.length).toBeLessThanOrEqual(7);
     expect(result.output.validation.blockers.join(" ").toLowerCase()).not.toContain("cure");
+    expect(result.output.searchBrowse.flavor).toBe("Unflavored");
+    expect(result.output.content.shortDescription.toLowerCase()).not.toContain("supports supports");
+    expect(result.output.content.bullets.join(" ").toLowerCase()).not.toContain("designed to supports");
+    expect(result.output.content.productTitle.toLowerCase()).not.toContain("supports relaxation support");
   });
 
   it("keeps price/inventory unchanged and keeps GTIN/UPC lookup-only guidance", () => {
@@ -104,11 +108,49 @@ describe("Walmart docket optimization rules engine", () => {
     const constraints = contract.constraints as Record<string, unknown>;
     expect(constraints.titleMaxChars).toBe(150);
     expect(constraints.noDiseaseClaims).toBe(true);
+    expect(constraints.missingFlavorDefaultsToUnflavored).toBe(true);
+    expect(constraints.noFlavorInferenceFromColorIngredientsOrCompetitors).toBe(true);
 
     const requiredOutputShape = contract.requiredOutputShape as Record<string, unknown>;
     expect(requiredOutputShape).toHaveProperty("content");
     expect(requiredOutputShape).toHaveProperty("media");
     expect(requiredOutputShape).toHaveProperty("pricingInventory");
     expect(requiredOutputShape).toHaveProperty("searchBrowse");
+    expect(requiredOutputShape).toHaveProperty("factPack");
+  });
+
+  it("keeps product identity first for ROC817-like supplement facts with minor minerals", () => {
+    const result = applyWalmartDocketOptimizationRules({
+      product: createProduct({
+        title: "OPA Nutrition Sleep Aid Formula 60 Capsules",
+        normalizedPayload: {
+          labelFacts: {
+            servingSize: "2 capsules",
+            servingsPerContainer: "30",
+            count: "60 capsules",
+            supplementFacts: {
+              Calcium: "17 mg",
+              "Vitamin B6": "1.8 mg",
+              Magnesium: "13 mg",
+              Melatonin: "10 mg",
+              "Sleep Formula Proprietary Blend": "905 mg",
+            },
+            activeIngredients: [
+              "Calcium 17 mg",
+              "Vitamin B6 1.8 mg",
+              "Magnesium 13 mg",
+              "Melatonin 10 mg",
+              "L-Tryptophan",
+            ],
+          },
+        },
+      }),
+    });
+
+    expect(result.output.content.productTitle.startsWith("OPA")).toBe(true);
+    expect(result.output.content.productTitle.toLowerCase().startsWith("calcium")).toBe(false);
+    expect(result.output.content.longDescription.startsWith(result.output.content.productTitle)).toBe(
+      true
+    );
   });
 });

@@ -7,6 +7,11 @@ import {
   normalizeVerifiedAllergenFreeStatements,
   type WalmartOptimizationFactPack,
 } from "@/lib/ecomviper/walmart/walmart-label-facts";
+import {
+  detectWalmartFlavorClaims,
+  resolveWalmartFlavorFromFacts,
+  type WalmartFlavorResolution,
+} from "@/lib/ecomviper/walmart/walmart-flavor-normalizer";
 
 const TITLE_MAX = 150;
 const TITLE_TARGET_MAX = 110;
@@ -44,6 +49,9 @@ const SUPPORT_AREA_FALLBACK = [
   "sleep quality support",
   "daily wellness support",
 ];
+
+const MINOR_MINERAL_PATTERN = /\b(calcium|vitamin\s*b6|magnesium)\b/i;
+const RAW_OCR_BULLET_PATTERN = /(^|\b)(%dv|\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*(mg|mcg|g|iu)\s*\d*%?)($|\b)/i;
 
 export interface WalmartFieldOptimizationRule {
   fieldKey:
@@ -183,6 +191,9 @@ export interface WalmartDocketOptimizationOutput {
     productType: string;
     supplementType: string;
     form: string;
+    flavor: string;
+    flavorSource: string;
+    flavorConfidence: "explicit" | "default_unflavored" | "unknown";
     count: string;
     countPerPack?: string;
     servingSize: string;
@@ -209,6 +220,7 @@ export interface WalmartDocketOptimizationOutput {
   validation: {
     warnings: string[];
     blockers: string[];
+    removedClaims: string[];
   };
 }
 
@@ -340,6 +352,194 @@ function normalizeAudience(value: string): string {
   return sentenceCase(text);
 }
 
+function prioritizeIngredientsForCopy(values: string[]): string[] {
+  const scored = values
+    .map((entry) => normalizeWhitespace(entry))
+    .filter(Boolean)
+    .map((entry, index) => {
+      const lowered = entry.toLowerCase();
+      let score = 10;
+      if (/\bmelatonin\b/.test(lowered)) score += 120;
+      if (/\bproprietary blend\b/.test(lowered)) score += 100;
+      if (/\b(tryptophan|chamomile|lemon balm|passion flower|gaba|theanine|ashwagandha|hops|skullcap)\b/.test(lowered)) {
+        score += 35;
+      }
+      if (/\b(calcium|vitamin\s*b6|magnesium)\b/.test(lowered)) score -= 40;
+      score -= index;
+      return { entry, score };
+    })
+    .sort((left, right) => right.score - left.score)
+    .map((entry) => entry.entry);
+  return unique(scored);
+}
+
+function toSupportVerbPhrase(area: string): string {
+  const normalized = normalizeWhitespace(area).replace(/\bsupport\b/gi, "").trim();
+  if (!normalized) return "support daily wellness";
+  return `support ${normalized.toLowerCase()}`;
+}
+
+function countWordOccurrences(value: string, needle: RegExp): number {
+  const matches = value.match(needle);
+  return matches ? matches.length : 0;
+}
+
+export function cleanWalmartOptimizedCopy(
+  text: string,
+  context: { field: "title" | "shortDescription" | "longDescription" | "bullet" }
+): string {
+  let cleaned = normalizeWhitespace(text);
+  if (!cleaned) return "";
+
+  cleaned = cleaned
+    .replace(/\bdesigned to supports\b/gi, "designed to support")
+    .replace(/\bsupports supports\b/gi, "supports")
+    .replace(/\bsupports ([a-z][a-z\s-]{1,40}) support\b/gi, "supports $1")
+    .replace(/\bcapsules? format\b/gi, "capsule form")
+    .replace(/\b(\d+)\s+capsules?\s+dietary supplement\b/gi, "$1-capsule dietary supplement")
+    .replace(/,\s*([A-Za-z])/g, ", $1")
+    .replace(/\b(\d+)\s*oz\./gi, "$1 oz")
+    .replace(/\bwater,or\b/gi, "water, or");
+
+  cleaned = cleaned.replace(/\b([A-Za-z]+)\s+\1\b/gi, "$1");
+  cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
+
+  const supportCount = countWordOccurrences(cleaned.toLowerCase(), /\bsupports?\b/g);
+  const maxSupportMentions =
+    context.field === "title" ? 1 : context.field === "shortDescription" ? 2 : context.field === "bullet" ? 2 : 5;
+  if (supportCount > maxSupportMentions) {
+    let next = cleaned;
+    while (countWordOccurrences(next.toLowerCase(), /\bsupports?\b/g) > maxSupportMentions) {
+      next = next.replace(/\bsupports?\b(?![\s\S]*\bsupports?\b)/i, "").replace(/\s{2,}/g, " ").trim();
+      if (!next) break;
+    }
+    cleaned = next || cleaned;
+  }
+
+  if (context.field === "title") {
+    cleaned = cleaned.replace(/[,:;\-\s]+$/, "").trim();
+  }
+  return normalizeWhitespace(cleaned);
+}
+
+export function removeUnsupportedFlavorClaims(
+  text: string,
+  flavorResolution: WalmartFlavorResolution
+): { text: string; removedClaims: string[] } {
+  const base = normalizeWhitespace(text);
+  if (!base) return { text: "", removedClaims: [] };
+
+  const hasExplicitFlavor =
+    flavorResolution.confidence === "explicit" &&
+    flavorResolution.flavor.trim().toLowerCase() !== "unflavored";
+  if (hasExplicitFlavor) {
+    const explicit = flavorResolution.flavor.toLowerCase();
+    const unsupported = detectWalmartFlavorClaims(base).filter(
+      (claim) => !claim.toLowerCase().includes(explicit)
+    );
+    return { text: base, removedClaims: unique(unsupported) };
+  }
+
+  const removedClaims = detectWalmartFlavorClaims(base);
+  if (removedClaims.length === 0) return { text: base, removedClaims: [] };
+
+  let cleaned = base;
+  for (const claim of removedClaims) {
+    const escaped = claim.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    cleaned = cleaned.replace(new RegExp(`(?:,\\s*)?${escaped}(?:\\s*,)?`, "gi"), " ");
+  }
+  cleaned = cleaned
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*,/g, ", ")
+    .replace(/^[,;\s]+/, "")
+    .replace(/[,\s]+$/, "")
+    .trim();
+  return {
+    text: normalizeWhitespace(cleaned),
+    removedClaims: unique(removedClaims),
+  };
+}
+
+function isRawOcrBulletFragment(value: string): boolean {
+  const text = normalizeWhitespace(value);
+  if (!text) return true;
+  if (text.length <= 6 && /%|mg|mcg|iu/i.test(text)) return true;
+  if (/^%dv$/i.test(text)) return true;
+  if (/^\d+(?:\.\d+)?\s*%$/.test(text)) return true;
+  if (RAW_OCR_BULLET_PATTERN.test(text) && text.split(" ").length <= 4) return true;
+  return false;
+}
+
+export function validateWalmartOptimizedCopy(
+  output: WalmartDocketOptimizationOutput,
+  factPack: WalmartOptimizationFactPack
+): { warnings: string[]; blockers: string[]; removedClaims: string[] } {
+  void factPack;
+  const warnings: string[] = [];
+  const blockers: string[] = [];
+  const removedClaims: string[] = [];
+  const flavorResolution: WalmartFlavorResolution = {
+    flavor: output.searchBrowse.flavor,
+    source: output.searchBrowse.flavorSource,
+    confidence: output.searchBrowse.flavorConfidence,
+  };
+  const hasExplicitFlavor =
+    flavorResolution.confidence === "explicit" &&
+    flavorResolution.flavor.trim().toLowerCase() !== "unflavored";
+
+  const titleFlavor = removeUnsupportedFlavorClaims(output.content.productTitle, flavorResolution);
+  output.content.productTitle = cleanWalmartOptimizedCopy(titleFlavor.text, { field: "title" });
+  removedClaims.push(...titleFlavor.removedClaims);
+
+  const shortFlavor = removeUnsupportedFlavorClaims(output.content.shortDescription, flavorResolution);
+  output.content.shortDescription = cleanWalmartOptimizedCopy(shortFlavor.text, {
+    field: "shortDescription",
+  });
+  removedClaims.push(...shortFlavor.removedClaims);
+
+  const longFlavor = removeUnsupportedFlavorClaims(output.content.longDescription, flavorResolution);
+  output.content.longDescription = cleanWalmartOptimizedCopy(longFlavor.text, {
+    field: "longDescription",
+  });
+  removedClaims.push(...longFlavor.removedClaims);
+
+  const cleanedBullets = output.content.bullets
+    .map((entry) => removeUnsupportedFlavorClaims(entry, flavorResolution))
+    .map((entry) => {
+      removedClaims.push(...entry.removedClaims);
+      return cleanWalmartOptimizedCopy(entry.text, { field: "bullet" });
+    })
+    .filter((entry) => !isRawOcrBulletFragment(entry))
+    .slice(0, 7);
+  output.content.bullets = unique(cleanedBullets);
+
+  if (removedClaims.length > 0 && !hasExplicitFlavor) {
+    warnings.push(
+      "Removed unsupported flavor claim because no explicit flavor was found. Defaulted Flavor attribute to Unflavored."
+    );
+  }
+  if (!hasExplicitFlavor) {
+    warnings.push("No explicit flavor found; defaulted Flavor attribute to Unflavored.");
+    warnings.push("No flavor found on label; Flavor set to Unflavored.");
+  }
+
+  if (MINOR_MINERAL_PATTERN.test(output.content.productTitle.split(/\s+/).slice(0, 3).join(" "))) {
+    blockers.push("Title must lead with product identity, not minor minerals.");
+  }
+  if (!output.content.longDescription.startsWith(output.content.productTitle)) {
+    warnings.push("Long description should open with product identity.");
+  }
+  if (countWordOccurrences(output.content.shortDescription.toLowerCase(), /\bsupports?\b/g) > 3) {
+    warnings.push("Short description had excessive support phrasing and was normalized.");
+  }
+  return {
+    warnings: unique(warnings),
+    blockers: unique(blockers),
+    removedClaims: unique(removedClaims),
+  };
+}
+
 function toDraftRecord(input: WalmartDocketOptimizationInput): Record<string, unknown> {
   return asObject(input.draftPayload) ?? {};
 }
@@ -437,13 +637,13 @@ function buildLongDescription(input: {
   form: string;
   count: string;
   factPack: WalmartOptimizationFactPack;
+  mainIngredients: string[];
   supportAreas: string[];
+  supportVerbPhrase: string;
   audience: string;
 }): string {
   const labelFacts = input.factPack.labelFacts;
-  const identity = `${input.productTitle} is a ${input.count || input.form.toLowerCase()} dietary supplement formulated for ${(
-    input.supportAreas[0] ?? "daily wellness support"
-  ).toLowerCase()}.`;
+  const identity = `${input.productTitle} is a ${input.count || input.form.toLowerCase()} dietary supplement formulated to ${input.supportVerbPhrase}.`;
 
   const servingLine = labelFacts.servingSize
     ? `Each serving is ${labelFacts.servingSize}${
@@ -459,8 +659,8 @@ function buildLongDescription(input: {
     labelFacts.proprietaryBlendName && labelFacts.proprietaryBlendAmount
       ? `${labelFacts.proprietaryBlendName} provides ${labelFacts.proprietaryBlendAmount} per serving.`
       : "";
-  const ingredientLine = labelFacts.activeIngredients.length
-    ? `Active ingredients include ${labelFacts.activeIngredients.slice(0, 12).join(", ")}.`
+  const ingredientLine = input.mainIngredients.length
+    ? `Active ingredients include ${input.mainIngredients.slice(0, 12).join(", ")}.`
     : "";
   const useLine = labelFacts.suggestedUse
     ? labelFacts.suggestedUse
@@ -497,6 +697,11 @@ export function buildWalmartDocketOptimizationPromptContract(
     product: input.product,
     draftPayload: input.draftPayload ?? null,
   });
+  const flavorResolution = resolveWalmartFlavorFromFacts({
+    candidates: [
+      { value: searchBrowse.flavor, source: "search_browse.flavor" },
+    ],
+  });
 
   return {
     task: "Optimize the full Walmart listing docket in one pass using label-backed facts first.",
@@ -515,6 +720,11 @@ export function buildWalmartDocketOptimizationPromptContract(
       neverCopyCompetitorText: true,
       noAllergenInferenceFromAbsence: true,
       markUncertainFieldsNeedsReview: true,
+      missingFlavorDefaultsToUnflavored: true,
+      noFlavorInferenceFromColorIngredientsOrCompetitors: true,
+      noFlavorInCustomerCopyWithoutExplicitEvidence: true,
+      grammarCleanupRequired: true,
+      productIdentityBeforeMinorMinerals: true,
     },
     productFacts: {
       sku: input.product.sku,
@@ -527,10 +737,16 @@ export function buildWalmartDocketOptimizationPromptContract(
       attributes: input.product.attributes,
       searchBrowseAttributes: searchBrowse,
       labelFactPack: factPack.labelFacts,
+      flavorResolution,
     },
     competitorPatterns: input.competitorPatterns ?? null,
     requiredOutputShape: {
       factPack: {
+        flavor: {
+          value: "string",
+          source: "explicit_source|default_unflavored|unknown",
+          confidence: "explicit|default_unflavored|unknown",
+        },
         servingSize: "string",
         servingsPerContainer: "string",
         dosageStrength: "string",
@@ -561,6 +777,7 @@ export function buildWalmartDocketOptimizationPromptContract(
         productType: "string",
         supplementType: "string",
         form: "string",
+        flavor: "string",
         count: "string",
         countPerPack: "string",
         servingSize: "string",
@@ -587,6 +804,7 @@ export function buildWalmartDocketOptimizationPromptContract(
       validation: {
         warnings: ["string"],
         blockers: ["string"],
+        removedClaims: ["string"],
       },
     },
   };
@@ -595,7 +813,7 @@ export function buildWalmartDocketOptimizationPromptContract(
 export function validateWalmartOptimizedDocket(
   output: WalmartDocketOptimizationOutput,
   options?: { factPack?: WalmartOptimizationFactPack }
-): { warnings: string[]; blockers: string[] } {
+): { warnings: string[]; blockers: string[]; removedClaims: string[] } {
   const warnings: string[] = [];
   const blockers: string[] = [];
 
@@ -665,6 +883,7 @@ export function validateWalmartOptimizedDocket(
   return {
     warnings: unique(warnings),
     blockers: unique(blockers),
+    removedClaims: [],
   };
 }
 
@@ -678,6 +897,7 @@ function projectedProductFromOutput(
     supplement_type: output.searchBrowse.supplementType,
     product_form: output.searchBrowse.form,
     form: output.searchBrowse.form,
+    flavor: output.searchBrowse.flavor,
     count: output.searchBrowse.count,
     count_per_pack: output.searchBrowse.countPerPack ?? "",
     serving_size: output.searchBrowse.servingSize,
@@ -789,15 +1009,25 @@ export function applyWalmartDocketOptimizationRules(
     inferCountFromText(originalTitle)
   );
   const countPerPack = firstNonEmpty(asText(searchBrowse.count_per_pack), count ? "1" : "");
+  const flavorResolution = resolveWalmartFlavorFromFacts({
+    candidates: [
+      { value: asText(searchBrowse.flavor), source: "search_browse.flavor" },
+    ],
+  });
+  const explicitFlavor =
+    flavorResolution.confidence === "explicit" &&
+    flavorResolution.flavor.trim().toLowerCase() !== "unflavored"
+      ? normalizeTitleCandidate(flavorResolution.flavor)
+      : "";
 
   const ingredientsFromSearch = unique([
     ...asList(searchBrowse.main_ingredients),
     ...asList(searchBrowse.ingredients_list),
   ]);
-  const mainIngredients = unique([
+  const mainIngredients = prioritizeIngredientsForCopy(unique([
     ...labelFacts.activeIngredients,
     ...ingredientsFromSearch,
-  ])
+  ]))
     .map((entry) => normalizeWhitespace(entry))
     .filter(Boolean)
     .slice(0, 16);
@@ -807,9 +1037,9 @@ export function applyWalmartDocketOptimizationRules(
     searchBrowse,
     fallback: SUPPORT_AREA_FALLBACK,
   });
-  const supportPhrase = firstNonEmpty(
-    supportAreas[0] ? `supports ${supportAreas[0].toLowerCase()}` : "",
-    "supports daily wellness"
+  const supportVerbPhrase = firstNonEmpty(
+    supportAreas[0] ? toSupportVerbPhrase(supportAreas[0]) : "",
+    "support daily wellness"
   );
 
   const productNameCandidate = firstNonEmpty(asText(searchBrowse.product_name), originalTitle)
@@ -823,6 +1053,7 @@ export function applyWalmartDocketOptimizationRules(
   const titleSegments = [
     normalizeTitleCandidate(brand),
     normalizeTitleCandidate(productNameCandidate || productType),
+    explicitFlavor ? normalizeTitleCandidate(`${explicitFlavor} flavor`) : "",
     normalizeTitleCandidate(ingredientOrSupport),
     normalizeTitleCandidate(form),
     normalizeTitleCandidate(count),
@@ -841,7 +1072,7 @@ export function applyWalmartDocketOptimizationRules(
 
   const shortDescription = ensureOneSentence(
     removeUnsafeFragments(
-      `${productTitle} is a ${count || `${form.toLowerCase()} format`} dietary supplement formulated to ${supportPhrase} for ${audience.toLowerCase()}.`
+      `${productTitle} is a ${count || `${form.toLowerCase()} form`} dietary supplement formulated to ${supportVerbPhrase} for ${audience.toLowerCase()}.`
     )
   );
 
@@ -851,7 +1082,9 @@ export function applyWalmartDocketOptimizationRules(
     form,
     count,
     factPack,
+    mainIngredients,
     supportAreas,
+    supportVerbPhrase,
     audience,
   });
 
@@ -860,8 +1093,8 @@ export function applyWalmartDocketOptimizationRules(
       ? `${labelFacts.servingsPerContainer}-day supply when taken as directed`
       : "";
   const bullets = unique([
-    `${productType} identity - ${brand} ${productNameCandidate || productType} in ${form.toLowerCase()} format.`,
-    `Support focus - designed to ${supportPhrase}.`,
+    `${productType} identity - ${brand} ${productNameCandidate || productType} in ${form.toLowerCase()} form.`,
+    `Support focus - designed to ${supportVerbPhrase}.`,
     labelFacts.servingSize
       ? `Serving size - ${labelFacts.servingSize} per serving from Supplement Facts.`
       : "",
@@ -938,6 +1171,7 @@ export function applyWalmartDocketOptimizationRules(
       product_type: productType,
       supplement_type: productType,
       product_form: form,
+      flavor: flavorResolution.flavor,
       count,
       serving_size: labelFacts.servingSize,
       servings_per_container: labelFacts.servingsPerContainer,
@@ -991,6 +1225,9 @@ export function applyWalmartDocketOptimizationRules(
       productType,
       supplementType: productType,
       form: toTitleCase(form),
+      flavor: flavorResolution.flavor,
+      flavorSource: flavorResolution.source,
+      flavorConfidence: flavorResolution.confidence,
       count,
       countPerPack,
       servingSize: labelFacts.servingSize,
@@ -1010,6 +1247,10 @@ export function applyWalmartDocketOptimizationRules(
       warnings: unique([
         "Do not include disease/treatment claims in Search & Browse fields.",
         "GTIN/UPC remain lookup identifiers only.",
+        flavorResolution.confidence === "explicit" &&
+        flavorResolution.flavor.trim().toLowerCase() !== "unflavored"
+          ? ""
+          : "No explicit flavor found; defaulted Flavor attribute to Unflavored.",
         ...factPack.warnings,
       ]),
     },
@@ -1021,19 +1262,27 @@ export function applyWalmartDocketOptimizationRules(
     validation: {
       warnings: [],
       blockers: [],
+      removedClaims: [],
     },
   };
 
+  const copyValidation = validateWalmartOptimizedCopy(output, factPack);
   const validation = validateWalmartOptimizedDocket(output, { factPack });
   output.validation = {
     warnings: unique([
+      ...copyValidation.warnings,
       ...validation.warnings,
       ...complianceReview.warnings,
       ...factPack.warnings,
     ]),
     blockers: unique([
+      ...copyValidation.blockers,
       ...validation.blockers,
       ...complianceReview.violations,
+    ]),
+    removedClaims: unique([
+      ...copyValidation.removedClaims,
+      ...validation.removedClaims,
     ]),
   };
 

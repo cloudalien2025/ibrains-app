@@ -3,6 +3,7 @@ import {
   isCustomerFacingSentinelValue,
 } from "@/lib/ecomviper/walmart/walmart-truth-guard";
 import { syncAliasGroups } from "@/lib/ecomviper/walmart/walmart-field-aliases";
+import { resolveWalmartFlavorFromFacts } from "@/lib/ecomviper/walmart/walmart-flavor-normalizer";
 
 export type WalmartSearchBrowseFieldType =
   | "text"
@@ -512,7 +513,7 @@ export function buildSearchBrowseAttributesFromSources(input: {
     brand: asString(draft.brand) || input.product.brand,
   };
 
-  return merge(
+  const merged = merge(
     productAttributes,
     normalizedAttributes,
     rawAttributes,
@@ -520,6 +521,34 @@ export function buildSearchBrowseAttributesFromSources(input: {
     draftSearchBrowse,
     identityDefaults
   );
+
+  const flavorResolution = resolveWalmartFlavorFromFacts({
+    candidates: [
+      { value: draftSearchBrowse.flavor, source: "draft_search_browse.flavor" },
+      { value: draftAttributes.flavor, source: "draft_attributes.flavor" },
+      { value: productAttributes.flavor, source: "product_attributes.flavor" },
+      { value: normalizedAttributes.flavor, source: "normalized_payload.attributes.flavor" },
+      { value: rawAttributes.flavor, source: "raw_payload.attributes.flavor" },
+      { value: asObject(normalizedPayload.labelFacts)?.flavor, source: "normalized_payload.labelFacts.flavor" },
+      { value: asObject(rawPayload.labelFacts)?.flavor, source: "raw_payload.labelFacts.flavor" },
+      { value: asString(draft.flavor), source: "draft_payload.flavor" },
+      { value: asString(merged.flavor), source: "merged.flavor" },
+    ],
+    labelTextCandidates: [
+      {
+        value: asString(asObject(normalizedPayload.labelFacts)?.labelText),
+        source: "normalized_payload.labelFacts.labelText",
+      },
+      {
+        value: asString(asObject(rawPayload.labelFacts)?.labelText),
+        source: "raw_payload.labelFacts.labelText",
+      },
+    ],
+  });
+
+  merged.flavor = flavorResolution.flavor;
+  syncAliasGroups({ attributes: merged });
+  return merged;
 }
 
 export function isSupplementLikeProduct(product: WalmartProductRecord): boolean {

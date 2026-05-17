@@ -89,6 +89,7 @@ describe("walmart search & browse attributes foundation", () => {
     expect(merged.serving_size).toBe("2 capsules");
     expect(merged.age_group).toBe("Adult");
     expect(merged.target_audience).toBe("Adults");
+    expect(merged.flavor).toBe("Unflavored");
     expect(merged.support_areas).toContain("Joint comfort");
   });
 

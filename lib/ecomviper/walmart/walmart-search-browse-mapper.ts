@@ -18,6 +18,7 @@ import {
   detectKnownStaleDemoValue,
   sanitizeCustomerFacingText,
 } from "@/lib/ecomviper/walmart/walmart-truth-guard";
+import { resolveWalmartFlavorFromFacts } from "@/lib/ecomviper/walmart/walmart-flavor-normalizer";
 
 export interface SearchBrowseMapperResult {
   mappedAttributes: Record<string, string>;
@@ -379,6 +380,27 @@ export function mapCanonicalFactsToSearchBrowse(
     ...canonical.attributes,
   });
   const sourceByField = { ...canonical.sourceByField };
+  const staleFlavorCleared = staleReplacements.some(
+    (entry) => entry.field === "flavor" && !entry.nextValue.trim()
+  );
+  const allowExistingFlavorFallback = !(
+    (usedSources.includes("label_image") && !input.facts.flavor) || staleFlavorCleared
+  );
+  const flavorResolution = resolveWalmartFlavorFromFacts({
+    candidates: [
+      {
+        value: canonical.attributes.flavor,
+        source: canonical.sourceByField.flavor || "product_facts.flavor",
+      },
+      {
+        value: allowExistingFlavorFallback ? existing.flavor : "",
+        source: "existing_search_browse.flavor",
+      },
+      { value: input.facts.flavor, source: "canonical_facts.flavor" },
+    ],
+  });
+  merged.flavor = flavorResolution.flavor;
+  sourceByField.flavor = flavorResolution.source;
   syncAliasSourceByCanonical({
     attributes: merged,
     sourceByField,
@@ -417,9 +439,21 @@ export function mapCanonicalFactsToSearchBrowse(
     }
   }
 
-  if (!merged.flavor && existing.flavor && usedSources.includes("label_image")) {
+  const finalFlavorResolution = resolveWalmartFlavorFromFacts({
+    candidates: [
+      { value: merged.flavor, source: sourceByField.flavor || "mapped.flavor" },
+      {
+        value: allowExistingFlavorFallback ? existing.flavor : "",
+        source: "existing_search_browse.flavor",
+      },
+      { value: input.facts.flavor, source: "canonical_facts.flavor" },
+    ],
+  });
+  merged.flavor = finalFlavorResolution.flavor;
+  sourceByField.flavor = finalFlavorResolution.source;
+  if (merged.flavor) {
     for (const key of expandAliasKeys(["flavor"])) {
-      clearedFields.add(key);
+      clearedFields.delete(key);
     }
   }
 
