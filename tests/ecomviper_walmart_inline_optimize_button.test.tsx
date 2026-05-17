@@ -93,7 +93,7 @@ describe("Walmart inline optimize button workflow", () => {
     const stateText =
       container.querySelector('[data-testid="ecomviper-walmart-inline-ai-panel"]')?.textContent ?? "";
     expect(stateText).toContain("Connect your OpenAI API key first to optimize this product.");
-    expect(stateText).toContain("Could not optimize with AI.");
+    expect(stateText).toContain("Optimization: Failed");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

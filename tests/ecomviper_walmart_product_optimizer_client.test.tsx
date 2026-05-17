@@ -98,25 +98,26 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("ecomviper-walmart-inline-ai-panel");
     expect(html).toContain("ecomviper-walmart-draft-editor-card");
     expect(html).toContain("ecomviper-walmart-product-form");
-    expect(html).toContain("ecomviper-walmart-readiness");
+    expect(html).toContain("ecomviper-walmart-editor-diagnostics");
     expect(html).toContain("Product Editor");
     expect(html).toContain("Walmart Docket");
     expect(html).toContain("SKU: 30066-841");
     expect(html).toContain("Agentic Visibility Score");
-    expect(html).toContain("View validation");
+    expect(html).toContain("ecomviper-walmart-agentic-score-ring");
+    expect(html).toContain("View readiness");
     expect(html).toContain("30066-841");
     expect(html).toContain("Inventory:</span> 9");
     expect(html).toContain("Optimize with AI");
     expect(html).toContain("Publish to Walmart");
     expect(html).toContain(
-      "Optimize with AI updates this docket for Agentic Visibility and Selection."
+      "Optimize this Walmart docket for Agentic Visibility and Selection, then review and publish when ready."
     );
     expect(html).not.toContain("Open AI Optimizer");
     expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
     expect(html).not.toContain("Preview + Validate");
     expect(html).not.toContain("Before / Original payload snapshot");
     expect(html).not.toContain("After / Normalized draft preview");
-    expect(html).toContain("Validation is checked continuously and before guarded publish confirmation.");
+    expect(html).not.toContain("Readiness &amp; validation");
   });
 
   it("renders staged changes section with proposal data", () => {
@@ -124,7 +125,7 @@ describe("Walmart product optimizer client", () => {
       <ProductEditorClient product={createProduct()} stagedDrafts={[createStagedDraft()]} aiProviderConnected={true} serpApiProviderConnected={true} />
     );
 
-    expect(html).toContain("ecomviper-walmart-staged-changes");
+    expect(html).toContain("Staged changes (developer)");
     expect(html).toContain("Improved title");
     expect(html).toContain("manual_image_required");
     expect(html).toContain("Image action: manual_image_required");

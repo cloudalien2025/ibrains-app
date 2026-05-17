@@ -131,13 +131,7 @@ describe("Walmart Search & Browse editor hydration", () => {
     expect(
       container.querySelector('[data-testid="ecomviper-walmart-field-provenance-table"]')
     ).not.toBeNull();
-
-    expect(container.querySelector('[data-testid="ecomviper-walmart-faq-section"]')).not.toBeNull();
-    const faqTextarea = container.querySelector(
-      '[data-testid="ecomviper-walmart-faq-textarea"]'
-    ) as HTMLTextAreaElement;
-    expect(faqTextarea).not.toBeNull();
-    expect(faqTextarea.value).toContain("Q: What is this product?");
+    expect(container.querySelector('[data-testid="ecomviper-walmart-faq-section"]')).toBeNull();
 
     const saveButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Save Draft"
@@ -204,16 +198,13 @@ describe("Walmart Search & Browse editor hydration", () => {
     expect(textareaValues).toContain("Docket short description");
     expect(textareaValues).toContain("Docket long description");
     expect(textareaValues).toContain("Docket bullet one\nDocket bullet two");
-    expect(container.textContent).toContain("Hydration status");
-    expect(container.textContent).toContain("Imported docket ready");
-    expect(container.textContent).toContain("Report backfill pending");
-    expect(container.textContent).toContain("Docket Freshness / Report Backfill");
+    expect(container.querySelector('[data-testid="ecomviper-walmart-hydration-status"]')).toBeNull();
+    expect(container.querySelector('[data-testid="ecomviper-walmart-docket-freshness-panel"]')).toBeNull();
+    expect(container.textContent).toContain("View diagnostics (optional)");
+    expect(container.textContent).toContain("Report backfill controls");
     expect(container.textContent).toContain("Request ITEM Report");
     expect(container.textContent).toContain("Check Report Status");
     expect(container.textContent).toContain("Apply Ready Report");
-    expect(
-      container.querySelector('[data-testid="ecomviper-walmart-docket-freshness-panel"]')
-    ).not.toBeNull();
     expect(container.innerHTML).toContain("Joint support");
   });
 
