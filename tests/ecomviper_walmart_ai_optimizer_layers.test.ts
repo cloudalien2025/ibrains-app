@@ -105,11 +105,11 @@ describe("Walmart AI optimizer layered enrichment", () => {
 
     expect(suggestion.searchBrowseAttributes?.serving_size).toBeUndefined();
     expect(suggestion.searchBrowseAttributes?.dosage_strength).toBeUndefined();
-    expect(suggestion.searchBrowseAttributes?.flavor).toBeUndefined();
+    expect(suggestion.searchBrowseAttributes?.flavor).toBe("Unflavored");
     expect(suggestion.searchBrowseAttributes?.main_ingredients).toBeUndefined();
 
     expect(suggestion.applyDiagnostics?.staleFieldsCleared).toEqual(
-      expect.arrayContaining(["serving_size", "dosage_strength", "flavor", "main_ingredients"])
+      expect.arrayContaining(["serving_size", "dosage_strength", "main_ingredients"])
     );
   });
 });

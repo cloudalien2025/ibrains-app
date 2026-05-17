@@ -498,6 +498,7 @@ function mapRulesOutputToSearchBrowseAttributes(
     supplement_type: output.searchBrowse.supplementType,
     product_form: output.searchBrowse.form,
     form: output.searchBrowse.form,
+    flavor: output.searchBrowse.flavor,
     count: output.searchBrowse.count,
     serving_size: output.searchBrowse.servingSize,
     main_ingredients: output.searchBrowse.mainIngredients.join(", "),
@@ -583,6 +584,9 @@ function applyRulesEngineToSuggestion(params: {
     ...(params.suggestion.complianceWarnings ?? []),
     ...rulesOutput.validation.warnings,
     ...rulesOutput.validation.blockers,
+    ...(rulesOutput.validation.removedClaims.length > 0
+      ? [`Removed unsupported claims: ${rulesOutput.validation.removedClaims.join(", ")}`]
+      : []),
     ...params.competitorContext.warnings,
   ]);
 
@@ -591,6 +595,7 @@ function applyRulesEngineToSuggestion(params: {
     ...rulesOutput.content.complianceNotes,
     ...rulesOutput.pricingInventory.priceNotes,
     ...rulesOutput.pricingInventory.inventoryNotes,
+    `Flavor provenance: ${rulesOutput.searchBrowse.flavor} (${rulesOutput.searchBrowse.flavorSource}, ${rulesOutput.searchBrowse.flavorConfidence}).`,
     `Competitor intelligence status: ${params.competitorContext.status}.`,
   ]);
 
@@ -748,7 +753,7 @@ async function requestOpenAiSuggestion(params: {
         {
           role: "system",
           content:
-            "You optimize Walmart supplement listings for marketplace conversion and AI visibility. Return JSON only. Use product-specific facts grounded in provided product data. Do not hallucinate ingredients/flavor/form/count. Never include disease/treatment/cure/prevention/drug-comparison claims and never use terms like ED, erectile dysfunction, hypertension, anxiety, insomnia, depression, natural viagra, or works like cialis. Keep supplement FDA disclaimer exact and include it once in longDescription. Optimize the full docket, never field-by-field, and do not copy competitor text.",
+            "You optimize Walmart supplement listings for marketplace conversion and AI visibility. Return JSON only. Use product-specific facts grounded in provided product data. Do not hallucinate ingredients/flavor/form/count. If no trusted flavor evidence exists, set searchBrowse.flavor to Unflavored and do not mention flavor in title, shortDescription, longDescription, or bullets. Never infer flavor from color, ingredients, or competitor listings. Never include disease/treatment/cure/prevention/drug-comparison claims and never use terms like ED, erectile dysfunction, hypertension, anxiety, insomnia, depression, natural viagra, or works like cialis. Keep supplement FDA disclaimer exact and include it once in longDescription. Run grammar cleanup to remove duplicated support phrasing and awkward constructions. Optimize the full docket, never field-by-field, and do not copy competitor text.",
         },
         {
           role: "user",

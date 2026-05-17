@@ -136,9 +136,12 @@ describe("Walmart top optimize full-docket workflow", () => {
                 searchBrowseAttributes: {
                   product_type: "Dietary Supplement",
                   search_keywords: "daily wellness, supplement",
+                  flavor: "Unflavored",
                 },
                 missingAttributes: [],
-                complianceWarnings: [],
+                complianceWarnings: [
+                  "No flavor found on label; Flavor set to Unflavored.",
+                ],
                 disclaimer: "Review claims before publish.",
               },
             }),
@@ -196,6 +199,7 @@ describe("Walmart top optimize full-docket workflow", () => {
     expect(container.textContent).toContain(
       "Optimized for Agentic Visibility and Selection. Updated Content:"
     );
+    expect(container.textContent).toContain("No flavor found on label; Flavor set to Unflavored.");
 
     const titleInput = container.querySelector('input[value="ROC808 Daily Wellness Formula | Optimized"]');
     expect(titleInput).not.toBeNull();

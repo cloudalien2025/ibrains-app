@@ -39,6 +39,10 @@ import {
   sanitizeWalmartAiSearchBrowseAttributes,
 } from "@/lib/ecomviper/walmart/walmart-ai-field-sanitization";
 import {
+  detectWalmartFlavorClaims,
+  normalizeWalmartFlavor,
+} from "@/lib/ecomviper/walmart/walmart-flavor-normalizer";
+import {
   appendUnknownSearchBrowseFields,
   buildSearchBrowseAttributesFromSources,
   getSearchBrowseFieldDefinitions,
@@ -2262,6 +2266,7 @@ export default function ProductEditorClient({
 
   const [inlineAiState, setInlineAiState] = useState<InlineAiState>("idle");
   const [inlineAiMessage, setInlineAiMessage] = useState<string | null>(null);
+  const [inlineFlavorNote, setInlineFlavorNote] = useState<string | null>(null);
   const [inlineAiSuggestion, setInlineAiSuggestion] =
     useState<WalmartAiSuggestion | null>(null);
   const [aiSuggestionApplied, setAiSuggestionApplied] = useState(false);
@@ -2936,6 +2941,32 @@ export default function ProductEditorClient({
       );
     }
     return "";
+  }
+
+  function hasUnsupportedFlavorClaimInCopy(input: {
+    title: string;
+    shortDescription: string;
+    longDescription: string;
+    bulletPoints: string;
+    flavorValue: string;
+  }): boolean {
+    const normalizedFlavor = normalizeWalmartFlavor(input.flavorValue);
+    const hasExplicitFlavor = Boolean(
+      normalizedFlavor && normalizedFlavor.toLowerCase() !== "unflavored"
+    );
+    if (hasExplicitFlavor) return false;
+
+    const copyText = [
+      input.title,
+      input.shortDescription,
+      input.longDescription,
+      input.bulletPoints,
+    ]
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .join(" ");
+
+    return detectWalmartFlavorClaims(copyText).length > 0;
   }
 
   function resolveSearchBrowseCandidateFromSuggestion(input: {
@@ -4295,10 +4326,12 @@ export default function ProductEditorClient({
       | "empty";
   }> {
     setAiSuggestionApplied(false);
+    setInlineFlavorNote(null);
 
     if (!aiProviderConnected) {
       setInlineAiState("missing_key");
       setInlineAiMessage(OPENAI_OPTIMIZE_REQUIRED_MESSAGE);
+      setInlineFlavorNote(null);
       return { status: "missing_key" };
     }
 
@@ -4336,6 +4369,7 @@ export default function ProductEditorClient({
             ? OPENAI_OPTIMIZE_REQUIRED_MESSAGE
             : errorMessage || "Could not optimize with AI."
         );
+        setInlineFlavorNote(null);
         return { status: missingKey ? "missing_key" : "error" };
       }
 
@@ -4360,6 +4394,7 @@ export default function ProductEditorClient({
     } catch {
       setInlineAiState("error");
       setInlineAiMessage("Optimization failed. Try again.");
+      setInlineFlavorNote(null);
       return { status: "error" };
     }
   }
@@ -4373,6 +4408,7 @@ export default function ProductEditorClient({
     if (!suggestion) {
       setInlineAiState("error");
       setInlineAiMessage("Could not optimize with AI.");
+      setInlineFlavorNote(null);
       return;
     }
 
@@ -4466,6 +4502,11 @@ export default function ProductEditorClient({
     const diagnostics = normalizeInlineAiApplyDiagnostics(
       suggestion.applyDiagnostics
     );
+    const flavorStatusNote =
+      (suggestion.complianceWarnings ?? []).find((entry) =>
+        /no flavor found on label;\s*flavor set to unflavored/i.test(entry)
+      ) ?? null;
+    setInlineFlavorNote(flavorStatusNote);
 
     const aiAttributeMap: Record<string, unknown> = {
       ...inferredSearchBrowseCandidates,
@@ -5436,6 +5477,9 @@ export default function ProductEditorClient({
       (currentWalmartState.searchBrowse.productType ?? "").trim();
     const categoryValue =
       (form.searchBrowseAttributes.category ?? "").trim() || (product.category ?? "").trim();
+    const flavorValue =
+      (form.searchBrowseAttributes.flavor ?? "").trim() ||
+      (preview.searchBrowseAttributes?.flavor ?? "").trim();
     const hasMedia =
       Boolean((preview.primaryImageUrl ?? preview.imageUrl ?? "").trim()) ||
       (preview.galleryImageUrls?.length ?? 0) > 0;
@@ -5450,6 +5494,19 @@ export default function ProductEditorClient({
     }
     if (!productTypeValue && !categoryValue) {
       errors.push("Product type or category is required before publish.");
+    }
+    if (
+      hasUnsupportedFlavorClaimInCopy({
+        title: preview.title,
+        shortDescription: preview.shortDescription,
+        longDescription: preview.longDescription,
+        bulletPoints: (preview.bulletPoints ?? []).join("\n"),
+        flavorValue,
+      })
+    ) {
+      errors.push(
+        "Unsupported flavor claim remains in customer-facing copy. Remove flavor phrasing or provide explicit flavor evidence."
+      );
     }
     if (publicItemId && lookupOnlyIds.has(publicItemId)) {
       errors.push("GTIN/UPC are lookup identifiers only and cannot be used as Walmart item IDs.");
@@ -6852,6 +6909,7 @@ export default function ProductEditorClient({
             </a>
           ) : null}
           {inlineAiMessage ? <p className="mt-2 text-xs text-[#475569]">{inlineAiMessage}</p> : null}
+          {inlineFlavorNote ? <p className="mt-1 text-xs text-[#92400E]">{inlineFlavorNote}</p> : null}
           {publishMessage ? <p className="mt-2 text-xs text-[#475569]">{publishMessage}</p> : null}
         </div>
 

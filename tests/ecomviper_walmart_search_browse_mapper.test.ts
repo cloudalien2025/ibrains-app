@@ -144,8 +144,8 @@ describe("Search & Browse mapper", () => {
       usedSources: ["label_image"],
     });
 
-    expect(result.mappedAttributes.flavor).toBeUndefined();
-    expect(result.clearedFields).toContain("flavor");
+    expect(result.mappedAttributes.flavor).toBe("Unflavored");
+    expect(result.clearedFields).not.toContain("flavor");
   });
 
   it("keeps canonical and legacy alias keys synchronized", () => {

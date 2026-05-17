@@ -141,11 +141,17 @@ describe("Walmart label facts optimizer", () => {
     expect(result.output.searchBrowse.servingSize).toBe("2 capsules");
     expect(result.output.searchBrowse.servingsPerContainer).toBe("30");
     expect(result.output.searchBrowse.count).toBe("60 capsules");
+    expect(result.output.searchBrowse.flavor).toBe("Unflavored");
+    expect(result.output.searchBrowse.flavorSource).toBe("default_unflavored");
+    expect(result.output.searchBrowse.flavorConfidence).toBe("default_unflavored");
     expect(result.output.searchBrowse.dosageStrength ?? "").toContain("Melatonin 10 mg");
     expect(result.output.searchBrowse.dosageStrength ?? "").toContain("905 mg");
     expect(result.output.content.longDescription.startsWith(result.output.content.productTitle)).toBe(
       true
     );
+    expect(result.output.content.productTitle.toLowerCase()).not.toContain("berry flavor");
+    expect(result.output.content.productTitle.toLowerCase()).not.toContain("unflavored");
+    expect(result.output.content.shortDescription.toLowerCase()).not.toContain("berry flavor");
     expect(result.output.content.longDescription).toContain("2 capsules");
     expect(result.output.content.longDescription).toContain("Melatonin 10 mg");
     expect(result.output.content.longDescription).toContain("905 mg");
@@ -160,5 +166,40 @@ describe("Walmart label facts optimizer", () => {
     expect(result.output.content.bullets.join(" ")).toContain("Melatonin 10 mg");
     expect(result.output.content.bullets.join(" ")).toContain("905 mg");
     expect(result.output.content.bullets.join(" ")).toContain("60 capsules");
+    expect(result.output.content.shortDescription.toLowerCase()).not.toContain("supports supports");
+    expect(result.output.content.productTitle.toLowerCase()).not.toContain("supports relaxation support");
+    expect(result.output.content.bullets.join(" ").toLowerCase()).not.toContain("designed to supports");
+    expect(result.output.content.longDescription.toLowerCase()).not.toContain("water,or");
+    expect(result.output.content.longDescription.toLowerCase()).not.toContain("8oz.");
+  });
+
+  it("removes unsupported flavor claims from title copy and emits warning", () => {
+    const result = applyWalmartDocketOptimizationRules({
+      product: createRoc817Product({
+        title: "OPA Nutrition Sleep Aid Formula Capsules, Berry flavor, 60 capsules",
+        searchBrowseAttributes: {},
+      }),
+    });
+
+    expect(result.output.searchBrowse.flavor).toBe("Unflavored");
+    expect(result.output.content.productTitle.toLowerCase()).not.toContain("berry flavor");
+    expect(result.output.validation.warnings.join(" ")).toContain(
+      "Removed unsupported flavor claim because no explicit flavor was found. Defaulted Flavor attribute to Unflavored."
+    );
+    expect(result.output.validation.removedClaims).toContain("Berry flavor");
+  });
+
+  it("keeps explicit Berry flavor when trusted flavor evidence exists", () => {
+    const result = applyWalmartDocketOptimizationRules({
+      product: createRoc817Product({
+        searchBrowseAttributes: {
+          flavor: "Berry",
+          product_form: "Capsule",
+        },
+      }),
+    });
+
+    expect(result.output.searchBrowse.flavor).toBe("Berry");
+    expect(result.output.searchBrowse.flavorConfidence).toBe("explicit");
   });
 });

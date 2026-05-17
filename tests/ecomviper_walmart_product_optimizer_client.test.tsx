@@ -108,6 +108,7 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("30066-841");
     expect(html).toContain("Inventory:</span> 9");
     expect(html).toContain("Optimize with AI");
+    expect(html).toContain('value="Unflavored"');
     expect(html.match(/ecomviper-walmart-optimize-top-button/g)?.length ?? 0).toBe(1);
     expect(html).not.toContain("ecomviper-walmart-optimize-button");
     expect(html).toContain("ecomviper-walmart-save-draft-button");

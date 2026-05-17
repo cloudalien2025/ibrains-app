@@ -63,14 +63,13 @@ describe("ROC015 Walmart optimizer truth gates", () => {
     expect(suggestion.searchBrowseAttributes?.form).toBe("Powder");
     expect(suggestion.searchBrowseAttributes?.servings_per_container).toBe("35");
     expect(suggestion.searchBrowseAttributes?.servings).toBe("35");
-    expect(suggestion.searchBrowseAttributes?.flavor).toBeUndefined();
+    expect(suggestion.searchBrowseAttributes?.flavor).toBe("Unflavored");
     expect(suggestion.searchBrowseAttributes?.main_ingredients).toBeUndefined();
     expect(suggestion.searchBrowseAttributes?.ingredients_list).toBeUndefined();
     expect(suggestion.searchBrowseAttributes?.serving_size).toBeUndefined();
     expect(suggestion.searchBrowseAttributes?.dosage_strength).toBeUndefined();
     expect(suggestion.applyDiagnostics?.staleFieldsCleared).toEqual(
       expect.arrayContaining([
-        "flavor",
         "main_ingredients",
         "ingredients_list",
         "serving_size",
