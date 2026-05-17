@@ -156,8 +156,24 @@ describe("Walmart product editor single docket workflow", () => {
 
     expect(container.textContent).toContain("Optimize with AI");
     expect(container.textContent).toContain("Publish to Walmart");
+    expect(container.textContent).toContain("Agentic Visibility Score");
+    const scoreRing = container.querySelector(
+      '[data-testid="ecomviper-walmart-agentic-score-ring"]'
+    ) as HTMLElement | null;
+    expect(scoreRing).not.toBeNull();
+    expect(scoreRing?.getAttribute("aria-label")).toContain("Agentic Visibility Score");
+    expect(container.textContent).toContain(
+      "Optimized according to EcomViper's Agentic Visibility and Selection scoring model."
+    );
     expect(container.textContent).not.toContain("Optimize Listing with AI");
     expect(container.textContent).not.toContain("Mark Publish-Ready");
+    expect(container.querySelector('[data-testid="ecomviper-walmart-hydration-status"]')).toBeNull();
+    expect(container.querySelector('[data-testid="ecomviper-walmart-docket-freshness-panel"]')).toBeNull();
+    expect(container.textContent).not.toContain("Docket Freshness / Report Backfill");
+    expect(container.textContent).not.toContain("FAQ (secondary)");
+    expect(container.textContent).not.toContain("Sync history (secondary)");
+    expect(container.textContent).not.toContain("Readiness & validation");
+    expect(container.textContent).toContain("View diagnostics (optional)");
   });
 
   it("optimizes in place without triggering publish submission", async () => {
@@ -232,7 +248,7 @@ describe("Walmart product editor single docket workflow", () => {
     expect(requestUrl).toBe("/api/ecomviper/walmart/ai/generate");
 
     const scoreText = container.textContent ?? "";
-    const scoreMatch = scoreText.match(/Current score:\s*(\d+)\/100[\s\S]*Optimized score:\s*(\d+)\/100/);
+    const scoreMatch = scoreText.match(/Current\s*(\d+)%\s*->\s*Optimized\s*(\d+)%/);
     expect(scoreMatch).not.toBeNull();
     if (scoreMatch) {
       expect(Number(scoreMatch[2])).toBeGreaterThanOrEqual(Number(scoreMatch[1]));
@@ -262,7 +278,7 @@ describe("Walmart product editor single docket workflow", () => {
     });
     await flush();
 
-    expect(container.textContent).toContain("ready_for_confirmation");
+    expect(container.textContent).toContain("Preview ready");
     const confirmButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Confirm Publish"
     ) as HTMLButtonElement | undefined;
@@ -273,7 +289,7 @@ describe("Walmart product editor single docket workflow", () => {
     });
     await flush();
 
-    expect(container.textContent).toContain("preview_only_no_publish_route");
+    expect(container.textContent).toContain("Preview only - not submitted to Walmart.");
     expect(container.textContent).toContain("nothing was submitted");
     expect(fetchMock).toHaveBeenCalledTimes(0);
   });
@@ -306,7 +322,7 @@ describe("Walmart product editor single docket workflow", () => {
     });
     await flush();
 
-    expect(container.textContent).toContain("blocked_validation_errors");
+    expect(container.textContent).toContain("Needs review");
     expect(container.textContent).toContain("Product title is required before publish.");
   });
 
