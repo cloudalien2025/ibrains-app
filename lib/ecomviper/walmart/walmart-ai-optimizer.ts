@@ -490,23 +490,10 @@ function shortDescriptionNeedsRulesReplacement(value: string): boolean {
   return sentenceCount !== 1;
 }
 
-function longDescriptionNeedsRulesReplacement(value: string): boolean {
-  const text = value.trim();
-  if (!text) return true;
-  if (includesUnsafeOrPromotionalCopy(text)) return true;
-  const disclaimerCount = text.split(SUPPLEMENT_FDA_DISCLAIMER).length - 1;
-  return disclaimerCount !== 1;
-}
-
-function bulletsNeedRulesReplacement(values: string[]): boolean {
-  if (values.length < 5 || values.length > 7) return true;
-  return values.some((entry) => includesUnsafeOrPromotionalCopy(entry));
-}
-
 function mapRulesOutputToSearchBrowseAttributes(
   output: ReturnType<typeof applyWalmartDocketOptimizationRules>["output"]
 ): Record<string, string> {
-  return {
+  const mapped: Record<string, string> = {
     product_type: output.searchBrowse.productType,
     supplement_type: output.searchBrowse.supplementType,
     product_form: output.searchBrowse.form,
@@ -517,11 +504,35 @@ function mapRulesOutputToSearchBrowseAttributes(
     support_areas: output.searchBrowse.benefitsSupportAreas.join(", "),
     target_audience: output.searchBrowse.targetAudience,
     suggested_use: output.searchBrowse.suggestedUse,
-    directions_suggested_use: output.searchBrowse.suggestedUse,
+    directions_suggested_use: output.searchBrowse.directionsSuggestedUse ?? output.searchBrowse.suggestedUse,
     search_keywords: output.searchBrowse.searchKeywords.join(", "),
     search_terms: output.searchBrowse.searchTerms.join(", "),
     category: output.searchBrowse.category,
   };
+
+  if (output.searchBrowse.servingsPerContainer) {
+    mapped.servings_per_container = output.searchBrowse.servingsPerContainer;
+    mapped.servings = output.searchBrowse.servingsPerContainer;
+  }
+  if (output.searchBrowse.dosageStrength) {
+    mapped.dosage_strength = output.searchBrowse.dosageStrength;
+  }
+  if (output.searchBrowse.ingredientsList) {
+    mapped.ingredients_list = output.searchBrowse.ingredientsList;
+  }
+  if (output.searchBrowse.safetyWarnings) {
+    mapped.safety_warnings = output.searchBrowse.safetyWarnings;
+    mapped.warnings = output.searchBrowse.safetyWarnings;
+  }
+  if (output.searchBrowse.countPerPack) {
+    mapped.count_per_pack = output.searchBrowse.countPerPack;
+    mapped.count_per_package = output.searchBrowse.countPerPack;
+  }
+  if (output.searchBrowse.allergenFreeStatements) {
+    mapped.allergen_free_statements = output.searchBrowse.allergenFreeStatements;
+  }
+
+  return mapped;
 }
 
 function applyRulesEngineToSuggestion(params: {
@@ -547,22 +558,16 @@ function applyRulesEngineToSuggestion(params: {
   )
     ? rulesOutput.content.shortDescription
     : params.suggestion.suggestedShortDescription ?? "";
-  const nextLongDescription = longDescriptionNeedsRulesReplacement(
-    params.suggestion.suggestedDescription
-  )
-    ? rulesOutput.content.longDescription
-    : params.suggestion.suggestedDescription;
-  const nextBullets = bulletsNeedRulesReplacement(params.suggestion.suggestedBullets)
-    ? rulesOutput.content.bullets
-    : params.suggestion.suggestedBullets;
+  const nextLongDescription = rulesOutput.content.longDescription;
+  const nextBullets = rulesOutput.content.bullets;
 
   const suggestedAttributes = {
-    ...rulesSearchBrowse,
     ...(params.suggestion.suggestedAttributes ?? {}),
+    ...rulesSearchBrowse,
   };
   const searchBrowseAttributes = {
-    ...rulesSearchBrowse,
     ...(params.suggestion.searchBrowseAttributes ?? {}),
+    ...rulesSearchBrowse,
   };
 
   const missingAttributes = unique([
@@ -608,6 +613,10 @@ function applyRulesEngineToSuggestion(params: {
     complianceChanges: unique([
       ...(params.suggestion.applyDiagnostics?.complianceChanges ?? []),
       "rules_engine_applied",
+    ]),
+    staleFieldsCleared: unique([
+      ...(params.suggestion.applyDiagnostics?.staleFieldsCleared ?? []),
+      ...(!rulesOutput.searchBrowse.allergenFreeStatements ? ["allergen_free_statements"] : []),
     ]),
     competitorResearchStatus: params.competitorContext.status,
     competitorResearchWarnings: params.competitorContext.warnings,

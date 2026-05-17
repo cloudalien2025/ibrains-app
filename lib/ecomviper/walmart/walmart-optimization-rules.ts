@@ -2,6 +2,11 @@ import { assessWalmartListingQuality } from "@/lib/ecomviper/walmart/walmart-lis
 import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmart-compliance";
 import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 import { SUPPLEMENT_FDA_DISCLAIMER } from "@/lib/ecomviper/walmart/walmart-ai-visibility-content-policy";
+import {
+  buildWalmartOptimizationFactPack,
+  normalizeVerifiedAllergenFreeStatements,
+  type WalmartOptimizationFactPack,
+} from "@/lib/ecomviper/walmart/walmart-label-facts";
 
 const TITLE_MAX = 150;
 const TITLE_TARGET_MAX = 110;
@@ -28,22 +33,16 @@ const UNSAFE_CLAIM_PATTERNS = [
   /\bhypertension\b/i,
   /\bhigh blood pressure\b/i,
   /\berectile dysfunction\b/i,
-  /\bed\b/i,
   /\bnatural viagra\b/i,
   /\bcialis\b/i,
   /\bclinically proven\b/i,
 ];
 
-const SUPPLEMENT_SAFE_SUPPORT_PHRASES = [
-  "supports daily wellness",
-  "supports sleep quality",
-  "supports relaxation",
-  "supports digestive wellness",
-  "supports immune wellness",
-  "supports joint comfort",
-  "supports metabolism",
-  "supports focus",
-  "supports hydration",
+const SUPPORT_AREA_FALLBACK = [
+  "nighttime relaxation support",
+  "restful sleep support",
+  "sleep quality support",
+  "daily wellness support",
 ];
 
 export interface WalmartFieldOptimizationRule {
@@ -67,9 +66,9 @@ export const WalmartDocketOptimizationRules: WalmartFieldOptimizationRule[] = [
     fieldKey: "productTitle",
     objective: "Produce a clear, descriptive Walmart-safe title under 150 characters.",
     deterministicChecks: [
-      "Use Brand + Product + Support/Ingredient + Form + Count when available.",
+      "Use Brand + Product + Ingredient/Support + Form + Count when available.",
       "Avoid promotional phrasing and unsafe medical claims.",
-      "Avoid repeated keywords.",
+      "Avoid repeated keywords and duplicate product types.",
     ],
   },
   {
@@ -77,25 +76,25 @@ export const WalmartDocketOptimizationRules: WalmartFieldOptimizationRule[] = [
     objective: "Generate one concise sentence for what it is, who it is for, and support context.",
     deterministicChecks: [
       "One sentence only.",
-      "Include product identity and support language.",
-      "Exclude disease/treatment claims.",
+      "Include product identity and supplement-safe support language.",
+      "Exclude disease/treatment/drug-comparison claims.",
     ],
   },
   {
     fieldKey: "longDescription",
-    objective: "Create structured long-form listing copy with supplement-safe language.",
+    objective: "Create structured long-form listing copy with label-backed supplement facts.",
     deterministicChecks: [
       "Entity-rich opening sentence.",
-      "Label-backed facts only.",
+      "Include serving size, dosage, and suggested use when available.",
       "FDA disclaimer included exactly once for supplements.",
     ],
   },
   {
     fieldKey: "bullets",
-    objective: "Create 5-7 distinct shopper-friendly bullets.",
+    objective: "Create 5-7 distinct shopper-friendly bullets grounded in label facts.",
     deterministicChecks: [
       "Each bullet has one job.",
-      "No repeated claims.",
+      "No repeated phrases or OCR fragments.",
       "No unsupported disease/treatment language.",
     ],
   },
@@ -103,7 +102,7 @@ export const WalmartDocketOptimizationRules: WalmartFieldOptimizationRule[] = [
     fieldKey: "mediaRecommendations",
     objective: "Recommend Walmart listing media that improves trust and discoverability.",
     deterministicChecks: [
-      "Front bottle plus label detail coverage.",
+      "Front bottle plus supplement facts and directions coverage.",
       "No unverified image claims.",
     ],
   },
@@ -125,10 +124,10 @@ export const WalmartDocketOptimizationRules: WalmartFieldOptimizationRule[] = [
   },
   {
     fieldKey: "searchBrowse",
-    objective: "Populate Search & Browse attributes from product facts and taxonomy context.",
+    objective: "Populate Search & Browse attributes from trusted product facts.",
     deterministicChecks: [
-      "Use available product facts and existing structured attributes.",
-      "Do not invent allergens/certifications.",
+      "Fill serving/dosage/ingredients from label-backed fields when available.",
+      "Do not infer allergen-free claims from ingredient absence.",
     ],
   },
   {
@@ -185,11 +184,18 @@ export interface WalmartDocketOptimizationOutput {
     supplementType: string;
     form: string;
     count: string;
+    countPerPack?: string;
     servingSize: string;
+    servingsPerContainer?: string;
+    dosageStrength?: string;
     mainIngredients: string[];
+    ingredientsList?: string;
     benefitsSupportAreas: string[];
     targetAudience: string;
     suggestedUse: string;
+    directionsSuggestedUse?: string;
+    safetyWarnings?: string;
+    allergenFreeStatements?: string;
     searchKeywords: string[];
     searchTerms: string[];
     category: string;
@@ -241,24 +247,7 @@ function unique(values: string[]): string[] {
 }
 
 function normalizeWhitespace(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function sentenceCase(value: string): string {
-  const text = normalizeWhitespace(value);
-  if (!text) return "";
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function removeUnsafeFragments(value: string): string {
-  let next = value;
-  for (const phrase of PROMOTIONAL_PHRASES) {
-    next = next.replace(new RegExp(phrase, "ig"), "");
-  }
-  for (const pattern of UNSAFE_CLAIM_PATTERNS) {
-    next = next.replace(pattern, "");
-  }
-  return normalizeWhitespace(next.replace(/\s+,/g, ",").replace(/,+/g, ","));
+  return value.replace(/\s+/g, " ").replace(/\s+([,.!?;:])/g, "$1").trim();
 }
 
 function firstNonEmpty(...values: string[]): string {
@@ -269,57 +258,28 @@ function firstNonEmpty(...values: string[]): string {
   return "";
 }
 
-function inferFormFromText(value: string): string {
-  const match = value.match(/\b(capsules?|softgels?|gummies?|tablets?|powder|liquid|drops?)\b/i);
-  return match?.[1] ? sentenceCase(match[1].toLowerCase().replace(/s$/, "")) : "";
+function sentenceCase(value: string): string {
+  const text = normalizeWhitespace(value);
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function inferCountFromText(value: string): string {
-  const match = value.match(/\b(\d{1,4})\s*(capsules?|softgels?|gummies?|tablets?|ct|count|servings?)\b/i);
-  if (!match) return "";
-  const num = match[1];
-  const unit = match[2].toLowerCase();
-  if (unit === "ct" || unit === "count") return `${num} count`;
-  return `${num} ${unit}`;
+function toTitleCase(value: string): string {
+  return normalizeWhitespace(value)
+    .split(" ")
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : ""))
+    .join(" ");
 }
 
-function normalizeTitleCandidate(value: string): string {
-  return removeUnsafeFragments(value)
-    .replace(/\s*[-|:,]+\s*/g, " ")
-    .replace(/\b([A-Za-z]+)\s+\1\b/gi, "$1")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
-function enforceTitleLength(value: string): string {
-  let title = value.trim();
-  if (title.length <= TITLE_MAX) return title;
-
-  const chunks = title
-    .split(/,|\||-/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-
-  while (chunks.length > 1 && chunks.join(", ").length > TITLE_MAX) {
-    chunks.pop();
+function removeUnsafeFragments(value: string): string {
+  let next = normalizeWhitespace(value);
+  for (const phrase of PROMOTIONAL_PHRASES) {
+    next = next.replace(new RegExp(phrase, "ig"), "");
   }
-
-  title = chunks.join(", ").trim();
-  if (title.length <= TITLE_MAX) return title;
-
-  return `${title.slice(0, TITLE_MAX - 1).trimEnd()}`;
-}
-
-function ensureOneSentence(value: string): string {
-  const compact = normalizeWhitespace(value.replace(/[!?]/g, "."));
-  const first = compact.split(".").find((entry) => entry.trim().length > 0) ?? compact;
-  return `${first.trim().replace(/[.,;:]+$/, "")}.`;
-}
-
-function normalizeAudience(value: string): string {
-  const text = asText(value);
-  if (!text) return "Adults";
-  return sentenceCase(text);
+  for (const pattern of UNSAFE_CLAIM_PATTERNS) {
+    next = next.replace(pattern, "");
+  }
+  return normalizeWhitespace(next.replace(/\b([A-Za-z]+)\s+\1\b/gi, "$1"));
 }
 
 function containsUnsafeClaim(value: string): boolean {
@@ -331,75 +291,53 @@ function containsPromotionalPhrase(value: string): boolean {
   return PROMOTIONAL_PHRASES.some((phrase) => haystack.includes(phrase));
 }
 
-function normalizeLongDescription(input: {
-  title: string;
-  productType: string;
-  form: string;
-  count: string;
-  ingredients: string[];
-  supportAreas: string[];
-  audience: string;
-  competitorPatterns?: WalmartDocketOptimizationInput["competitorPatterns"];
-}): string {
-  const identityLine = `${input.title} is a ${input.productType.toLowerCase()} in ${
-    input.count || `a ${input.form.toLowerCase()} format`
-  } designed for ${input.audience.toLowerCase()}.`;
-
-  const ingredientLine = input.ingredients.length
-    ? `The formula features ${input.ingredients.slice(0, 4).join(", ")} with label-backed positioning for ${
-        input.supportAreas[0] ?? "daily wellness"
-      }.`
-    : `The formula is positioned to ${input.supportAreas[0] ?? SUPPLEMENT_SAFE_SUPPORT_PHRASES[0]}.`;
-
-  const useCaseLine = `Use as directed on the product label and review the Supplement Facts panel before purchase.`;
-
-  const competitorPatternLine =
-    (input.competitorPatterns?.gaps ?? []).length > 0
-      ? `Differentiation note: highlight label-backed facts shoppers may miss in similar listings.`
-      : "";
-
-  const parts = [identityLine, ingredientLine, useCaseLine, competitorPatternLine]
-    .map((entry) => removeUnsafeFragments(entry))
-    .filter(Boolean);
-
-  const joined = `${parts.join("\n\n")}\n\n${SUPPLEMENT_FDA_DISCLAIMER}`;
-  const disclaimerCount = joined.split(SUPPLEMENT_FDA_DISCLAIMER).length - 1;
-  if (disclaimerCount === 1) return joined;
-  const without = joined.replace(new RegExp(SUPPLEMENT_FDA_DISCLAIMER, "g"), "").trim();
-  return `${without}\n\n${SUPPLEMENT_FDA_DISCLAIMER}`;
+function inferFormFromText(value: string): string {
+  const match = value.match(/\b(capsules?|softgels?|gummies?|tablets?|powder|liquid)\b/i);
+  if (!match) return "";
+  const unit = match[1].toLowerCase();
+  if (unit.startsWith("capsule")) return "Capsule";
+  if (unit.startsWith("tablet")) return "Tablet";
+  if (unit.startsWith("softgel")) return "Softgel";
+  if (unit.startsWith("gumm")) return "Gummy";
+  if (unit === "powder") return "Powder";
+  if (unit === "liquid") return "Liquid";
+  return sentenceCase(unit);
 }
 
-function buildSearchKeywords(input: {
-  brand: string;
-  productType: string;
-  ingredient: string;
-  supportArea: string;
-  form: string;
-  count: string;
-  audience: string;
-}): string[] {
-  const base = unique([
-    `${input.ingredient} ${input.supportArea} supplement`.trim(),
-    `${input.form} ${input.count}`.trim(),
-    `${input.audience} ${input.supportArea}`.trim(),
-    `${input.brand} ${input.productType}`.trim(),
-    `${input.supportArea} daily wellness supplement`.trim(),
-  ])
-    .map((entry) => removeUnsafeFragments(entry))
-    .filter((entry) => entry.length > 3 && !containsUnsafeClaim(entry));
-
-  return base.slice(0, 8);
+function inferCountFromText(value: string): string {
+  const match = value.match(/\b(\d{1,4})\s*(capsules?|tablets?|softgels?|gummies?|count|ct)\b/i);
+  if (!match) return "";
+  const amount = match[1];
+  const unit = match[2].toLowerCase();
+  if (unit === "count" || unit === "ct") return `${amount} count`;
+  return `${amount} ${unit}`;
 }
 
-function buildSearchTerms(keywords: string[]): string[] {
-  return unique(
-    keywords.flatMap((entry) => {
-      const normalized = entry.toLowerCase();
-      return [normalized, normalized.replace(/supplement/gi, "dietary supplement")];
-    })
-  )
-    .filter((entry) => entry.length > 3)
-    .slice(0, 12);
+function ensureOneSentence(value: string): string {
+  const compact = normalizeWhitespace(value.replace(/[!?]/g, "."));
+  const first = compact.split(".").find((entry) => entry.trim().length > 0) ?? compact;
+  return `${first.trim().replace(/[.,;:]+$/, "")}.`;
+}
+
+function enforceTitleLength(value: string): string {
+  const title = normalizeWhitespace(value);
+  if (title.length <= TITLE_MAX) return title;
+  const trimmed = title.slice(0, TITLE_MAX).replace(/\s+\S*$/, "");
+  return normalizeWhitespace(trimmed);
+}
+
+function normalizeTitleCandidate(value: string): string {
+  return removeUnsafeFragments(value)
+    .replace(/\s*[-|:,]+\s*/g, " ")
+    .replace(/\b([A-Za-z]+)\s+\1\b/gi, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function normalizeAudience(value: string): string {
+  const text = asText(value);
+  if (!text) return "Adults";
+  return sentenceCase(text);
 }
 
 function toDraftRecord(input: WalmartDocketOptimizationInput): Record<string, unknown> {
@@ -411,11 +349,10 @@ function mergeSearchBrowseFromProductAndDraft(input: WalmartDocketOptimizationIn
     ...(input.product.searchBrowseAttributes ?? {}),
     ...(input.product.attributes ?? {}),
   };
-
-  const draft = toDraftRecord(input);
+  const fromDraftObject = toDraftRecord(input);
   const fromDraft = {
-    ...(asObject(draft.searchBrowseAttributes) ?? {}),
-    ...(asObject(draft.attributes) ?? {}),
+    ...(asObject(fromDraftObject.searchBrowseAttributes) ?? {}),
+    ...(asObject(fromDraftObject.attributes) ?? {}),
   };
 
   const merged: Record<string, string> = {};
@@ -426,17 +363,143 @@ function mergeSearchBrowseFromProductAndDraft(input: WalmartDocketOptimizationIn
       merged[normalizedKey] = normalizedValue;
     }
   }
-
   return merged;
+}
+
+function normalizeIngredientForTitle(value: string): string {
+  return normalizeWhitespace(value.replace(/\b\d+(?:\.\d+)?\s*(mg|g|mcg|iu)\b/gi, ""));
+}
+
+function inferSupportAreas(input: {
+  title: string;
+  searchBrowse: Record<string, string>;
+  fallback: string[];
+}): string[] {
+  const supportAreas = unique([
+    ...asList(input.searchBrowse.support_areas),
+    ...asList(input.searchBrowse.benefits_support_areas),
+    ...asList(input.searchBrowse.supported_benefits),
+    ...input.fallback,
+  ])
+    .map((entry) => removeUnsafeFragments(entry))
+    .filter(Boolean);
+
+  const normalizedTitle = input.title.toLowerCase();
+  if (normalizedTitle.includes("sleep")) {
+    supportAreas.push("nighttime relaxation support", "restful sleep support");
+  }
+  if (normalizedTitle.includes("digest")) {
+    supportAreas.push("digestive wellness support");
+  }
+  if (normalizedTitle.includes("joint")) {
+    supportAreas.push("joint comfort support");
+  }
+
+  return unique(supportAreas).slice(0, 6);
+}
+
+function buildSearchKeywords(input: {
+  brand: string;
+  productType: string;
+  ingredient: string;
+  supportArea: string;
+  form: string;
+  count: string;
+  audience: string;
+}): string[] {
+  const raw = unique([
+    `${input.ingredient} ${input.supportArea} supplement`.trim(),
+    `${input.form} ${input.count}`.trim(),
+    `${input.audience} ${input.supportArea}`.trim(),
+    `${input.brand} ${input.productType}`.trim(),
+    `${input.supportArea} daily wellness supplement`.trim(),
+  ]);
+  return raw
+    .map((entry) => removeUnsafeFragments(entry))
+    .filter((entry) => entry.length > 3 && !containsUnsafeClaim(entry))
+    .slice(0, 10);
+}
+
+function buildSearchTerms(keywords: string[]): string[] {
+  return unique(
+    keywords.flatMap((entry) => {
+      const lower = entry.toLowerCase();
+      return [lower, lower.replace(/supplement/g, "dietary supplement")];
+    })
+  )
+    .filter((entry) => entry.length > 3 && !containsUnsafeClaim(entry))
+    .slice(0, 12);
+}
+
+function buildLongDescription(input: {
+  productTitle: string;
+  productType: string;
+  form: string;
+  count: string;
+  factPack: WalmartOptimizationFactPack;
+  supportAreas: string[];
+  audience: string;
+}): string {
+  const labelFacts = input.factPack.labelFacts;
+  const identity = `${input.productTitle} is a ${input.count || input.form.toLowerCase()} dietary supplement formulated for ${(
+    input.supportAreas[0] ?? "daily wellness support"
+  ).toLowerCase()}.`;
+
+  const servingLine = labelFacts.servingSize
+    ? `Each serving is ${labelFacts.servingSize}${
+        labelFacts.servingsPerContainer
+          ? ` with ${labelFacts.servingsPerContainer} servings per container`
+          : ""
+      }.`
+    : "";
+  const dosageLine = labelFacts.dosageStrength
+    ? `Label-backed dosage includes ${labelFacts.dosageStrength}.`
+    : "";
+  const blendLine =
+    labelFacts.proprietaryBlendName && labelFacts.proprietaryBlendAmount
+      ? `${labelFacts.proprietaryBlendName} provides ${labelFacts.proprietaryBlendAmount} per serving.`
+      : "";
+  const ingredientLine = labelFacts.activeIngredients.length
+    ? `Active ingredients include ${labelFacts.activeIngredients.slice(0, 12).join(", ")}.`
+    : "";
+  const useLine = labelFacts.suggestedUse
+    ? labelFacts.suggestedUse
+    : "Use as directed on the product label.";
+  const audienceLine = `Designed for ${input.audience.toLowerCase()} seeking ${(
+    input.supportAreas[0] ?? "daily wellness support"
+  ).toLowerCase()}.`;
+  const cautionLine = labelFacts.cautionsWarnings ? labelFacts.cautionsWarnings : "Review label cautions before use.";
+
+  const parts = [
+    identity,
+    servingLine,
+    dosageLine,
+    blendLine,
+    ingredientLine,
+    useLine,
+    audienceLine,
+    cautionLine,
+  ]
+    .map((entry) => removeUnsafeFragments(entry))
+    .filter(Boolean);
+  const withoutDisclaimer = parts.join(" ");
+  const withOneDisclaimer = `${withoutDisclaimer} ${SUPPLEMENT_FDA_DISCLAIMER}`;
+  const disclaimerCount = withOneDisclaimer.split(SUPPLEMENT_FDA_DISCLAIMER).length - 1;
+  if (disclaimerCount === 1) return withOneDisclaimer;
+  return `${withoutDisclaimer} ${SUPPLEMENT_FDA_DISCLAIMER}`;
 }
 
 export function buildWalmartDocketOptimizationPromptContract(
   input: WalmartDocketOptimizationInput
 ): Record<string, unknown> {
   const searchBrowse = mergeSearchBrowseFromProductAndDraft(input);
+  const factPack = buildWalmartOptimizationFactPack({
+    product: input.product,
+    draftPayload: input.draftPayload ?? null,
+  });
 
   return {
-    task: "Optimize the full Walmart listing docket in one pass.",
+    task: "Optimize the full Walmart listing docket in one pass using label-backed facts first.",
     rules: WalmartDocketOptimizationRules,
     constraints: {
       titleMaxChars: TITLE_MAX,
@@ -450,6 +513,8 @@ export function buildWalmartDocketOptimizationPromptContract(
       fdaDisclaimerExactOnceForSupplements: true,
       gtinLookupOnly: true,
       neverCopyCompetitorText: true,
+      noAllergenInferenceFromAbsence: true,
+      markUncertainFieldsNeedsReview: true,
     },
     productFacts: {
       sku: input.product.sku,
@@ -461,9 +526,20 @@ export function buildWalmartDocketOptimizationPromptContract(
       bulletPoints: input.product.bulletPoints,
       attributes: input.product.attributes,
       searchBrowseAttributes: searchBrowse,
+      labelFactPack: factPack.labelFacts,
     },
     competitorPatterns: input.competitorPatterns ?? null,
     requiredOutputShape: {
+      factPack: {
+        servingSize: "string",
+        servingsPerContainer: "string",
+        dosageStrength: "string",
+        activeIngredients: ["string"],
+        suggestedUse: "string",
+        warnings: "string",
+        allergenFreeStatements: ["string"],
+        evidence: "record",
+      },
       content: {
         productTitle: "string",
         shortDescription: "string",
@@ -486,11 +562,18 @@ export function buildWalmartDocketOptimizationPromptContract(
         supplementType: "string",
         form: "string",
         count: "string",
+        countPerPack: "string",
         servingSize: "string",
+        servingsPerContainer: "string",
+        dosageStrength: "string",
         mainIngredients: ["string"],
+        ingredientsList: "string",
         benefitsSupportAreas: ["string"],
         targetAudience: "string",
         suggestedUse: "string",
+        directionsSuggestedUse: "string",
+        safetyWarnings: "string",
+        allergenFreeStatements: "string",
         searchKeywords: ["string"],
         searchTerms: ["string"],
         category: "string",
@@ -510,7 +593,8 @@ export function buildWalmartDocketOptimizationPromptContract(
 }
 
 export function validateWalmartOptimizedDocket(
-  output: WalmartDocketOptimizationOutput
+  output: WalmartDocketOptimizationOutput,
+  options?: { factPack?: WalmartOptimizationFactPack }
 ): { warnings: string[]; blockers: string[] } {
   const warnings: string[] = [];
   const blockers: string[] = [];
@@ -524,33 +608,58 @@ export function validateWalmartOptimizedDocket(
   if (containsPromotionalPhrase(title)) blockers.push("Product title contains promotional phrasing.");
   if (containsUnsafeClaim(title)) blockers.push("Product title contains unsafe supplement claim language.");
 
-  const sentenceParts = shortDescription.split(/[.!?]/).filter((entry) => entry.trim().length > 0);
+  const sentenceParts = shortDescription
+    .split(/[.!?]/)
+    .filter((entry) => entry.trim().length > 0);
   if (sentenceParts.length !== 1) warnings.push("Short description should be exactly one sentence.");
-  if (containsUnsafeClaim(shortDescription)) blockers.push("Short description contains unsafe supplement claim language.");
+  if (containsUnsafeClaim(shortDescription)) {
+    blockers.push("Short description contains unsafe supplement claim language.");
+  }
 
   const disclaimerCount = longDescription.split(SUPPLEMENT_FDA_DISCLAIMER).length - 1;
-  if (disclaimerCount !== 1) blockers.push("Long description must include FDA disclaimer exactly once for supplements.");
-  if (containsUnsafeClaim(longDescription)) blockers.push("Long description contains unsafe supplement claim language.");
+  if (disclaimerCount !== 1) {
+    blockers.push("Long description must include FDA disclaimer exactly once for supplements.");
+  }
+  if (containsUnsafeClaim(longDescription)) {
+    blockers.push("Long description contains unsafe supplement claim language.");
+  }
+  if (/differentiation note/i.test(longDescription)) {
+    warnings.push("Long description contains generic filler text.");
+  }
 
   if (output.content.bullets.length < 5 || output.content.bullets.length > 7) {
     warnings.push("Bullets should contain 5-7 entries.");
+  }
+  if (output.content.bullets.some((entry) => entry.length < 12)) {
+    warnings.push("Bullets contain very short fragments that should be reviewed.");
   }
 
   if (!output.searchBrowse.productType && !output.searchBrowse.category) {
     blockers.push("Search & Browse requires product type or category.");
   }
+  if (!output.searchBrowse.servingSize) {
+    warnings.push("Serving Size is missing.");
+  }
+  if (!output.searchBrowse.servingsPerContainer) {
+    warnings.push("Servings per container is missing.");
+  }
 
-  const keywordText = [...output.searchBrowse.searchKeywords, ...output.searchBrowse.searchTerms].join(" ");
+  const keywordText = [
+    ...output.searchBrowse.searchKeywords,
+    ...output.searchBrowse.searchTerms,
+  ].join(" ");
   if (containsUnsafeClaim(keywordText)) {
     blockers.push("Search keywords/search terms include unsafe claims.");
   }
 
-  if (!output.searchBrowse.searchKeywords.length) {
-    warnings.push("Search keywords are missing.");
-  }
-
-  if (!output.searchBrowse.searchTerms.length) {
-    warnings.push("Search terms are missing.");
+  const allergenClaims = normalizeVerifiedAllergenFreeStatements(
+    output.searchBrowse.allergenFreeStatements ?? ""
+  );
+  if (
+    allergenClaims.length > 0 &&
+    (options?.factPack?.labelFacts.allergenFreeStatements.length ?? 0) === 0
+  ) {
+    blockers.push("Allergen-free statements are present without verified label evidence.");
   }
 
   return {
@@ -570,12 +679,19 @@ function projectedProductFromOutput(
     product_form: output.searchBrowse.form,
     form: output.searchBrowse.form,
     count: output.searchBrowse.count,
+    count_per_pack: output.searchBrowse.countPerPack ?? "",
     serving_size: output.searchBrowse.servingSize,
+    servings_per_container: output.searchBrowse.servingsPerContainer ?? "",
+    servings: output.searchBrowse.servingsPerContainer ?? "",
+    dosage_strength: output.searchBrowse.dosageStrength ?? "",
     main_ingredients: output.searchBrowse.mainIngredients.join(", "),
+    ingredients_list: output.searchBrowse.ingredientsList ?? "",
     support_areas: output.searchBrowse.benefitsSupportAreas.join(", "),
     target_audience: output.searchBrowse.targetAudience,
     suggested_use: output.searchBrowse.suggestedUse,
-    directions_suggested_use: output.searchBrowse.suggestedUse,
+    directions_suggested_use: output.searchBrowse.directionsSuggestedUse ?? output.searchBrowse.suggestedUse,
+    safety_warnings: output.searchBrowse.safetyWarnings ?? "",
+    allergen_free_statements: output.searchBrowse.allergenFreeStatements ?? "",
     search_keywords: output.searchBrowse.searchKeywords.join(", "),
     search_terms: output.searchBrowse.searchTerms.join(", "),
     category: output.searchBrowse.category,
@@ -612,10 +728,7 @@ export function scoreWalmartOptimizedDocket(input: {
   if (input.output.content.productTitle !== input.input.product.title) {
     reasons.push("Title aligned to Walmart-friendly formula and concise entity coverage.");
   }
-  if (
-    input.output.content.shortDescription &&
-    input.output.content.shortDescription !== input.input.product.shortDescription
-  ) {
+  if (input.output.content.shortDescription) {
     reasons.push("Short description converted to one-sentence support-focused summary.");
   }
   if (input.output.content.bullets.length >= 5) {
@@ -623,6 +736,9 @@ export function scoreWalmartOptimizedDocket(input: {
   }
   if (input.output.searchBrowse.searchKeywords.length > 0) {
     reasons.push("Search keywords/terms improved for Walmart and agentic retrieval.");
+  }
+  if (input.output.searchBrowse.servingSize) {
+    reasons.push("Serving Size was completed from trusted label facts.");
   }
 
   return {
@@ -637,6 +753,11 @@ export function applyWalmartDocketOptimizationRules(
 ): WalmartOptimizationRuleResult {
   const draft = toDraftRecord(input);
   const searchBrowse = mergeSearchBrowseFromProductAndDraft(input);
+  const factPack = buildWalmartOptimizationFactPack({
+    product: input.product,
+    draftPayload: input.draftPayload ?? null,
+  });
+  const labelFacts = factPack.labelFacts;
 
   const brand = firstNonEmpty(
     asText(draft.brand),
@@ -654,61 +775,68 @@ export function applyWalmartDocketOptimizationRules(
   );
   const productType = sentenceCase(removeUnsafeFragments(rawProductType || "Dietary Supplement"));
 
-  const mainIngredients = unique([
-    ...asList(searchBrowse.main_ingredients),
-    ...asList(searchBrowse.ingredients),
-    ...asList(searchBrowse.primary_ingredient),
-  ]).slice(0, 6);
-
-  const supportAreas = unique([
-    ...asList(searchBrowse.support_areas),
-    ...asList(searchBrowse.benefits_support_areas),
-    ...asList(searchBrowse.supported_benefits),
-  ])
-    .map((entry) => removeUnsafeFragments(entry))
-    .filter(Boolean)
-    .slice(0, 5);
-
   const form = firstNonEmpty(
     asText(searchBrowse.product_form),
     asText(searchBrowse.form),
+    inferFormFromText(labelFacts.capsuleTabletGummyCount),
     inferFormFromText(originalTitle),
     "Capsule"
   );
 
   const count = firstNonEmpty(
+    labelFacts.capsuleTabletGummyCount,
     asText(searchBrowse.count),
-    asText(searchBrowse.servings_per_container),
     inferCountFromText(originalTitle)
   );
+  const countPerPack = firstNonEmpty(asText(searchBrowse.count_per_pack), count ? "1" : "");
 
-  const ingredientOrSupport = firstNonEmpty(mainIngredients[0] ?? "", supportAreas[0] ?? "");
+  const ingredientsFromSearch = unique([
+    ...asList(searchBrowse.main_ingredients),
+    ...asList(searchBrowse.ingredients_list),
+  ]);
+  const mainIngredients = unique([
+    ...labelFacts.activeIngredients,
+    ...ingredientsFromSearch,
+  ])
+    .map((entry) => normalizeWhitespace(entry))
+    .filter(Boolean)
+    .slice(0, 16);
+
+  const supportAreas = inferSupportAreas({
+    title: originalTitle,
+    searchBrowse,
+    fallback: SUPPORT_AREA_FALLBACK,
+  });
+  const supportPhrase = firstNonEmpty(
+    supportAreas[0] ? `supports ${supportAreas[0].toLowerCase()}` : "",
+    "supports daily wellness"
+  );
+
   const productNameCandidate = firstNonEmpty(asText(searchBrowse.product_name), originalTitle)
     .replace(new RegExp(`^${brand}\\s+`, "i"), "")
     .trim();
+  const ingredientOrSupport = firstNonEmpty(
+    normalizeIngredientForTitle(mainIngredients[0] ?? ""),
+    supportAreas[0]
+  );
 
   const titleSegments = [
-    brand,
-    productNameCandidate || productType,
-    ingredientOrSupport,
-    form,
-    count,
-  ]
-    .map((entry) => normalizeTitleCandidate(entry))
-    .filter(Boolean);
-
-  const rawTitle = titleSegments.join(" ").replace(/\s{2,}/g, " ").trim();
-  let productTitle = enforceTitleLength(rawTitle);
+    normalizeTitleCandidate(brand),
+    normalizeTitleCandidate(productNameCandidate || productType),
+    normalizeTitleCandidate(ingredientOrSupport),
+    normalizeTitleCandidate(form),
+    normalizeTitleCandidate(count),
+  ].filter(Boolean);
+  let productTitle = enforceTitleLength(titleSegments.join(" "));
   if (productTitle.length < TITLE_TARGET_MIN) {
     productTitle = enforceTitleLength(`${productTitle} ${productType}`.trim());
+  }
+  if (productTitle.length > TITLE_TARGET_MAX && productTitle.includes("  ")) {
+    productTitle = enforceTitleLength(productTitle.replace(/\s{2,}/g, " "));
   }
 
   const audience = normalizeAudience(
     firstNonEmpty(asText(searchBrowse.target_audience), asText(searchBrowse.audience), "Adults")
-  );
-  const supportPhrase = firstNonEmpty(
-    supportAreas[0] ? `supports ${supportAreas[0].toLowerCase()}` : "",
-    SUPPLEMENT_SAFE_SUPPORT_PHRASES[0]
   );
 
   const shortDescription = ensureOneSentence(
@@ -717,44 +845,56 @@ export function applyWalmartDocketOptimizationRules(
     )
   );
 
-  const longDescription = normalizeLongDescription({
-    title: productTitle,
+  const longDescription = buildLongDescription({
+    productTitle,
     productType,
     form,
     count,
-    ingredients: mainIngredients,
+    factPack,
     supportAreas,
     audience,
-    competitorPatterns: input.competitorPatterns ?? null,
   });
 
+  const supplyText =
+    labelFacts.servingsPerContainer && labelFacts.servingSize
+      ? `${labelFacts.servingsPerContainer}-day supply when taken as directed`
+      : "";
   const bullets = unique([
     `${productType} identity - ${brand} ${productNameCandidate || productType} in ${form.toLowerCase()} format.`,
-    `Primary support area - designed to ${supportPhrase}.`,
-    mainIngredients[0]
-      ? `Ingredient context - includes ${mainIngredients[0]} as listed on the product label.`
-      : "Ingredient context - label-backed ingredient details are provided in the Supplement Facts panel.",
+    `Support focus - designed to ${supportPhrase}.`,
+    labelFacts.servingSize
+      ? `Serving size - ${labelFacts.servingSize} per serving from Supplement Facts.`
+      : "",
+    labelFacts.dosageStrength
+      ? `Dosage facts - ${labelFacts.dosageStrength}.`
+      : "",
+    mainIngredients.length > 0
+      ? `Label-backed ingredients - ${mainIngredients.slice(0, 8).join(", ")}.`
+      : "",
     count
-      ? `Form and count - ${count} in ${form.toLowerCase()} format for routine use.`
-      : `Form and count - ${form} format with count verified from label details before publish.`,
-    "Usage occasion - intended for consistent daily wellness routines as directed on label.",
-    "Safety note - review label directions and consult a healthcare professional when appropriate.",
+      ? `Count and routine - ${count}${supplyText ? `, ${supplyText}` : ""}.`
+      : "",
+    labelFacts.suggestedUse
+      ? `Suggested use - ${labelFacts.suggestedUse}`
+      : "Suggested use - follow product label directions.",
+    labelFacts.cautionsWarnings
+      ? `Caution - ${labelFacts.cautionsWarnings}`
+      : "Caution - review label warnings before use.",
   ])
     .map((entry) => removeUnsafeFragments(entry))
     .filter(Boolean)
     .slice(0, 7);
-
   while (bullets.length < 5) {
-    bullets.push("Listing quality note - include complete structured attributes for Walmart search and browse relevance.");
+    bullets.push("Listing quality - keep structured attributes complete and label-accurate.");
   }
 
   const mediaRecommendations = [
     "Front bottle hero image with full label visibility",
     "Supplement Facts panel image",
-    "Suggested use and direction label close-up",
+    "Suggested use/directions label close-up",
     "Ingredient/formula close-up image",
     "Lifestyle context image aligned to label-safe use case",
-    "Multi-pack comparison image when applicable",
+    "Multi-pack image when applicable",
   ];
 
   const altTextGuidance = removeUnsafeFragments(
@@ -772,30 +912,22 @@ export function applyWalmartDocketOptimizationRules(
   const searchKeywords = buildSearchKeywords({
     brand,
     productType,
-    ingredient: ingredientOrSupport || "daily wellness",
+    ingredient: normalizeIngredientForTitle(mainIngredients[0] ?? "supplement"),
     supportArea: supportAreas[0] || "daily wellness",
     form,
     count: count || "count",
     audience,
   });
-
-  const searchTerms = buildSearchTerms(searchKeywords).filter((entry) => !containsUnsafeClaim(entry));
-
-  const suggestedUse = ensureOneSentence(
-    removeUnsafeFragments(
-      firstNonEmpty(
-        asText(searchBrowse.suggested_use),
-        asText(searchBrowse.directions_suggested_use),
-        "Use as directed on the product label."
-      )
-    )
+  const searchTerms = buildSearchTerms(searchKeywords);
+  const suggestedUse = firstNonEmpty(
+    labelFacts.suggestedUse,
+    asText(searchBrowse.suggested_use),
+    asText(searchBrowse.directions_suggested_use),
+    "Use as directed on the product label."
   );
-
-  const category = firstNonEmpty(
-    asText(searchBrowse.category),
-    input.product.category,
-    productType
-  );
+  const category = firstNonEmpty(asText(searchBrowse.category), input.product.category, productType);
+  const ingredientsList = unique([...mainIngredients, ...labelFacts.inactiveIngredients]).join(", ");
+  const allergenFreeStatements = labelFacts.allergenFreeStatements.join(", ");
 
   const compliancePayload = {
     title: productTitle,
@@ -807,16 +939,22 @@ export function applyWalmartDocketOptimizationRules(
       supplement_type: productType,
       product_form: form,
       count,
+      serving_size: labelFacts.servingSize,
+      servings_per_container: labelFacts.servingsPerContainer,
+      dosage_strength: labelFacts.dosageStrength,
       main_ingredients: mainIngredients.join(", "),
+      ingredients_list: ingredientsList,
       support_areas: supportAreas.join(", "),
       target_audience: audience,
       suggested_use: suggestedUse,
+      directions_suggested_use: labelFacts.directions || suggestedUse,
+      safety_warnings: labelFacts.cautionsWarnings,
+      allergen_free_statements: allergenFreeStatements,
       search_keywords: searchKeywords.join(", "),
       search_terms: searchTerms.join(", "),
       category,
     },
   } satisfies Record<string, unknown>;
-
   const complianceReview = evaluateWalmartListingCompliance(compliancePayload);
 
   const output: WalmartDocketOptimizationOutput = {
@@ -852,19 +990,27 @@ export function applyWalmartDocketOptimizationRules(
     searchBrowse: {
       productType,
       supplementType: productType,
-      form,
+      form: toTitleCase(form),
       count,
-      servingSize: firstNonEmpty(asText(searchBrowse.serving_size), "Use label directions"),
+      countPerPack,
+      servingSize: labelFacts.servingSize,
+      servingsPerContainer: labelFacts.servingsPerContainer,
+      dosageStrength: labelFacts.dosageStrength,
       mainIngredients,
-      benefitsSupportAreas: supportAreas.length > 0 ? supportAreas : ["daily wellness"],
+      ingredientsList,
+      benefitsSupportAreas: supportAreas.length > 0 ? supportAreas : ["daily wellness support"],
       targetAudience: audience,
       suggestedUse,
+      directionsSuggestedUse: labelFacts.directions || suggestedUse,
+      safetyWarnings: labelFacts.cautionsWarnings,
+      allergenFreeStatements,
       searchKeywords,
       searchTerms,
       category,
       warnings: unique([
         "Do not include disease/treatment claims in Search & Browse fields.",
         "GTIN/UPC remain lookup identifiers only.",
+        ...factPack.warnings,
       ]),
     },
     score: {
@@ -878,23 +1024,30 @@ export function applyWalmartDocketOptimizationRules(
     },
   };
 
-  const validation = validateWalmartOptimizedDocket(output);
-  output.validation = validation;
+  const validation = validateWalmartOptimizedDocket(output, { factPack });
+  output.validation = {
+    warnings: unique([
+      ...validation.warnings,
+      ...complianceReview.warnings,
+      ...factPack.warnings,
+    ]),
+    blockers: unique([
+      ...validation.blockers,
+      ...complianceReview.violations,
+    ]),
+  };
+
+  if (!labelFacts.allergenFreeStatements.length && output.searchBrowse.allergenFreeStatements) {
+    output.validation.blockers.push(
+      "Allergen-free statements must be evidence-backed by explicit label text."
+    );
+  }
 
   const score = scoreWalmartOptimizedDocket({
     input,
     output,
   });
   output.score = score;
-
-  output.validation.warnings = unique([
-    ...output.validation.warnings,
-    ...complianceReview.warnings,
-  ]);
-  output.validation.blockers = unique([
-    ...output.validation.blockers,
-    ...complianceReview.violations,
-  ]);
 
   return {
     output,
