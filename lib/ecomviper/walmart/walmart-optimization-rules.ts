@@ -384,17 +384,63 @@ function countWordOccurrences(value: string, needle: RegExp): number {
   return matches ? matches.length : 0;
 }
 
+function stripOcrFragments(value: string): string {
+  return normalizeWhitespace(
+    value
+      .replace(/\b%dv\b/gi, " ")
+      .replace(/\b\d+(?:\.\d+)?\s*%\s*dv\b/gi, " ")
+      .replace(/\b\d+(?:\.\d+)?\s*(mg|mcg|g|iu)\s+\d+(?:\.\d+)?\s*%/gi, " ")
+      .replace(/\s{2,}/g, " ")
+  );
+}
+
+function normalizeFlavorClaimToken(value: string): string {
+  return normalizeWhitespace(
+    value
+      .toLowerCase()
+      .replace(/\bflavou?r(?:ed)?\b/g, " ")
+      .replace(/[^\w\s-]/g, " ")
+  );
+}
+
+function isFlavorClaimSupported(claim: string, explicitFlavor: string): boolean {
+  const normalizedClaim = normalizeFlavorClaimToken(claim);
+  const normalizedExplicit = normalizeFlavorClaimToken(explicitFlavor);
+  if (!normalizedClaim || !normalizedExplicit) return false;
+  return (
+    normalizedClaim === normalizedExplicit ||
+    normalizedClaim.includes(normalizedExplicit) ||
+    normalizedExplicit.includes(normalizedClaim)
+  );
+}
+
+function stripFlavorClaimsFromCopy(text: string, claims: string[]): string {
+  let cleaned = text;
+  for (const claim of claims) {
+    const escaped = claim.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    cleaned = cleaned.replace(new RegExp(`(?:,\\s*)?${escaped}(?:\\s*,)?`, "gi"), " ");
+  }
+  return cleaned
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*,/g, ", ")
+    .replace(/^[,;\s]+/, "")
+    .replace(/[,\s]+$/, "")
+    .trim();
+}
+
 export function cleanWalmartOptimizedCopy(
   text: string,
   context: { field: "title" | "shortDescription" | "longDescription" | "bullet" }
 ): string {
-  let cleaned = normalizeWhitespace(text);
+  let cleaned = stripOcrFragments(normalizeWhitespace(text));
   if (!cleaned) return "";
 
   cleaned = cleaned
     .replace(/\bdesigned to supports\b/gi, "designed to support")
     .replace(/\bsupports supports\b/gi, "supports")
     .replace(/\bsupports ([a-z][a-z\s-]{1,40}) support\b/gi, "supports $1")
+    .replace(/\bunflavo(?:r|u)ed\s+flavou?r\b/gi, "")
     .replace(/\bcapsules? format\b/gi, "capsule form")
     .replace(/\b(\d+)\s+capsules?\s+dietary supplement\b/gi, "$1-capsule dietary supplement")
     .replace(/,\s*([A-Za-z])/g, ", $1")
@@ -429,32 +475,17 @@ export function removeUnsupportedFlavorClaims(
   const base = normalizeWhitespace(text);
   if (!base) return { text: "", removedClaims: [] };
 
+  const claims = detectWalmartFlavorClaims(base);
   const hasExplicitFlavor =
     flavorResolution.confidence === "explicit" &&
     flavorResolution.flavor.trim().toLowerCase() !== "unflavored";
-  if (hasExplicitFlavor) {
-    const explicit = flavorResolution.flavor.toLowerCase();
-    const unsupported = detectWalmartFlavorClaims(base).filter(
-      (claim) => !claim.toLowerCase().includes(explicit)
-    );
-    return { text: base, removedClaims: unique(unsupported) };
-  }
+  const removedClaims = hasExplicitFlavor
+    ? claims.filter((claim) => !isFlavorClaimSupported(claim, flavorResolution.flavor))
+    : claims;
 
-  const removedClaims = detectWalmartFlavorClaims(base);
   if (removedClaims.length === 0) return { text: base, removedClaims: [] };
 
-  let cleaned = base;
-  for (const claim of removedClaims) {
-    const escaped = claim.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    cleaned = cleaned.replace(new RegExp(`(?:,\\s*)?${escaped}(?:\\s*,)?`, "gi"), " ");
-  }
-  cleaned = cleaned
-    .replace(/\s{2,}/g, " ")
-    .replace(/\s+,/g, ",")
-    .replace(/,\s*,/g, ", ")
-    .replace(/^[,;\s]+/, "")
-    .replace(/[,\s]+$/, "")
-    .trim();
+  const cleaned = stripFlavorClaimsFromCopy(base, removedClaims);
   return {
     text: normalizeWhitespace(cleaned),
     removedClaims: unique(removedClaims),
@@ -532,6 +563,25 @@ export function validateWalmartOptimizedCopy(
   }
   if (countWordOccurrences(output.content.shortDescription.toLowerCase(), /\bsupports?\b/g) > 3) {
     warnings.push("Short description had excessive support phrasing and was normalized.");
+  }
+  const finalCopy = [
+    output.content.productTitle,
+    output.content.shortDescription,
+    output.content.longDescription,
+    ...output.content.bullets,
+  ].join(" ");
+  if (/\bunflavo(?:r|u)ed\s+flavou?r\b/i.test(finalCopy)) {
+    blockers.push("Copy contains unsupported 'Unflavored flavor' phrasing.");
+  }
+  if (
+    /\bsupports supports\b/i.test(finalCopy) ||
+    /\bsupports [a-z][a-z\s-]{1,40} support\b/i.test(finalCopy) ||
+    /\bdesigned to supports\b/i.test(finalCopy)
+  ) {
+    blockers.push("Copy contains repeated or malformed support phrasing.");
+  }
+  if (/%dv/i.test(finalCopy)) {
+    blockers.push("Copy contains raw OCR fragments that must be removed.");
   }
   return {
     warnings: unique(warnings),
@@ -1045,8 +1095,9 @@ export function applyWalmartDocketOptimizationRules(
   const productNameCandidate = firstNonEmpty(asText(searchBrowse.product_name), originalTitle)
     .replace(new RegExp(`^${brand}\\s+`, "i"), "")
     .trim();
+  const titleIngredientCandidate = normalizeIngredientForTitle(mainIngredients[0] ?? "");
   const ingredientOrSupport = firstNonEmpty(
-    normalizeIngredientForTitle(mainIngredients[0] ?? ""),
+    MINOR_MINERAL_PATTERN.test(titleIngredientCandidate) ? "" : titleIngredientCandidate,
     supportAreas[0]
   );
 

@@ -155,6 +155,7 @@ describe("EcomViper Walmart OpenAI BYO flow", () => {
     expect(payload.suggestion?.sku).toBe("OPA-OMEGA3-120");
     expect(payload.suggestion?.suggestedTitle?.length ?? 0).toBeGreaterThan(20);
     expect(payload.suggestion?.suggestedTitle?.toLowerCase()).not.toContain("viagra");
+    expect(payload.suggestion?.suggestedTitle).not.toContain("|");
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];

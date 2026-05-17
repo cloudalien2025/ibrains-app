@@ -176,17 +176,19 @@ describe("Walmart label facts optimizer", () => {
   it("removes unsupported flavor claims from title copy and emits warning", () => {
     const result = applyWalmartDocketOptimizationRules({
       product: createRoc817Product({
-        title: "OPA Nutrition Sleep Aid Formula Capsules, Berry flavor, 60 capsules",
+        title: "OPA Nutrition Sleep Aid Formula Capsules, Berry flavor, Unflavored flavor, 60 capsules",
         searchBrowseAttributes: {},
       }),
     });
 
     expect(result.output.searchBrowse.flavor).toBe("Unflavored");
     expect(result.output.content.productTitle.toLowerCase()).not.toContain("berry flavor");
+    expect(result.output.content.productTitle.toLowerCase()).not.toContain("unflavored flavor");
     expect(result.output.validation.warnings.join(" ")).toContain(
       "Removed unsupported flavor claim because no explicit flavor was found. Defaulted Flavor attribute to Unflavored."
     );
     expect(result.output.validation.removedClaims).toContain("Berry flavor");
+    expect(result.output.validation.removedClaims).toContain("Unflavored flavor");
   });
 
   it("keeps explicit Berry flavor when trusted flavor evidence exists", () => {

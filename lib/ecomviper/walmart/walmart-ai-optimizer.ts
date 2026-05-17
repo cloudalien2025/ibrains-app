@@ -468,28 +468,6 @@ export function buildDeterministicAiSuggestion(product: WalmartProductRecord): W
   return buildLayeredSuggestion(product, {});
 }
 
-function includesUnsafeOrPromotionalCopy(value: string): boolean {
-  return /(cure|treat|prevent|reverse|diagnose|viagra|cialis|insomnia|depression|anxiety|hypertension|erectile dysfunction)/i.test(
-    value
-  );
-}
-
-function titleNeedsRulesReplacement(value: string): boolean {
-  const title = value.trim();
-  if (!title) return true;
-  if (title.length > 150) return true;
-  if (/best seller|free shipping|limited time|guaranteed|#1/i.test(title)) return true;
-  return includesUnsafeOrPromotionalCopy(title);
-}
-
-function shortDescriptionNeedsRulesReplacement(value: string): boolean {
-  const text = value.trim();
-  if (!text) return true;
-  if (includesUnsafeOrPromotionalCopy(text)) return true;
-  const sentenceCount = text.split(/[.!?]/).filter((entry) => entry.trim().length > 0).length;
-  return sentenceCount !== 1;
-}
-
 function mapRulesOutputToSearchBrowseAttributes(
   output: ReturnType<typeof applyWalmartDocketOptimizationRules>["output"]
 ): Record<string, string> {
@@ -551,14 +529,8 @@ function applyRulesEngineToSuggestion(params: {
   const rulesOutput = rulesResult.output;
   const rulesSearchBrowse = mapRulesOutputToSearchBrowseAttributes(rulesOutput);
 
-  const nextTitle = titleNeedsRulesReplacement(params.suggestion.suggestedTitle)
-    ? rulesOutput.content.productTitle
-    : params.suggestion.suggestedTitle;
-  const nextShortDescription = shortDescriptionNeedsRulesReplacement(
-    params.suggestion.suggestedShortDescription ?? ""
-  )
-    ? rulesOutput.content.shortDescription
-    : params.suggestion.suggestedShortDescription ?? "";
+  const nextTitle = rulesOutput.content.productTitle;
+  const nextShortDescription = rulesOutput.content.shortDescription;
   const nextLongDescription = rulesOutput.content.longDescription;
   const nextBullets = rulesOutput.content.bullets;
 
@@ -592,6 +564,7 @@ function applyRulesEngineToSuggestion(params: {
 
   const complianceNotes = unique([
     ...(params.suggestion.complianceNotes ?? []),
+    "Deterministic Walmart copy template output applied for title, short description, long description, and bullets.",
     ...rulesOutput.content.complianceNotes,
     ...rulesOutput.pricingInventory.priceNotes,
     ...rulesOutput.pricingInventory.inventoryNotes,

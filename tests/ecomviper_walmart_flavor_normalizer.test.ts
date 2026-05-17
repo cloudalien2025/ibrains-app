@@ -42,4 +42,11 @@ describe("Walmart flavor normalizer", () => {
     );
     expect(claims).toContain("Berry flavor");
   });
+
+  it("detects unsupported unflavored flavor phrasing", () => {
+    const claims = detectWalmartFlavorClaims(
+      "OPA Sleep Aid Capsules, Unflavored flavor, 60 capsules."
+    );
+    expect(claims).toContain("Unflavored flavor");
+  });
 });

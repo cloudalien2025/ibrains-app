@@ -81,6 +81,7 @@ describe("Walmart docket optimization rules engine", () => {
     expect(result.output.content.shortDescription.toLowerCase()).not.toContain("supports supports");
     expect(result.output.content.bullets.join(" ").toLowerCase()).not.toContain("designed to supports");
     expect(result.output.content.productTitle.toLowerCase()).not.toContain("supports relaxation support");
+    expect(result.output.content.productTitle.toLowerCase()).not.toContain("unflavored flavor");
   });
 
   it("keeps price/inventory unchanged and keeps GTIN/UPC lookup-only guidance", () => {
