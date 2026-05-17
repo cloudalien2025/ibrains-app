@@ -4233,11 +4233,18 @@ export default function ProductEditorClient({
       });
       draftPayload = extractionResult.nextDraftPayload;
       nextFormState = extractionResult.nextFormState;
+      if (extractionResult.ok) {
+        setTopOptimizeMessage("Using label facts from product images and current docket.");
+      } else {
+        setTopOptimizeMessage("No label facts available; optimizing from current docket only.");
+      }
       if (!extractionResult.ok && extractionResult.providerUnavailable && !aiProviderConnected) {
         setTopOptimizeStatus("failed");
         setTopOptimizeMessage("Provider unavailable.");
         return;
       }
+    } else {
+      setTopOptimizeMessage("No label facts available; optimizing from current docket only.");
     }
 
     setTopOptimizeStatus("checking_competition");
