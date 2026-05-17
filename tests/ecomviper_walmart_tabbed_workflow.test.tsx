@@ -90,7 +90,7 @@ describe("Walmart product editor single docket workflow", () => {
     await act(async () => {
       root.render(
         <ProductEditorClient
-          product={createProduct()}
+          product={createProduct({ imageUrl: "", normalizedPayload: {}, rawPayload: {} })}
           stagedDrafts={[]}
           aiProviderConnected={true}
           serpApiProviderConnected={true}
@@ -155,6 +155,14 @@ describe("Walmart product editor single docket workflow", () => {
     expect(container.querySelectorAll('[data-testid="ecomviper-walmart-generate-product-images"]')).toHaveLength(1);
 
     expect(container.textContent).toContain("Optimize with AI");
+    expect(
+      container.querySelectorAll('[data-testid="ecomviper-walmart-optimize-top-button"]')
+    ).toHaveLength(1);
+    expect(container.querySelector('[data-testid="ecomviper-walmart-optimize-button"]')).toBeNull();
+    const saveDraftButtons = Array.from(container.querySelectorAll("button")).filter(
+      (button) => button.textContent?.trim() === "Save Draft"
+    );
+    expect(saveDraftButtons).toHaveLength(1);
     expect(container.textContent).toContain("Publish to Walmart");
     expect(container.textContent).toContain("Agentic Visibility Score");
     const scoreRing = container.querySelector(
@@ -230,7 +238,7 @@ describe("Walmart product editor single docket workflow", () => {
     });
 
     const optimizeButton = container.querySelector(
-      '[data-testid="ecomviper-walmart-optimize-button"]'
+      '[data-testid="ecomviper-walmart-optimize-top-button"]'
     ) as HTMLButtonElement;
     await act(async () => {
       optimizeButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -243,9 +251,16 @@ describe("Walmart product editor single docket workflow", () => {
     expect(titleInput).not.toBeNull();
     expect(container.textContent).toContain("Optimized for Agentic Visibility and Selection.");
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [requestUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(requestUrl).toBe("/api/ecomviper/walmart/ai/generate");
+    const generateCall = fetchMock.mock.calls.find(([request]) => {
+      const url =
+        typeof request === "string"
+          ? request
+          : request instanceof URL
+            ? request.toString()
+            : request.url;
+      return url === "/api/ecomviper/walmart/ai/generate";
+    });
+    expect(generateCall).toBeDefined();
 
     const scoreText = container.textContent ?? "";
     const scoreMatch = scoreText.match(/Current\s*(\d+)%\s*->\s*Optimized\s*(\d+)%/);

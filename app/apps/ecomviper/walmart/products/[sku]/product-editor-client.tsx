@@ -122,6 +122,11 @@ interface ProductEditorFormState {
 type GenerateSuggestionResponse = {
   ok: boolean;
   suggestion?: WalmartAiSuggestion;
+  optimizationMeta?: {
+    flow?: string;
+    competitorResearchStatus?: string;
+    competitorWarnings?: string[];
+  };
   error?: {
     code?: string;
     message?: string;
@@ -324,11 +329,12 @@ type LabelFactsUiStatus =
   | "failed";
 type TopOptimizeUiStatus =
   | "idle"
-  | "optimizing"
-  | "extracting"
-  | "filling"
-  | "success"
-  | "provider_unavailable"
+  | "reading_docket"
+  | "checking_competition"
+  | "optimizing_fields"
+  | "applying_improvements"
+  | "optimized"
+  | "fallback_local_only"
   | "failed";
 type WalmartPublishResultStatus =
   | "idle"
@@ -451,6 +457,9 @@ const DEFAULT_INLINE_AI_APPLY_DIAGNOSTICS = {
   manufacturerConfidence: "unknown",
   manufacturerNeedsReview: false,
   faqGenerationState: "final",
+  competitorResearchStatus: "skipped_no_credentials",
+  competitorResearchWarnings: [] as string[],
+  optimizationFlow: "full_docket_rules_engine",
   disclaimerStatus: "unknown",
   finalDecision: "accepted",
 };
@@ -975,6 +984,9 @@ function normalizeInlineAiApplyDiagnostics(
     asText(diagnostics.manufacturerConfidence)?.trim().toLowerCase() || "unknown";
   const manufacturerNeedsReview = diagnostics.manufacturerNeedsReview === true;
   const faqGenerationStateRaw = asText(diagnostics.faqGenerationState)?.trim().toLowerCase() ?? "";
+  const competitorResearchStatusRaw =
+    asText(diagnostics.competitorResearchStatus)?.trim().toLowerCase() ?? "";
+  const optimizationFlowRaw = asText(diagnostics.optimizationFlow)?.trim().toLowerCase() ?? "";
 
   const disclaimerStatus =
     disclaimerStatusRaw === "inserted" ||
@@ -1003,6 +1015,18 @@ function normalizeInlineAiApplyDiagnostics(
     faqGenerationStateRaw === "pending" || faqGenerationStateRaw === "final"
       ? faqGenerationStateRaw
       : "final";
+  const competitorResearchStatus =
+    competitorResearchStatusRaw === "available" ||
+    competitorResearchStatusRaw === "skipped_no_credentials" ||
+    competitorResearchStatusRaw === "timeout" ||
+    competitorResearchStatusRaw === "provider_error" ||
+    competitorResearchStatusRaw === "empty"
+      ? competitorResearchStatusRaw
+      : "skipped_no_credentials";
+  const optimizationFlow =
+    optimizationFlowRaw === "full_docket_rules_engine"
+      ? "full_docket_rules_engine"
+      : "full_docket_rules_engine";
 
   return {
     factsUpdated: toSafeStringArray(diagnostics.factsUpdated),
@@ -1022,6 +1046,9 @@ function normalizeInlineAiApplyDiagnostics(
     manufacturerConfidence,
     manufacturerNeedsReview,
     faqGenerationState,
+    competitorResearchStatus,
+    competitorResearchWarnings: toSafeStringArray(diagnostics.competitorResearchWarnings),
+    optimizationFlow,
     disclaimerStatus,
     finalDecision,
   };
@@ -2195,63 +2222,11 @@ function resolveFieldProvenanceRows(input: {
   ];
 }
 
-function normalizeCopywritingFieldTestId(fieldKey: string): string {
-  return fieldKey
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function WalmartFieldCopywritingAgentAction({
-  fieldKey,
-  actionLabel,
-  disabled = false,
-  state,
-  onClick,
-}: WalmartFieldCopywritingAgentActionProps) {
-  const statusToneClass =
-    state.status === "success"
-      ? "text-emerald-700"
-      : state.status === "error" ||
-          state.status === "missing_key" ||
-          state.status === "provider_unavailable"
-        ? "text-amber-700"
-        : "text-[#475569]";
-
-  return (
-    <div className="mt-1 flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled || state.status === "loading"}
-        title={actionLabel}
-        aria-label={actionLabel}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#2563EB] bg-[#EFF6FF] text-[#1D4ED8] shadow-sm transition-colors hover:bg-[#DBEAFE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] disabled:cursor-not-allowed disabled:opacity-50"
-        data-testid={`ecomviper-walmart-viper-agent-${normalizeCopywritingFieldTestId(fieldKey)}`}
-        data-color-intent="primary-blue"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          className="h-4 w-4"
-          role="presentation"
-          aria-hidden="true"
-          data-testid={`ecomviper-walmart-viper-icon-${normalizeCopywritingFieldTestId(fieldKey)}`}
-        >
-          <path
-            d="M6 4.8c2.5-2 7.2-1.9 9.4.4 1.8 1.8 1.7 4.7-.3 6.2-.9.7-2 .9-2.9 1.3-1.6.7-2 2.8-.8 4.1.8.8 2 1.2 3.1 1.6-2.2 1.9-6.5 1.8-8.8-.1-1.9-1.7-2-4.4-.4-6 1-.9 2.3-1.1 3.5-1.5 1.4-.5 1.9-2.4.8-3.5-.8-.8-2-1.2-3.6-1.7Z"
-            fill="currentColor"
-          />
-          <circle cx="16.4" cy="5.6" r="1" fill="#FFFFFF" />
-          <circle cx="16.4" cy="5.6" r=".45" fill="currentColor" />
-        </svg>
-        <span className="sr-only">
-          {state.status === "loading" ? `Optimizing: ${actionLabel}` : actionLabel}
-        </span>
-      </button>
-      {state.message ? <p className={`text-xs ${statusToneClass}`}>{state.message}</p> : null}
-    </div>
-  );
+function WalmartFieldCopywritingAgentAction(
+  _props: WalmartFieldCopywritingAgentActionProps
+) {
+  void _props;
+  return null;
 }
 
 export default function ProductEditorClient({
@@ -2376,7 +2351,6 @@ export default function ProductEditorClient({
     return firstPending?.id ?? initialForm.generatedMediaAssets[0]?.id ?? null;
   });
   const referenceFileInputRef = useRef<HTMLInputElement | null>(null);
-  const optimizingWithAi = inlineAiState === "loading";
 
   const stagedOptimizations = useMemo(() => {
     const indexed = new Map<string, WalmartOptimizationProposalRecord>();
@@ -2851,19 +2825,21 @@ export default function ProductEditorClient({
               ? "failed"
               : "ready";
   const topOptimizeStatusText =
-    topOptimizeStatus === "optimizing"
-      ? "Optimizing with AI..."
-      : topOptimizeStatus === "extracting"
-        ? "Extracting image facts..."
-        : topOptimizeStatus === "filling"
-          ? "Filling eligible docket fields..."
-          : topOptimizeStatus === "success"
-            ? "Optimized for Agentic Visibility and Selection."
-            : topOptimizeStatus === "provider_unavailable"
-              ? "Provider unavailable."
-              : topOptimizeStatus === "failed"
-                ? "Could not optimize with AI."
-                : "Ready to optimize for Agentic Visibility and Selection.";
+    topOptimizeStatus === "reading_docket"
+      ? "Reading Walmart docket..."
+      : topOptimizeStatus === "checking_competition"
+        ? "Checking Walmart competition..."
+        : topOptimizeStatus === "optimizing_fields"
+          ? "Optimizing listing fields..."
+          : topOptimizeStatus === "applying_improvements"
+            ? "Applying improvements..."
+            : topOptimizeStatus === "optimized"
+              ? "Optimized draft ready for review."
+              : topOptimizeStatus === "fallback_local_only"
+                ? "Competitor context unavailable; optimized from local docket facts."
+                : topOptimizeStatus === "failed"
+                  ? "Optimization failed. Try again."
+                  : "Ready to optimize for Agentic Visibility and Selection.";
 
   function fieldCopyStateFor(fieldKey: string): WalmartFieldCopywritingState {
     return fieldCopywritingStates[fieldKey] ?? DEFAULT_FIELD_COPYWRITING_STATE;
@@ -4237,13 +4213,19 @@ export default function ProductEditorClient({
   }
 
   async function handleTopOptimizeWithAi() {
-    setTopOptimizeStatus("optimizing");
+    setTopOptimizeStatus("reading_docket");
     setTopOptimizeMessage(null);
+    if (!aiProviderConnected) {
+      setInlineAiState("missing_key");
+      setInlineAiMessage(OPENAI_OPTIMIZE_REQUIRED_MESSAGE);
+      setTopOptimizeStatus("failed");
+      setTopOptimizeMessage("Provider unavailable.");
+      return;
+    }
     let draftPayload = preview as Record<string, unknown>;
     let nextFormState = form;
 
     if (hasAnyImagesForLabelExtraction) {
-      setTopOptimizeStatus("extracting");
       const extractionResult = await handleExtractLabelFacts({
         draftPayloadOverride: draftPayload,
         formStateOverride: nextFormState,
@@ -4252,56 +4234,84 @@ export default function ProductEditorClient({
       draftPayload = extractionResult.nextDraftPayload;
       nextFormState = extractionResult.nextFormState;
       if (!extractionResult.ok && extractionResult.providerUnavailable && !aiProviderConnected) {
-        setTopOptimizeStatus("provider_unavailable");
+        setTopOptimizeStatus("failed");
         setTopOptimizeMessage("Provider unavailable.");
         return;
       }
     }
 
-    setTopOptimizeStatus("filling");
+    setTopOptimizeStatus("checking_competition");
+    await Promise.resolve();
+    setTopOptimizeStatus("optimizing_fields");
     const optimizationResult = await runInlineOptimization({
       draftPayloadOverride: draftPayload,
       formStateOverride: nextFormState,
     });
-    if (optimizationResult === "success") {
-      setTopOptimizeStatus("success");
-      setTopOptimizeMessage("Optimized for Agentic Visibility and Selection.");
+    if (optimizationResult.status === "success") {
+      setTopOptimizeStatus("applying_improvements");
+      await Promise.resolve();
+      if (
+        optimizationResult.competitorResearchStatus === "timeout" ||
+        optimizationResult.competitorResearchStatus === "provider_error" ||
+        optimizationResult.competitorResearchStatus === "empty" ||
+        optimizationResult.competitorResearchStatus === "skipped_no_credentials"
+      ) {
+        setTopOptimizeStatus("fallback_local_only");
+        setTopOptimizeMessage(
+          "Competitor context unavailable; optimized from local docket facts."
+        );
+        return;
+      }
+      setTopOptimizeStatus("optimized");
+      setTopOptimizeMessage("Optimized draft ready for review.");
       return;
     }
-    if (optimizationResult === "missing_key") {
-      setTopOptimizeStatus("provider_unavailable");
+    if (optimizationResult.status === "missing_key") {
+      setTopOptimizeStatus("failed");
       setTopOptimizeMessage("Provider unavailable.");
       return;
     }
     setTopOptimizeStatus("failed");
-    setTopOptimizeMessage("Could not optimize with AI.");
+    setTopOptimizeMessage("Optimization failed. Try again.");
   }
 
   async function runInlineOptimization(options?: {
     draftPayloadOverride?: Record<string, unknown>;
     formStateOverride?: ProductEditorFormState;
-  }): Promise<"success" | "missing_key" | "error"> {
+  }): Promise<{
+    status: "success" | "missing_key" | "error";
+    competitorResearchStatus?:
+      | "available"
+      | "skipped_no_credentials"
+      | "timeout"
+      | "provider_error"
+      | "empty";
+  }> {
     setAiSuggestionApplied(false);
 
     if (!aiProviderConnected) {
       setInlineAiState("missing_key");
       setInlineAiMessage(OPENAI_OPTIMIZE_REQUIRED_MESSAGE);
-      return "missing_key";
+      return { status: "missing_key" };
     }
 
     try {
       setInlineAiState("loading");
       setInlineAiMessage(INLINE_AI_LOADING_MESSAGE);
       setInlineAiSuggestion(null);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 45_000);
       const response = await fetch("/api/ecomviper/walmart/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           sku: product.sku,
           draftPayload: options?.draftPayloadOverride ?? (preview as Record<string, unknown>),
           target: "agentic_visibility_and_selection",
         }),
       });
+      clearTimeout(timeout);
 
       const payload =
         (await response.json().catch(() => null)) as GenerateSuggestionResponse | null;
@@ -4319,16 +4329,31 @@ export default function ProductEditorClient({
             ? OPENAI_OPTIMIZE_REQUIRED_MESSAGE
             : errorMessage || "Could not optimize with AI."
         );
-        return missingKey ? "missing_key" : "error";
+        return { status: missingKey ? "missing_key" : "error" };
       }
 
       setInlineAiSuggestion(payload.suggestion);
       handleApplyInlineAiSuggestion(payload.suggestion, options?.formStateOverride);
-      return "success";
+      const competitorResearchStatusRaw =
+        payload.optimizationMeta?.competitorResearchStatus?.trim().toLowerCase() ??
+        payload.suggestion.applyDiagnostics?.competitorResearchStatus ??
+        "";
+      const competitorResearchStatus =
+        competitorResearchStatusRaw === "available" ||
+        competitorResearchStatusRaw === "skipped_no_credentials" ||
+        competitorResearchStatusRaw === "timeout" ||
+        competitorResearchStatusRaw === "provider_error" ||
+        competitorResearchStatusRaw === "empty"
+          ? competitorResearchStatusRaw
+          : undefined;
+      return {
+        status: "success",
+        competitorResearchStatus,
+      };
     } catch {
       setInlineAiState("error");
-      setInlineAiMessage("Could not optimize with AI.");
-      return "error";
+      setInlineAiMessage("Optimization failed. Try again.");
+      return { status: "error" };
     }
   }
 
@@ -4526,19 +4551,6 @@ export default function ProductEditorClient({
     }
     if (safeBrand.trim() !== baseForm.brand.trim()) appliedContentFields.push("brand");
 
-    const skippedProtectedFields = unique([
-      ...sanitizedAiSearchBrowse.skipped
-        .filter((entry) => entry.reason === "protected_field")
-        .map((entry) => entry.key),
-      ...diagnostics.skippedProtectedFields,
-    ]).slice(0, 8);
-    const skippedLowConfidenceFields = unique([
-      ...sanitizedAiSearchBrowse.skipped
-        .filter((entry) => entry.reason === "low_confidence")
-        .map((entry) => entry.key),
-      ...diagnostics.skippedLowConfidenceFields,
-    ]).slice(0, 8);
-
     patchForm({
       title: nextTitle,
       longDescription: nextLongDescription,
@@ -4571,36 +4583,14 @@ export default function ProductEditorClient({
     const searchBrowseSummary = appliedSearchBrowseFields.length
       ? appliedSearchBrowseFields.join(", ")
       : "none";
-    const faqSummary = nextFaqSnippets.length > 0 ? String(nextFaqSnippets.length) : "none";
-    const protectedSummary = skippedProtectedFields.length
-      ? skippedProtectedFields.join(", ")
-      : "none";
-    const lowConfidenceSummary = skippedLowConfidenceFields.length
-      ? skippedLowConfidenceFields.join(", ")
-      : "none";
-    const staleSummary = unique([
-      ...diagnostics.staleFieldsReplaced,
-      ...diagnostics.staleFieldsCleared,
-    ]);
-    const staleSummaryText = staleSummary.length ? staleSummary.join(", ") : "none";
-    const factsSummaryText =
-      diagnostics.factsUpdated.length > 0
-        ? diagnostics.factsUpdated.join(", ")
-        : "none";
-    const sourceSummaryText =
-      diagnostics.factsSources.length > 0
-        ? diagnostics.factsSources.join(", ")
-        : "none";
-    const complianceSummaryText =
-      diagnostics.complianceChanges.length > 0
-        ? diagnostics.complianceChanges.join(", ")
-        : "none";
     const disclaimerSummaryText = diagnostics.disclaimerStatus;
-    const imageFactsStatusText = diagnostics.imageFactsStatus;
-    const imageFactsMessageText = diagnostics.imageFactsMessage || "none";
-    const manufacturerSummary = `Manufacturer provenance: source=${diagnostics.manufacturerSource}, confidence=${diagnostics.manufacturerConfidence}, needs_review=${diagnostics.manufacturerNeedsReview}.`;
+    const competitorNote =
+      diagnostics.competitorResearchStatus &&
+      diagnostics.competitorResearchStatus !== "available"
+        ? " Competitor context unavailable; local docket facts were used."
+        : "";
     setInlineAiMessage(
-      `Optimized for Agentic Visibility and Selection. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. FAQ snippets: ${faqSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Image-derived facts status: ${imageFactsStatusText}. Image-derived facts detail: ${imageFactsMessageText}. ${manufacturerSummary} Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
+      `Optimized for Agentic Visibility and Selection. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. FDA disclaimer status: ${disclaimerSummaryText}.${competitorNote} Save Draft when ready.`
     );
   }
 
@@ -5601,18 +5591,20 @@ export default function ProductEditorClient({
               onClick={() => void handleTopOptimizeWithAi()}
               disabled={
                 extractingLabelFacts ||
-                topOptimizeStatus === "optimizing" ||
-                topOptimizeStatus === "extracting" ||
-                topOptimizeStatus === "filling"
+                topOptimizeStatus === "reading_docket" ||
+                topOptimizeStatus === "checking_competition" ||
+                topOptimizeStatus === "optimizing_fields" ||
+                topOptimizeStatus === "applying_improvements"
               }
               className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
               data-testid="ecomviper-walmart-optimize-top-button"
               aria-label="Optimize with AI for Agentic Visibility and Selection"
               data-color-intent="primary-blue"
             >
-              {topOptimizeStatus === "optimizing" ||
-              topOptimizeStatus === "extracting" ||
-              topOptimizeStatus === "filling"
+              {topOptimizeStatus === "reading_docket" ||
+              topOptimizeStatus === "checking_competition" ||
+              topOptimizeStatus === "optimizing_fields" ||
+              topOptimizeStatus === "applying_improvements"
                 ? "Optimizing with AI..."
                 : "Optimize with AI"}
             </button>
@@ -5677,16 +5669,7 @@ export default function ProductEditorClient({
           </summary>
 
           <div className="mt-3 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleSaveDraft}
-                className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
-              >
-                Save Draft
-              </button>
-              <p className="text-xs text-[#64748B]">{readinessNote}</p>
-            </div>
+            <p className="text-xs text-[#64748B]">{readinessNote}</p>
 
             <div className="grid gap-3 md:grid-cols-2" data-testid="ecomviper-walmart-product-form">
               <>
@@ -6821,12 +6804,11 @@ export default function ProductEditorClient({
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => void runInlineOptimization()}
-            disabled={optimizingWithAi}
-            data-testid="ecomviper-walmart-optimize-button"
-            className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white disabled:opacity-60"
+            onClick={handleSaveDraft}
+            data-testid="ecomviper-walmart-save-draft-button"
+            className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
           >
-            {optimizingWithAi ? "Optimizing with AI..." : "Optimize with AI"}
+            Save Draft
           </button>
           <button
             type="button"

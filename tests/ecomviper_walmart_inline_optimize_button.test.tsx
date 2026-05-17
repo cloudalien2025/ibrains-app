@@ -45,7 +45,7 @@ function flush() {
   });
 }
 
-describe("Walmart inline optimize button workflow", () => {
+describe("Walmart top optimize full-docket workflow", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -82,8 +82,17 @@ describe("Walmart inline optimize button workflow", () => {
       );
     });
 
+    expect(
+      container.querySelectorAll('[data-testid="ecomviper-walmart-optimize-top-button"]')
+    ).toHaveLength(1);
+    expect(container.querySelector('[data-testid="ecomviper-walmart-optimize-button"]')).toBeNull();
+    const saveDraftButtons = Array.from(container.querySelectorAll("button")).filter(
+      (button) => button.textContent?.trim() === "Save Draft"
+    );
+    expect(saveDraftButtons).toHaveLength(1);
+
     const optimizeButton = container.querySelector(
-      '[data-testid="ecomviper-walmart-optimize-button"]'
+      '[data-testid="ecomviper-walmart-optimize-top-button"]'
     ) as HTMLButtonElement;
     await act(async () => {
       optimizeButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -176,7 +185,7 @@ describe("Walmart inline optimize button workflow", () => {
     });
 
     const optimizeButton = container.querySelector(
-      '[data-testid="ecomviper-walmart-optimize-button"]'
+      '[data-testid="ecomviper-walmart-optimize-top-button"]'
     ) as HTMLButtonElement;
     await act(async () => {
       optimizeButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -185,7 +194,7 @@ describe("Walmart inline optimize button workflow", () => {
 
     expect(container.textContent).toContain("Optimized for Agentic Visibility and Selection.");
     expect(container.textContent).toContain(
-      "Optimized for Agentic Visibility and Selection. Save Draft when ready."
+      "Optimized for Agentic Visibility and Selection. Updated Content:"
     );
 
     const titleInput = container.querySelector('input[value="ROC808 Daily Wellness Formula | Optimized"]');
@@ -230,5 +239,93 @@ describe("Walmart inline optimize button workflow", () => {
       "Optimized bullet 3",
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to local-only optimization state when competitor context is unavailable", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.includes("/api/ecomviper/walmart/ai/generate")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              suggestion: {
+                sku: "ROC808",
+                qualityScore: 88,
+                suggestedTitle: "ROC808 Daily Wellness Formula Optimized",
+                suggestedShortDescription: "Optimized short summary",
+                suggestedDescription:
+                  "Optimized long listing description. These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
+                suggestedBullets: [
+                  "Optimized bullet 1",
+                  "Optimized bullet 2",
+                  "Optimized bullet 3",
+                  "Optimized bullet 4",
+                  "Optimized bullet 5",
+                ],
+                missingAttributes: [],
+                complianceWarnings: [],
+                disclaimer:
+                  "These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
+                applyDiagnostics: {
+                  factsUpdated: [],
+                  factsSources: [],
+                  staleFieldsReplaced: [],
+                  staleFieldsCleared: [],
+                  copyFieldsUpdated: [],
+                  searchBrowseFieldsUpdated: [],
+                  searchBrowseFieldsReplaced: [],
+                  complianceChanges: [],
+                  skippedProtectedFields: [],
+                  skippedLowConfidenceFields: [],
+                  rejectedClaims: [],
+                  disclaimerStatus: "preserved",
+                  finalDecision: "accepted",
+                  competitorResearchStatus: "skipped_no_credentials",
+                  optimizationFlow: "full_docket_rules_engine",
+                },
+              },
+              optimizationMeta: {
+                competitorResearchStatus: "skipped_no_credentials",
+                flow: "full_docket_rules_engine",
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={false}
+        />
+      );
+    });
+
+    const optimizeButton = container.querySelector(
+      '[data-testid="ecomviper-walmart-optimize-top-button"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      optimizeButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain(
+      "Competitor context unavailable; optimized from local docket facts."
+    );
   });
 });

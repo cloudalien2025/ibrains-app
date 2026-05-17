@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
     const suggestion = await generateWalmartAiSuggestion({
       product: mergeWalmartDraftPayloadIntoProduct(product, body.draftPayload),
       openAiApiKey,
+      userId,
       draftPayload:
         body.draftPayload && typeof body.draftPayload === "object"
           ? (body.draftPayload as Record<string, unknown>)
@@ -62,6 +63,12 @@ export async function POST(req: NextRequest) {
     return ok({
       ok: true,
       suggestion,
+      optimizationMeta: {
+        flow: suggestion.applyDiagnostics?.optimizationFlow ?? "full_docket_rules_engine",
+        competitorResearchStatus:
+          suggestion.applyDiagnostics?.competitorResearchStatus ?? "skipped_no_credentials",
+        competitorWarnings: suggestion.applyDiagnostics?.competitorResearchWarnings ?? [],
+      },
       message: "Walmart product content generated successfully.",
     });
   } catch (error) {

@@ -14,6 +14,14 @@ import {
 import { pickMeaningfulAiText } from "@/lib/ecomviper/walmart/walmart-ai-field-sanitization";
 import { buildSearchBrowseAttributesFromSources } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
 import type { WalmartAiSuggestion, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import {
+  applyWalmartDocketOptimizationRules,
+  buildWalmartDocketOptimizationPromptContract,
+} from "@/lib/ecomviper/walmart/walmart-optimization-rules";
+import {
+  getWalmartSerpApiCompetitorIntelligence,
+  type WalmartCompetitorIntelligence,
+} from "@/lib/ecomviper/walmart/walmart-serpapi-competitor-research";
 import { buildAgenticReferralCopy } from "@/lib/ecomviper/walmart/agentic-referral-copy-agent";
 import {
   extractCanonicalProductFacts,
@@ -21,6 +29,7 @@ import {
 } from "@/lib/ecomviper/walmart/product-facts-agent";
 import { mapCanonicalFactsToSearchBrowse } from "@/lib/ecomviper/walmart/walmart-search-browse-mapper";
 import { reviewWalmartSupplementCopy } from "@/lib/ecomviper/walmart/walmart-compliance-agent";
+import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmart-compliance";
 import {
   faqThresholdMet,
   sanitizeCustomerFacingList,
@@ -84,6 +93,7 @@ interface LayeredSuggestionInput {
   compliantBenefitClusters?: string[];
   faqSnippets?: string[];
   draftPayload?: Record<string, unknown> | null;
+  competitorContext?: WalmartCompetitorIntelligence | null;
 }
 
 function unique(items: string[]): string[] {
@@ -311,6 +321,7 @@ function buildLayeredSuggestion(
 
   const complianceWarnings = unique([
     ...(input.complianceWarnings ?? []),
+    ...(input.competitorContext?.warnings ?? []),
     ...(compliance.finalDecision === "rejected"
       ? [
           "Generated copy failed compliance review and was replaced with deterministic compliant copy.",
@@ -440,6 +451,9 @@ function buildLayeredSuggestion(
       manufacturerConfidence: factsResult.manufacturerConfidence,
       manufacturerNeedsReview: factsResult.manufacturerNeedsReview,
       faqGenerationState: faqShouldBePending ? "pending" : "final",
+      competitorResearchStatus: input.competitorContext?.status,
+      competitorResearchWarnings: input.competitorContext?.warnings ?? [],
+      optimizationFlow: "full_docket_rules_engine",
       disclaimerStatus: fallbackCompliance.disclaimerStatus,
       finalDecision: complianceDecision,
     },
@@ -452,6 +466,228 @@ function buildLayeredSuggestion(
 
 export function buildDeterministicAiSuggestion(product: WalmartProductRecord): WalmartAiSuggestion {
   return buildLayeredSuggestion(product, {});
+}
+
+function includesUnsafeOrPromotionalCopy(value: string): boolean {
+  return /(cure|treat|prevent|reverse|diagnose|viagra|cialis|insomnia|depression|anxiety|hypertension|erectile dysfunction)/i.test(
+    value
+  );
+}
+
+function titleNeedsRulesReplacement(value: string): boolean {
+  const title = value.trim();
+  if (!title) return true;
+  if (title.length > 150) return true;
+  if (/best seller|free shipping|limited time|guaranteed|#1/i.test(title)) return true;
+  return includesUnsafeOrPromotionalCopy(title);
+}
+
+function shortDescriptionNeedsRulesReplacement(value: string): boolean {
+  const text = value.trim();
+  if (!text) return true;
+  if (includesUnsafeOrPromotionalCopy(text)) return true;
+  const sentenceCount = text.split(/[.!?]/).filter((entry) => entry.trim().length > 0).length;
+  return sentenceCount !== 1;
+}
+
+function longDescriptionNeedsRulesReplacement(value: string): boolean {
+  const text = value.trim();
+  if (!text) return true;
+  if (includesUnsafeOrPromotionalCopy(text)) return true;
+  const disclaimerCount = text.split(SUPPLEMENT_FDA_DISCLAIMER).length - 1;
+  return disclaimerCount !== 1;
+}
+
+function bulletsNeedRulesReplacement(values: string[]): boolean {
+  if (values.length < 5 || values.length > 7) return true;
+  return values.some((entry) => includesUnsafeOrPromotionalCopy(entry));
+}
+
+function mapRulesOutputToSearchBrowseAttributes(
+  output: ReturnType<typeof applyWalmartDocketOptimizationRules>["output"]
+): Record<string, string> {
+  return {
+    product_type: output.searchBrowse.productType,
+    supplement_type: output.searchBrowse.supplementType,
+    product_form: output.searchBrowse.form,
+    form: output.searchBrowse.form,
+    count: output.searchBrowse.count,
+    serving_size: output.searchBrowse.servingSize,
+    main_ingredients: output.searchBrowse.mainIngredients.join(", "),
+    support_areas: output.searchBrowse.benefitsSupportAreas.join(", "),
+    target_audience: output.searchBrowse.targetAudience,
+    suggested_use: output.searchBrowse.suggestedUse,
+    directions_suggested_use: output.searchBrowse.suggestedUse,
+    search_keywords: output.searchBrowse.searchKeywords.join(", "),
+    search_terms: output.searchBrowse.searchTerms.join(", "),
+    category: output.searchBrowse.category,
+  };
+}
+
+function applyRulesEngineToSuggestion(params: {
+  product: WalmartProductRecord;
+  draftPayload?: Record<string, unknown> | null;
+  suggestion: WalmartAiSuggestion;
+  competitorContext: WalmartCompetitorIntelligence;
+}): WalmartAiSuggestion {
+  const rulesResult = applyWalmartDocketOptimizationRules({
+    product: params.product,
+    draftPayload: params.draftPayload ?? null,
+    competitorPatterns: params.competitorContext.patterns,
+  });
+
+  const rulesOutput = rulesResult.output;
+  const rulesSearchBrowse = mapRulesOutputToSearchBrowseAttributes(rulesOutput);
+
+  const nextTitle = titleNeedsRulesReplacement(params.suggestion.suggestedTitle)
+    ? rulesOutput.content.productTitle
+    : params.suggestion.suggestedTitle;
+  const nextShortDescription = shortDescriptionNeedsRulesReplacement(
+    params.suggestion.suggestedShortDescription ?? ""
+  )
+    ? rulesOutput.content.shortDescription
+    : params.suggestion.suggestedShortDescription ?? "";
+  const nextLongDescription = longDescriptionNeedsRulesReplacement(
+    params.suggestion.suggestedDescription
+  )
+    ? rulesOutput.content.longDescription
+    : params.suggestion.suggestedDescription;
+  const nextBullets = bulletsNeedRulesReplacement(params.suggestion.suggestedBullets)
+    ? rulesOutput.content.bullets
+    : params.suggestion.suggestedBullets;
+
+  const suggestedAttributes = {
+    ...rulesSearchBrowse,
+    ...(params.suggestion.suggestedAttributes ?? {}),
+  };
+  const searchBrowseAttributes = {
+    ...rulesSearchBrowse,
+    ...(params.suggestion.searchBrowseAttributes ?? {}),
+  };
+
+  const missingAttributes = unique([
+    ...(params.suggestion.missingAttributes ?? []),
+    ...(rulesOutput.validation.blockers.some((entry) =>
+      /product type|category/i.test(entry)
+    )
+      ? ["product_type_or_category"]
+      : []),
+  ]);
+
+  const complianceWarnings = unique([
+    ...(params.suggestion.complianceWarnings ?? []),
+    ...rulesOutput.validation.warnings,
+    ...rulesOutput.validation.blockers,
+    ...params.competitorContext.warnings,
+  ]);
+
+  const complianceNotes = unique([
+    ...(params.suggestion.complianceNotes ?? []),
+    ...rulesOutput.content.complianceNotes,
+    ...rulesOutput.pricingInventory.priceNotes,
+    ...rulesOutput.pricingInventory.inventoryNotes,
+    `Competitor intelligence status: ${params.competitorContext.status}.`,
+  ]);
+
+  const applyDiagnostics = {
+    ...(params.suggestion.applyDiagnostics ?? {
+      factsUpdated: [],
+      factsSources: [],
+      staleFieldsReplaced: [],
+      staleFieldsCleared: [],
+      copyFieldsUpdated: [],
+      searchBrowseFieldsUpdated: [],
+      searchBrowseFieldsReplaced: [],
+      complianceChanges: [],
+      skippedProtectedFields: [],
+      skippedLowConfidenceFields: [],
+      rejectedClaims: [],
+      disclaimerStatus: "preserved" as const,
+      finalDecision: "accepted" as const,
+    }),
+    complianceChanges: unique([
+      ...(params.suggestion.applyDiagnostics?.complianceChanges ?? []),
+      "rules_engine_applied",
+    ]),
+    competitorResearchStatus: params.competitorContext.status,
+    competitorResearchWarnings: params.competitorContext.warnings,
+    optimizationFlow: "full_docket_rules_engine" as const,
+  };
+
+  const candidate: WalmartAiSuggestion = {
+    ...params.suggestion,
+    suggestedTitle: nextTitle,
+    suggestedShortDescription: nextShortDescription,
+    suggestedDescription: nextLongDescription,
+    suggestedBullets: nextBullets,
+    suggestedAttributes,
+    searchBrowseAttributes,
+    mediaRecommendations:
+      normalizeMediaRecommendations(params.suggestion.mediaRecommendations).length > 0
+        ? normalizeMediaRecommendations(params.suggestion.mediaRecommendations)
+        : rulesOutput.media.mediaRecommendations,
+    altText: pickMeaningfulAiText(params.suggestion.altText) ?? rulesOutput.media.altTextGuidance,
+    qualityScore: Math.max(params.suggestion.qualityScore, rulesOutput.score.after),
+    complianceWarnings,
+    complianceNotes,
+    missingAttributes,
+    applyDiagnostics,
+  };
+
+  const candidateCompliance = evaluateWalmartListingCompliance({
+    title: candidate.suggestedTitle,
+    shortDescription: candidate.suggestedShortDescription ?? "",
+    longDescription: candidate.suggestedDescription,
+    bulletPoints: candidate.suggestedBullets,
+  });
+  if (candidateCompliance.valid) {
+    return candidate;
+  }
+
+  const deterministicFallback = buildLayeredSuggestion(params.product, {
+    draftPayload: params.draftPayload ?? null,
+    competitorContext: params.competitorContext,
+  });
+  const candidateDiagnostics = candidate.applyDiagnostics ?? applyDiagnostics;
+  return {
+    ...candidate,
+    suggestedTitle: deterministicFallback.suggestedTitle,
+    suggestedShortDescription: deterministicFallback.suggestedShortDescription,
+    suggestedDescription: deterministicFallback.suggestedDescription,
+    suggestedBullets: deterministicFallback.suggestedBullets,
+    complianceWarnings: unique([
+      ...(candidate.complianceWarnings ?? []),
+      "Rules-engine output failed compliance checks and deterministic compliant fallback was applied.",
+      ...candidateCompliance.violations,
+    ]),
+    applyDiagnostics: {
+      factsUpdated: candidateDiagnostics.factsUpdated ?? [],
+      factsSources: candidateDiagnostics.factsSources ?? [],
+      staleFieldsReplaced: candidateDiagnostics.staleFieldsReplaced ?? [],
+      staleFieldsCleared: candidateDiagnostics.staleFieldsCleared ?? [],
+      copyFieldsUpdated: candidateDiagnostics.copyFieldsUpdated ?? [],
+      searchBrowseFieldsUpdated: candidateDiagnostics.searchBrowseFieldsUpdated ?? [],
+      searchBrowseFieldsReplaced: candidateDiagnostics.searchBrowseFieldsReplaced ?? [],
+      complianceChanges: unique([
+        ...(candidateDiagnostics.complianceChanges ?? []),
+        "rules_engine_compliance_fallback",
+      ]),
+      skippedProtectedFields: candidateDiagnostics.skippedProtectedFields ?? [],
+      skippedLowConfidenceFields: candidateDiagnostics.skippedLowConfidenceFields ?? [],
+      rejectedClaims: candidateDiagnostics.rejectedClaims ?? [],
+      imageFactsStatus: candidateDiagnostics.imageFactsStatus,
+      imageFactsMessage: candidateDiagnostics.imageFactsMessage,
+      manufacturerSource: candidateDiagnostics.manufacturerSource,
+      manufacturerConfidence: candidateDiagnostics.manufacturerConfidence,
+      manufacturerNeedsReview: candidateDiagnostics.manufacturerNeedsReview,
+      faqGenerationState: candidateDiagnostics.faqGenerationState,
+      competitorResearchStatus: candidateDiagnostics.competitorResearchStatus,
+      competitorResearchWarnings: candidateDiagnostics.competitorResearchWarnings ?? [],
+      optimizationFlow: candidateDiagnostics.optimizationFlow ?? "full_docket_rules_engine",
+      disclaimerStatus: candidateDiagnostics.disclaimerStatus ?? "preserved",
+      finalDecision: "accepted_with_changes",
+    },
+  };
 }
 
 function parseJsonObject(raw: string): Record<string, unknown> {
@@ -481,7 +717,14 @@ function parseJsonObject(raw: string): Record<string, unknown> {
 async function requestOpenAiSuggestion(params: {
   apiKey: string;
   product: WalmartProductRecord;
+  draftPayload?: Record<string, unknown> | null;
+  competitorContext?: WalmartCompetitorIntelligence | null;
 }): Promise<Record<string, unknown>> {
+  const promptContract = buildWalmartDocketOptimizationPromptContract({
+    product: params.product,
+    draftPayload: params.draftPayload ?? null,
+    competitorPatterns: params.competitorContext?.patterns ?? null,
+  });
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -496,12 +739,12 @@ async function requestOpenAiSuggestion(params: {
         {
           role: "system",
           content:
-            "You optimize Walmart supplement listings for marketplace conversion and AI visibility. Return JSON only. Use product-specific facts grounded in provided product data. Do not hallucinate ingredients/flavor/form/count. Never include disease/treatment/cure/prevention/drug-comparison claims and never use terms like ED, erectile dysfunction, hypertension, anxiety, insomnia, depression, natural viagra, or works like cialis. Keep supplement FDA disclaimer exact and include it once in longDescription.",
+            "You optimize Walmart supplement listings for marketplace conversion and AI visibility. Return JSON only. Use product-specific facts grounded in provided product data. Do not hallucinate ingredients/flavor/form/count. Never include disease/treatment/cure/prevention/drug-comparison claims and never use terms like ED, erectile dysfunction, hypertension, anxiety, insomnia, depression, natural viagra, or works like cialis. Keep supplement FDA disclaimer exact and include it once in longDescription. Optimize the full docket, never field-by-field, and do not copy competitor text.",
         },
         {
           role: "user",
           content: JSON.stringify({
-            task: "Generate layered Walmart enrichment suggestions with searchable, answer-engine-friendly copy.",
+            task: "Generate layered Walmart enrichment suggestions with searchable, answer-engine-friendly copy in one full-docket optimization pass.",
             requiredFields: [
               "suggestedTitle",
               "suggestedShortDescription",
@@ -528,6 +771,7 @@ async function requestOpenAiSuggestion(params: {
               noUnsupportedFacts: true,
               noKeywordStuffing: true,
               disclaimerExactOnce: true,
+              competitorUsage: "patterns_only_do_not_copy_text",
               protectedFieldsNeverOverwrite: [
                 "sku",
                 "gtin",
@@ -555,6 +799,7 @@ async function requestOpenAiSuggestion(params: {
               rawPayload: params.product.rawPayload,
               normalizedPayload: params.product.normalizedPayload,
             },
+            contract: promptContract,
           }),
         },
       ],
@@ -656,13 +901,42 @@ export async function generateWalmartAiSuggestion(params: {
   product: WalmartProductRecord;
   openAiApiKey: string;
   draftPayload?: Record<string, unknown> | null;
+  userId?: string;
 }): Promise<WalmartAiSuggestion> {
+  const competitorContext = params.userId
+    ? await getWalmartSerpApiCompetitorIntelligence({
+        userId: params.userId,
+        product: params.product,
+        draftPayload: params.draftPayload ?? null,
+      })
+    : ({
+        status: "skipped_no_credentials",
+        queries: [],
+        competitors: [],
+        patterns: {
+          titlePatterns: [],
+          commonAttributes: [],
+          supportPhrases: [],
+          mediaPatterns: [],
+          priceCountNotes: [],
+          gaps: [],
+        },
+        warnings: ["Competitor research skipped: user context unavailable."],
+      } satisfies WalmartCompetitorIntelligence);
+
   const useDeterministicMock = process.env.WALMART_AI_DETERMINISTIC_MOCK === "1";
   if (useDeterministicMock) {
+    const deterministicSuggestion = buildLayeredSuggestion(params.product, {
+      draftPayload: params.draftPayload ?? null,
+      competitorContext,
+    });
     return alignSuggestionQualityScore(
       params.product,
-      buildLayeredSuggestion(params.product, {
+      applyRulesEngineToSuggestion({
+        product: params.product,
         draftPayload: params.draftPayload ?? null,
+        suggestion: deterministicSuggestion,
+        competitorContext,
       })
     );
   }
@@ -670,12 +944,19 @@ export async function generateWalmartAiSuggestion(params: {
   const generated = await requestOpenAiSuggestion({
     apiKey: params.openAiApiKey,
     product: params.product,
+    draftPayload: params.draftPayload ?? null,
+    competitorContext,
   });
 
-  const suggestion = toSuggestionFromGenerated(
-    params.product,
-    generated,
-    params.draftPayload ?? null
-  );
+  const suggestion = applyRulesEngineToSuggestion({
+    product: params.product,
+    draftPayload: params.draftPayload ?? null,
+    suggestion: toSuggestionFromGenerated(
+      params.product,
+      generated,
+      params.draftPayload ?? null
+    ),
+    competitorContext,
+  });
   return alignSuggestionQualityScore(params.product, suggestion);
 }
