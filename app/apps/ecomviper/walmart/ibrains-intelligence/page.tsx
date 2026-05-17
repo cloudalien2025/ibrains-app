@@ -1,6 +1,8 @@
 import WalmartIBrainsIntelligenceClient from "@/app/apps/ecomviper/walmart/ibrains-intelligence/walmart-ibrains-intelligence-client";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
+import type { WalmartNetworkConnection } from "@/lib/ecomviper/walmart/walmart-network-connections";
+import { listWalmartNetworkConnectionsForUser } from "@/lib/ecomviper/walmart/walmart-network-connections-repository";
 import { mergeProductsWithLatestDrafts } from "@/lib/ecomviper/walmart/walmart-product-display";
 import { listWalmartProductsForUser } from "@/lib/ecomviper/walmart/walmart-products";
 
@@ -13,13 +15,14 @@ function asArray<T>(value: T[] | null | undefined): T[] {
 export default async function WalmartIBrainsIntelligencePage() {
   const { userId, unauthorizedResponse } = await requireSignedInUser();
   if (unauthorizedResponse || !userId) {
-    return <WalmartIBrainsIntelligenceClient products={[]} />;
+    return <WalmartIBrainsIntelligenceClient products={[]} networkConnections={[]} />;
   }
 
   let loadError: string | null = null;
   let products = [] as Awaited<ReturnType<typeof listWalmartProductsForUser>>;
   let drafts = [] as Awaited<ReturnType<typeof listWalmartDraftsForUser>>;
   let effectiveProducts = [] as typeof products;
+  let networkConnections: WalmartNetworkConnection[] = [];
 
   try {
     products = asArray(await listWalmartProductsForUser(userId));
@@ -54,5 +57,19 @@ export default async function WalmartIBrainsIntelligencePage() {
     }
   }
 
-  return <WalmartIBrainsIntelligenceClient products={effectiveProducts} loadError={loadError} />;
+  try {
+    networkConnections = asArray(await listWalmartNetworkConnectionsForUser(userId));
+  } catch (error) {
+    console.error("[ecomviper:walmart:ibrains-intelligence] network connections load failed", {
+      message: error instanceof Error ? error.message : "unknown_error",
+    });
+  }
+
+  return (
+    <WalmartIBrainsIntelligenceClient
+      products={effectiveProducts}
+      loadError={loadError}
+      networkConnections={networkConnections}
+    />
+  );
 }

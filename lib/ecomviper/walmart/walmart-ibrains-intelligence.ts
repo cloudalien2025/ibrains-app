@@ -1,4 +1,5 @@
 import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
+import { hostFromUrl, type WalmartNetworkConnection } from "@/lib/ecomviper/walmart/walmart-network-connections";
 
 export type IBrainsOpportunityType =
   | "citation"
@@ -20,6 +21,20 @@ export type IBrainsOpportunityStatus =
   | "monitoring";
 
 export type IBrainsComplianceRisk = "low" | "medium" | "high";
+
+export type IBrainsOpportunityDestinationType = "marketplace_listing" | "wordpress_site" | "manual" | "other";
+
+export interface IBrainsOpportunityDestination {
+  connectionId?: string;
+  destinationName: string;
+  destinationUrl?: string;
+  platform: "walmart" | "wordpress" | "other";
+  destinationType: IBrainsOpportunityDestinationType;
+  recommendedAction: string;
+  contentAngle?: string;
+  whyThisDestination: string;
+  fitScore?: number;
+}
 
 export interface IBrainsIntelligenceOpportunity {
   id: string;
@@ -43,6 +58,7 @@ export interface IBrainsIntelligenceOpportunity {
   draftBody?: string;
   status: IBrainsOpportunityStatus;
   createdAt: string;
+  destination: IBrainsOpportunityDestination;
 }
 
 export interface IBrainsIntelligenceRun {
@@ -62,7 +78,42 @@ export interface IBrainsIntelligenceRun {
     highImpactActions: number;
     complianceWarnings: number;
     draftsReady: number;
+    strongDestinationMatches: number;
+    topDestinations: Array<{
+      destinationName: string;
+      destinationUrl?: string;
+      platform: "walmart" | "wordpress" | "other";
+      fitScore: number;
+    }>;
   };
+}
+
+interface OpportunityTemplate {
+  type: IBrainsOpportunityType;
+  title: string;
+  destinationHint: "walmart" | "wordpress" | "manual";
+  recommendedActionTemplate: string;
+  fallbackAction: string;
+  rationale: string;
+  contentAngle: string;
+  desiredContentType: string;
+  topicalKeywords: string[];
+  draftTitle: string;
+  draftBody: string;
+  relevanceOffset: number;
+  citationOffset: number;
+  impactOffset: number;
+}
+
+export interface DestinationFit {
+  connectionId: string;
+  destinationName: string;
+  destinationUrl?: string;
+  platform: "wordpress";
+  fitScore: number;
+  rationale: string;
+  recommendedAction: string;
+  contentAngle: string;
 }
 
 const RISKY_CLAIM_PATTERNS = [
@@ -84,6 +135,25 @@ const RISKY_CLAIM_PATTERNS = [
   /\bdisease\b/i,
 ];
 
+const STOP_WORDS = new Set([
+  "and",
+  "the",
+  "with",
+  "for",
+  "from",
+  "this",
+  "that",
+  "your",
+  "into",
+  "about",
+  "daily",
+  "support",
+  "walmart",
+  "draft",
+]);
+
+const DESTINATION_MATCH_THRESHOLD = 55;
+
 function clampScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -103,22 +173,22 @@ function isMeaningfulText(value: string): boolean {
   return !new Set(["unknown", "n/a", "na", "none", "null", "undefined"]).has(normalized);
 }
 
-export function extractRiskyClaimsFromProduct(product: WalmartEffectiveProductRecord): string[] {
-  const corpus = [
-    product.title,
-    product.shortDescription,
-    product.longDescription,
-    ...product.bulletPoints,
-  ]
-    .filter((entry) => typeof entry === "string")
-    .join("\n");
+function tokenize(input: string): string[] {
+  return input
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && !STOP_WORDS.has(token));
+}
 
-  const hits = new Set<string>();
-  for (const pattern of RISKY_CLAIM_PATTERNS) {
-    const match = corpus.match(pattern);
-    if (match?.[0]) hits.add(match[0].toLowerCase());
+function overlapCount(left: string[], right: string[]): number {
+  if (left.length === 0 || right.length === 0) return 0;
+  const rightSet = new Set(right);
+  const seen = new Set<string>();
+  for (const token of left) {
+    if (rightSet.has(token)) seen.add(token);
   }
-  return Array.from(hits);
+  return seen.size;
 }
 
 function inferBaseAgenticVisibilityScore(product: WalmartEffectiveProductRecord): number {
@@ -173,196 +243,322 @@ function defaultStatusForOpportunity(input: {
   return "new";
 }
 
-function classifySourceForType(type: IBrainsOpportunityType): {
-  sourceName: string;
-  sourceDomain: string;
-  url: string;
-} {
-  if (type === "citation") {
-    return {
-      sourceName: "Knowledge and buying guides",
-      sourceDomain: "wellness-resource-hubs.example",
-      url: "https://wellness-resource-hubs.example",
-    };
-  }
-  if (type === "community") {
-    return {
-      sourceName: "Community Q&A channels",
-      sourceDomain: "qa-community.example",
-      url: "https://qa-community.example",
-    };
-  }
-  if (type === "marketplace") {
-    return {
-      sourceName: "Walmart PDP and listing fields",
-      sourceDomain: "walmart.com",
-      url: "https://www.walmart.com",
-    };
-  }
-  if (type === "owned_content") {
-    return {
-      sourceName: "Owned brand content",
-      sourceDomain: "yourbrand.example",
-      url: "https://yourbrand.example",
-    };
-  }
-  if (type === "image_media") {
-    return {
-      sourceName: "Image metadata channels",
-      sourceDomain: "cdn-content.example",
-      url: "https://cdn-content.example",
-    };
-  }
-  if (type === "backlink_outreach") {
-    return {
-      sourceName: "Partner and editorial outreach",
-      sourceDomain: "editorial-outreach.example",
-      url: "https://editorial-outreach.example",
-    };
-  }
-  if (type === "competitor_gap") {
-    return {
-      sourceName: "Competitor citation gaps",
-      sourceDomain: "market-intelligence.example",
-      url: "https://market-intelligence.example",
-    };
-  }
-  return {
-    sourceName: "FAQ coverage surfaces",
-    sourceDomain: "support-content.example",
-    url: "https://support-content.example",
-  };
-}
-
-function buildOpportunityTemplates(product: WalmartEffectiveProductRecord): Array<{
-  type: IBrainsOpportunityType;
-  title: string;
-  recommendedAction: string;
-  rationale: string;
-  draftTitle: string;
-  draftBody: string;
-  relevanceOffset: number;
-  citationOffset: number;
-  impactOffset: number;
-}> {
+function buildOpportunityTemplates(product: WalmartEffectiveProductRecord): OpportunityTemplate[] {
   const productName = product.title || product.sku;
-  const safeBlurb = `${productName} is designed to support daily wellness and should be reviewed for marketplace-safe claims before publication.`;
 
   return [
     {
-      type: "citation",
-      title: "Create citation-ready product fact snippet",
-      recommendedAction:
-        "Draft a concise product fact block with SKU, use context, and compliant wellness language for citation-friendly placements.",
+      type: "owned_content",
+      title: "Create destination-aware product review draft",
+      destinationHint: "wordpress",
+      recommendedActionTemplate: "Create WordPress product review draft on {destination}.",
+      fallbackAction:
+        "No strong matching connected property found for this topic yet. Create a draft for manual use or add a WordPress property for this niche.",
       rationale:
-        "Citation surfaces improve how AI agents and recommendation systems verify product facts before recommending or selecting a listing.",
-      draftTitle: `${productName} citation-ready facts`,
-      draftBody: `${safeBlurb}\n\nSuggested citation snippet:\n${productName} | SKU: ${product.sku} | Supports daily wellness routines with clear usage and ingredient context.`,
-      relevanceOffset: 8,
-      citationOffset: 14,
-      impactOffset: 10,
+        "Owned product-review surfaces strengthen citation confidence for agentic recommendation and selection workflows.",
+      contentAngle: `Best ${productName} options for daily wellness routines`,
+      desiredContentType: "product review",
+      topicalKeywords: ["product", "review", "buying", "guide", product.category],
+      draftTitle: `${productName} review draft for owned media`,
+      draftBody:
+        `Draft angle: ${productName} product review with clear usage context and compliance-safe language.\n` +
+        "Include factual product details and a Walmart listing reference for verification.",
+      relevanceOffset: 9,
+      citationOffset: 12,
+      impactOffset: 12,
     },
     {
-      type: "community",
-      title: "Prepare high-trust community Q&A response draft",
-      recommendedAction:
-        "Prepare a helpful, non-promotional Q&A response explaining who the product is for and how it supports general wellness routines.",
+      type: "citation",
+      title: "Create destination-aware buyer guide draft",
+      destinationHint: "wordpress",
+      recommendedActionTemplate: "Create WordPress buyer guide draft on {destination}.",
+      fallbackAction:
+        "No strong matching connected property found for this topic yet. Create a citation-ready draft for manual use and add a niche-matched WordPress property.",
       rationale:
-        "Community answers can become recurring references for AI systems when they are factual, helpful, and safely phrased.",
-      draftTitle: `${productName} community answer draft`,
+        "Buyer-guide citations help assistants verify product facts and selection context.",
+      contentAngle: `${productName} buyer guide and comparison essentials`,
+      desiredContentType: "buyer guide",
+      topicalKeywords: ["buyer", "guide", "comparison", "wellness", product.category],
+      draftTitle: `${productName} citation-ready buyer guide draft`,
       draftBody:
-        `Thanks for asking about ${productName}. It is designed to support general wellness goals as part of a balanced routine. ` +
-        "For transparency, include ingredient context, serving guidance, and a link to the Walmart listing so shoppers can review details.",
-      relevanceOffset: 7,
-      citationOffset: 10,
+        `Buyer guide structure for ${productName}: clear audience fit, ingredient facts, usage context, and Walmart listing link for source validation.`,
+      relevanceOffset: 8,
+      citationOffset: 14,
       impactOffset: 11,
     },
     {
       type: "marketplace",
-      title: "Strengthen Walmart listing selection signals",
-      recommendedAction:
-        "Improve title clarity, structured attributes, and bullet consistency so AI-driven shopping flows can parse and rank the listing confidently.",
+      title: "Improve Walmart listing completeness",
+      destinationHint: "walmart",
+      recommendedActionTemplate: "Strengthen core listing fields directly on the Walmart listing draft.",
+      fallbackAction: "Strengthen core listing fields directly on the Walmart listing draft.",
       rationale:
-        "Marketplace completeness directly affects discoverability, recommendation quality, and selection confidence.",
-      draftTitle: `${productName} Walmart listing improvement plan`,
+        "Walmart listing completeness increases discoverability and helps AI systems parse product facts cleanly.",
+      contentAngle: "Title, bullets, and attributes for cleaner marketplace entity understanding",
+      desiredContentType: "listing update",
+      topicalKeywords: ["listing", "walmart", "attributes", "bullets"],
+      draftTitle: `${productName} Walmart listing optimization draft`,
       draftBody:
-        `Update the Walmart listing for ${productName} with clearer value context, complete attributes, and shopper-friendly bullets that use support-focused language.`,
+        `Update title clarity, bullet consistency, and structured attributes for ${productName} while keeping compliance-safe wording.`,
       relevanceOffset: 12,
       citationOffset: 8,
       impactOffset: 15,
     },
     {
-      type: "owned_content",
-      title: "Draft owned content angle for agentic discovery",
-      recommendedAction:
-        "Create an owned article or guide section that explains product usage context and links back to Walmart with citation-ready facts.",
-      rationale:
-        "Owned content helps search engines and assistants map your product to trustworthy topical entities.",
-      draftTitle: `${productName} daily wellness guide angle`,
-      draftBody:
-        `Article angle: How ${productName} fits into a consistent daily wellness routine. Include practical usage tips, ingredient transparency, and a Walmart purchase reference.`,
-      relevanceOffset: 6,
-      citationOffset: 9,
-      impactOffset: 9,
-    },
-    {
-      type: "image_media",
-      title: "Improve image metadata for AI understanding",
-      recommendedAction:
-        "Add descriptive alt text and SEO-safe file names so visual search and multimodal agents can understand product context.",
-      rationale:
-        "Image metadata increases comprehension in visual discovery channels and recommendation engines.",
-      draftTitle: `${productName} image metadata draft`,
-      draftBody:
-        `Alt text suggestion: ${productName} wellness support product packaging on clean background.\nFilename suggestion: ${normalizeSkuKey(product.sku).toLowerCase()}-wellness-support-walmart.jpg`,
-      relevanceOffset: 9,
-      citationOffset: 6,
-      impactOffset: 11,
-    },
-    {
-      type: "backlink_outreach",
-      title: "Prepare partner outreach brief for trusted mentions",
-      recommendedAction:
-        "Draft outreach copy for relevant publishers or partners focused on factual product references and safe, support-oriented language.",
-      rationale:
-        "Trusted mentions can improve the probability that assistants and recommendation layers surface your product.",
-      draftTitle: `${productName} outreach draft`,
-      draftBody:
-        `Hello team, we are sharing updated reference details for ${productName} (SKU: ${product.sku}). ` +
-        "If relevant for your audience, you can cite its daily wellness support positioning and ingredient transparency.",
-      relevanceOffset: 5,
-      citationOffset: 11,
-      impactOffset: 8,
-    },
-    {
-      type: "competitor_gap",
-      title: "Close competitor citation and content gaps",
-      recommendedAction:
-        "Identify missing trust signals or FAQs competitors have and draft improved, compliant versions for your listing ecosystem.",
-      rationale:
-        "Competitive gap closure increases selection probability in ranking and recommendation flows.",
-      draftTitle: `${productName} competitor gap checklist`,
-      draftBody:
-        `Gap checklist for ${productName}: citation-ready summary, complete attribute coverage, FAQ depth, and clearer media metadata for agentic visibility.`,
-      relevanceOffset: 8,
-      citationOffset: 7,
-      impactOffset: 10,
-    },
-    {
       type: "faq_gap",
-      title: "Generate FAQ recommendations for selection clarity",
-      recommendedAction:
-        "Draft FAQ responses covering usage context, audience fit, and ingredient transparency in support-focused language.",
+      title: "Add product FAQ block to Walmart listing draft",
+      destinationHint: "walmart",
+      recommendedActionTemplate: "Add product FAQ block to Walmart listing draft.",
+      fallbackAction: "Add product FAQ block to Walmart listing draft.",
       rationale:
-        "FAQ completeness helps assistants answer intent-specific questions and recommend the right product.",
-      draftTitle: `${productName} FAQ recommendation draft`,
+        "Listing FAQ coverage improves answer quality for shopper intent and AI retrieval.",
+      contentAngle: "Serving size, usage context, and product positioning questions",
+      desiredContentType: "faq",
+      topicalKeywords: ["faq", "questions", "usage", "serving"],
+      draftTitle: `${productName} Walmart FAQ draft`,
       draftBody:
-        `FAQ recommendation:\nQ: Who is ${productName} designed for?\nA: It is designed to support daily wellness routines for adults seeking consistent nutritional support.`,
+        `FAQ examples for ${productName}: Who is it for? How should it be used? What facts should shoppers compare before purchase?`,
       relevanceOffset: 10,
       citationOffset: 8,
       impactOffset: 12,
     },
+    {
+      type: "image_media",
+      title: "Improve Walmart product image metadata",
+      destinationHint: "walmart",
+      recommendedActionTemplate: "Create image alt text and metadata updates for Walmart product images.",
+      fallbackAction: "Create image alt text and metadata updates for Walmart product images.",
+      rationale:
+        "Image metadata supports multimodal retrieval and improves product understanding in AI systems.",
+      contentAngle: `${productName} image alt text focused on factual product context`,
+      desiredContentType: "image metadata",
+      topicalKeywords: ["image", "metadata", "alt", "visual"],
+      draftTitle: `${productName} image metadata draft`,
+      draftBody:
+        `Alt text suggestion: ${productName} product packaging with clear label and wellness support context.`,
+      relevanceOffset: 7,
+      citationOffset: 6,
+      impactOffset: 10,
+    },
+    {
+      type: "community",
+      title: "Create topical Q&A article draft",
+      destinationHint: "wordpress",
+      recommendedActionTemplate: "Create WordPress Q&A support article draft on {destination}.",
+      fallbackAction:
+        "No strong matching connected property found for this topic yet. Create a manual Q&A draft and map a suitable destination.",
+      rationale:
+        "Trusted Q&A content can become a recurring source for product selection guidance.",
+      contentAngle: `${productName} audience-fit and routine-usage Q&A`,
+      desiredContentType: "educational article",
+      topicalKeywords: ["q", "a", "audience", "routine", product.category],
+      draftTitle: `${productName} Q&A article draft`,
+      draftBody:
+        `Create a non-promotional Q&A article for ${productName} with practical usage context and factual product references.`,
+      relevanceOffset: 6,
+      citationOffset: 10,
+      impactOffset: 8,
+    },
+    {
+      type: "competitor_gap",
+      title: "Create competitor comparison draft",
+      destinationHint: "wordpress",
+      recommendedActionTemplate: "Create WordPress comparison post draft on {destination}.",
+      fallbackAction:
+        "No strong matching connected property found for this topic yet. Create a comparison draft for manual review and distribution.",
+      rationale:
+        "Comparison content can close trust and citation gaps against competing products.",
+      contentAngle: `${productName} comparison checklist and decision factors`,
+      desiredContentType: "comparison post",
+      topicalKeywords: ["comparison", "best", "vs", "buying", product.category],
+      draftTitle: `${productName} comparison draft`,
+      draftBody:
+        `Build a comparison framework for ${productName} with factual criteria and compliance-safe descriptors.`,
+      relevanceOffset: 7,
+      citationOffset: 8,
+      impactOffset: 9,
+    },
   ];
+}
+
+function productContextTokens(product: WalmartEffectiveProductRecord): string[] {
+  return tokenize(
+    [
+      product.title,
+      product.brand,
+      product.category,
+      product.shortDescription,
+      product.longDescription,
+      ...(product.bulletPoints ?? []),
+    ]
+      .filter((entry) => typeof entry === "string")
+      .join(" ")
+  );
+}
+
+function statusPenalty(status: WalmartNetworkConnection["status"]): number {
+  if (status === "connected") return 0;
+  if (status === "needs_attention") return 15;
+  return 35;
+}
+
+export function scoreWordpressDestinationFit(input: {
+  product: WalmartEffectiveProductRecord;
+  template: {
+    topicalKeywords: string[];
+    desiredContentType: string;
+    contentAngle: string;
+  };
+  connection: WalmartNetworkConnection;
+}): DestinationFit {
+  const connection = input.connection;
+  const guardrails = connection.guardrails;
+  const destinationName = hostFromUrl(connection.url) || connection.name;
+
+  const productTokens = productContextTokens(input.product);
+  const templateTokens = tokenize(`${input.template.contentAngle} ${input.template.topicalKeywords.join(" ")}`);
+  const contextTokens = Array.from(new Set([...productTokens, ...templateTokens]));
+
+  const primaryTokens = tokenize(guardrails?.primaryNiche ?? "");
+  const secondaryTokens = tokenize((guardrails?.secondaryNiches ?? []).join(" "));
+  const allowedTokens = tokenize((guardrails?.allowedTopics ?? []).join(" "));
+  const blockedTokens = tokenize((guardrails?.blockedTopics ?? []).join(" "));
+  const preferredTypeTokens = tokenize((guardrails?.preferredContentTypes ?? []).join(" "));
+  const audienceTokens = tokenize(guardrails?.audience ?? "");
+
+  const primaryOverlap = overlapCount(primaryTokens, contextTokens);
+  const secondaryOverlap = overlapCount(secondaryTokens, contextTokens);
+  const allowedOverlap = overlapCount(allowedTokens, contextTokens);
+  const blockedOverlap = overlapCount(blockedTokens, contextTokens);
+  const audienceOverlap = overlapCount(audienceTokens, contextTokens);
+  const contentTypeOverlap = overlapCount(preferredTypeTokens, tokenize(input.template.desiredContentType));
+
+  const score = clampScore(
+    25 +
+      primaryOverlap * 16 +
+      Math.min(secondaryOverlap, 3) * 8 +
+      Math.min(allowedOverlap, 4) * 6 +
+      Math.min(audienceOverlap, 2) * 5 +
+      Math.min(contentTypeOverlap, 2) * 8 -
+      blockedOverlap * 22 -
+      statusPenalty(connection.status)
+  );
+
+  const rationaleParts: string[] = [];
+  if (guardrails?.primaryNiche) rationaleParts.push(`${destinationName} primary niche: ${guardrails.primaryNiche}.`);
+  if (allowedOverlap > 0) rationaleParts.push("Allowed topics align with this opportunity.");
+  if (contentTypeOverlap > 0) rationaleParts.push("Preferred content types match the recommended draft format.");
+  if (blockedOverlap > 0) rationaleParts.push("Blocked topic overlap reduced fit.");
+  if (connection.status === "needs_attention") rationaleParts.push("Connection needs attention before publish actions.");
+
+  return {
+    connectionId: connection.id,
+    destinationName,
+    destinationUrl: connection.url,
+    platform: "wordpress",
+    fitScore: score,
+    rationale: rationaleParts.join(" ") || `${destinationName} has limited topical guardrail data.`,
+    recommendedAction: `Create WordPress ${input.template.desiredContentType} draft on ${destinationName}`,
+    contentAngle: input.template.contentAngle,
+  };
+}
+
+function rankWordpressDestinations(input: {
+  product: WalmartEffectiveProductRecord;
+  template: OpportunityTemplate;
+  connections: WalmartNetworkConnection[];
+}): DestinationFit[] {
+  return input.connections
+    .filter((connection) => connection.platform === "wordpress")
+    .map((connection) =>
+      scoreWordpressDestinationFit({
+        product: input.product,
+        template: {
+          topicalKeywords: input.template.topicalKeywords,
+          desiredContentType: input.template.desiredContentType,
+          contentAngle: input.template.contentAngle,
+        },
+        connection,
+      })
+    )
+    .sort((left, right) => right.fitScore - left.fitScore);
+}
+
+function buildDestinationForTemplate(input: {
+  product: WalmartEffectiveProductRecord;
+  template: OpportunityTemplate;
+  connections: WalmartNetworkConnection[];
+  warningSuffix: string;
+}): IBrainsOpportunityDestination {
+  if (input.template.destinationHint === "walmart") {
+    return {
+      destinationName: "Walmart listing",
+      destinationType: "marketplace_listing",
+      platform: "walmart",
+      recommendedAction: input.template.recommendedActionTemplate,
+      contentAngle: input.template.contentAngle,
+      whyThisDestination:
+        `Walmart listing completeness improves marketplace discovery and gives AI systems cleaner product facts.${input.warningSuffix}`,
+      fitScore: 100,
+    };
+  }
+
+  if (input.template.destinationHint === "wordpress") {
+    const ranked = rankWordpressDestinations({
+      product: input.product,
+      template: input.template,
+      connections: input.connections,
+    });
+    const best = ranked.find((fit) => fit.fitScore >= DESTINATION_MATCH_THRESHOLD);
+
+    if (best) {
+      return {
+        connectionId: best.connectionId,
+        destinationName: best.destinationName,
+        destinationUrl: best.destinationUrl,
+        platform: "wordpress",
+        destinationType: "wordpress_site",
+        recommendedAction: input.template.recommendedActionTemplate.replace("{destination}", best.destinationName),
+        contentAngle: best.contentAngle,
+        whyThisDestination: `${best.rationale}${input.warningSuffix}`,
+        fitScore: best.fitScore,
+      };
+    }
+
+    return {
+      destinationName: "No strong match yet",
+      destinationType: "manual",
+      platform: "other",
+      recommendedAction: input.template.fallbackAction,
+      contentAngle: input.template.contentAngle,
+      whyThisDestination:
+        `No strong matching connected property found for this topic yet. Use on Walmart listing, create a draft for manual use, or add a new WordPress property for this niche.${input.warningSuffix}`,
+      fitScore: 0,
+    };
+  }
+
+  return {
+    destinationName: "Manual workflow",
+    destinationType: "manual",
+    platform: "other",
+    recommendedAction: input.template.fallbackAction,
+    contentAngle: input.template.contentAngle,
+    whyThisDestination: `This opportunity currently requires approval-first manual routing.${input.warningSuffix}`,
+    fitScore: 0,
+  };
+}
+
+export function extractRiskyClaimsFromProduct(product: WalmartEffectiveProductRecord): string[] {
+  const corpus = [product.title, product.shortDescription, product.longDescription, ...product.bulletPoints]
+    .filter((entry) => typeof entry === "string")
+    .join("\n");
+
+  const hits = new Set<string>();
+  for (const pattern of RISKY_CLAIM_PATTERNS) {
+    const match = corpus.match(pattern);
+    if (match?.[0]) hits.add(match[0].toLowerCase());
+  }
+  return Array.from(hits);
 }
 
 export function summarizeWalmartIBrainsOpportunities(
@@ -381,29 +577,68 @@ export function summarizeWalmartIBrainsOpportunities(
     ? opportunities.reduce((sum, row) => sum + row.agenticVisibilityScore, 0) / opportunitiesFound
     : 0;
 
-  const agenticVisibilityScore = clampScore(averageOpportunityScore);
+  const topDestinationMap = new Map<string, IBrainsIntelligenceRun["summary"]["topDestinations"][number]>();
+  for (const opportunity of opportunities) {
+    if (!opportunity.destination.connectionId || opportunity.destination.fitScore === undefined) continue;
+    const key = opportunity.destination.connectionId;
+    const current = topDestinationMap.get(key);
+    if (!current || opportunity.destination.fitScore > current.fitScore) {
+      topDestinationMap.set(key, {
+        destinationName: opportunity.destination.destinationName,
+        destinationUrl: opportunity.destination.destinationUrl,
+        platform: opportunity.destination.platform,
+        fitScore: opportunity.destination.fitScore,
+      });
+    }
+  }
+
+  const topDestinations = Array.from(topDestinationMap.values())
+    .sort((left, right) => right.fitScore - left.fitScore)
+    .slice(0, 3);
 
   return {
-    agenticVisibilityScore,
+    agenticVisibilityScore: clampScore(averageOpportunityScore),
     opportunitiesFound,
     highImpactActions,
     complianceWarnings,
     draftsReady,
+    strongDestinationMatches: topDestinations.length,
+    topDestinations,
   };
 }
 
 export function runWalmartIBrainsIntelligence(
-  product: WalmartEffectiveProductRecord
+  product: WalmartEffectiveProductRecord,
+  options?: {
+    networkConnections?: WalmartNetworkConnection[];
+  }
 ): IBrainsIntelligenceRun {
   const now = new Date().toISOString();
   const productRiskHits = extractRiskyClaimsFromProduct(product);
   const baseScore = inferBaseAgenticVisibilityScore(product);
+  const connections = options?.networkConnections ?? [];
 
   const opportunities = buildOpportunityTemplates(product).map((template, index) => {
     const relevanceScore = clampScore(baseScore + template.relevanceOffset - index);
     const citationPotentialScore = clampScore(baseScore - 12 + template.citationOffset);
+
+    const warningSuffix =
+      productRiskHits.length > 0
+        ? ` Compliance note: potential risky claim terms detected (${productRiskHits.join(", ")}). Keep support-focused language and route for review.`
+        : "";
+
+    const destination = buildDestinationForTemplate({
+      product,
+      template,
+      connections,
+      warningSuffix,
+    });
+
     const agenticVisibilityScore = clampScore(
-      relevanceScore * 0.4 + citationPotentialScore * 0.25 + (baseScore + template.impactOffset) * 0.35
+      relevanceScore * 0.38 +
+        citationPotentialScore * 0.22 +
+        (baseScore + template.impactOffset) * 0.3 +
+        (destination.fitScore ?? 0) * 0.1
     );
 
     const complianceRisk = inferComplianceRisk({
@@ -414,12 +649,6 @@ export function runWalmartIBrainsIntelligence(
     const hasDraft = Boolean(template.draftBody.trim());
     const status = defaultStatusForOpportunity({ complianceRisk, hasDraft });
 
-    const source = classifySourceForType(template.type);
-    const warningSuffix =
-      productRiskHits.length > 0
-        ? ` Compliance note: potential risky claim terms detected (${productRiskHits.join(", ")}). Keep support-focused language and route for review.`
-        : "";
-
     return {
       id: `ibrains-${normalizeSkuKey(product.sku).toLowerCase()}-${template.type}-${index + 1}`,
       productId: product.id,
@@ -428,20 +657,21 @@ export function runWalmartIBrainsIntelligence(
       marketplace: "walmart",
       type: template.type,
       title: template.title,
-      sourceName: source.sourceName,
-      sourceDomain: source.sourceDomain,
-      url: source.url,
+      sourceName: destination.destinationName,
+      sourceDomain: destination.destinationUrl ? hostFromUrl(destination.destinationUrl) : destination.destinationName,
+      url: destination.destinationUrl,
       snippet: `${product.title} | SKU: ${product.sku}`,
       relevanceScore,
       citationPotentialScore,
       agenticVisibilityScore,
       complianceRisk,
-      recommendedAction: template.recommendedAction,
-      rationale: `${template.rationale}${warningSuffix}`,
+      recommendedAction: destination.recommendedAction,
+      rationale: `${template.rationale} ${destination.whyThisDestination}`.trim(),
       draftTitle: template.draftTitle,
       draftBody: template.draftBody,
       status,
       createdAt: now,
+      destination,
     } satisfies IBrainsIntelligenceOpportunity;
   });
 
@@ -457,10 +687,10 @@ export function runWalmartIBrainsIntelligence(
     startedAt: now,
     completedAt: now,
     queries: [
-      `${product.title} walmart review insights`,
-      `${product.title} wellness faq`,
-      `${product.brand} ${product.sku} product references`,
-      `${product.title} citation opportunity`,
+      `${product.title} walmart listing optimization`,
+      `${product.title} buyer guide`,
+      `${product.brand} ${product.sku} trusted references`,
+      `${product.title} citation-ready draft destinations`,
     ],
     opportunities,
     summary: summarizeWalmartIBrainsOpportunities(opportunities),

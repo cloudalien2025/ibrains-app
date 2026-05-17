@@ -6,6 +6,11 @@ import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import ConnectionInstructionsDialog, {
   type ConnectionInstructionsProvider,
 } from "@/app/apps/ecomviper/walmart/connect/_components/connection-instructions-dialog";
+import {
+  hostFromUrl,
+  type WalmartNetworkConnection,
+  type WalmartNetworkConnectionInput,
+} from "@/lib/ecomviper/walmart/walmart-network-connections";
 import type {
   WalmartApiError,
   WalmartConnectionDiagnostic,
@@ -17,6 +22,7 @@ import type {
 
 interface ConnectClientProps {
   initialHealth: WalmartConnectionHealth;
+  initialNetworkConnections?: WalmartNetworkConnection[];
 }
 
 type ConnectForm = {
@@ -39,6 +45,25 @@ type ShopifyForm = {
   storeDomain: string;
   clientId: string;
   clientSecret: string;
+};
+
+type WordPressConnectionForm = {
+  siteName: string;
+  siteUrl: string;
+  status: "connected" | "needs_attention" | "not_connected";
+  credentialLabel: string;
+  applicationPassword: string;
+  defaultPublishingStatus: "draft" | "pending_review";
+  defaultCategory: string;
+  defaultAuthor: string;
+  primaryNiche: string;
+  secondaryNiches: string;
+  allowedTopics: string;
+  blockedTopics: string;
+  preferredContentTypes: string;
+  audience: string;
+  notesForIBrains: string;
+  notes: string;
 };
 
 type ShopifyStatus = {
@@ -183,6 +208,18 @@ type ShopifyImportApiPayload = {
   message?: string;
 };
 
+type NetworkConnectionsApiPayload = {
+  ok: boolean;
+  connections: WalmartNetworkConnection[];
+  message?: string;
+};
+
+type NetworkConnectionApiPayload = {
+  ok: boolean;
+  connection: WalmartNetworkConnection;
+  message?: string;
+};
+
 class ApiRequestError extends Error {
   readonly status: number;
   readonly payload: unknown;
@@ -256,6 +293,18 @@ function asStringArray(value: unknown): string[] {
   return value
     .map((entry) => asString(entry))
     .filter((entry) => entry.length > 0);
+}
+
+function splitCsv(value: string): string[] {
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function joinList(values: string[] | undefined): string {
+  if (!Array.isArray(values) || values.length === 0) return "";
+  return values.join(", ");
 }
 
 function toHealth(response: ConnectApiPayload): WalmartConnectionHealth {
@@ -568,7 +617,10 @@ function buildDiagnosticText(diagnostic: WalmartConnectionDiagnostic): string {
   );
 }
 
-export default function WalmartConnectClient({ initialHealth }: ConnectClientProps) {
+export default function WalmartConnectClient({
+  initialHealth,
+  initialNetworkConnections = [],
+}: ConnectClientProps) {
   const walmartClientIdInputRef = useRef<HTMLInputElement | null>(null);
   const walmartClientSecretInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<ConnectForm>({
@@ -585,7 +637,26 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     clientId: "",
     clientSecret: "",
   });
+  const [wordpressForm, setWordpressForm] = useState<WordPressConnectionForm>({
+    siteName: "",
+    siteUrl: "",
+    status: "connected",
+    credentialLabel: "",
+    applicationPassword: "",
+    defaultPublishingStatus: "draft",
+    defaultCategory: "",
+    defaultAuthor: "",
+    primaryNiche: "",
+    secondaryNiches: "",
+    allowedTopics: "",
+    blockedTopics: "",
+    preferredContentTypes: "",
+    audience: "",
+    notesForIBrains: "",
+    notes: "",
+  });
   const [health, setHealth] = useState(initialHealth);
+  const [networkConnections, setNetworkConnections] = useState<WalmartNetworkConnection[]>(initialNetworkConnections);
   const [openAiStatus, setOpenAiStatus] = useState<WalmartOpenAiConnectionStatus>({
     connected: false,
     status: "disconnected",
@@ -649,6 +720,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   const [openAiLoading, setOpenAiLoading] = useState(false);
   const [serpApiLoading, setSerpApiLoading] = useState(false);
   const [shopifyLoading, setShopifyLoading] = useState(false);
+  const [networkLoading, setNetworkLoading] = useState(false);
   const [shopifyFullSync, setShopifyFullSync] = useState(false);
   const [walmartDraftDirty, setWalmartDraftDirty] = useState(false);
   const [shopifyDraftDirty, setShopifyDraftDirty] = useState(false);
@@ -680,6 +752,10 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     shopifyForm.clientId,
     shopifyStatus.storeDomain,
   ]);
+  const wordpressConnections = useMemo(
+    () => networkConnections.filter((connection) => connection.platform === "wordpress"),
+    [networkConnections]
+  );
 
   function resolveWalmartFormForSubmit(): ConnectForm {
     const clientIdFromInput = walmartClientIdInputRef.current?.value?.trim() ?? "";
@@ -780,10 +856,23 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       }
     }
 
+    async function loadNetworkConnections() {
+      try {
+        const response = await fetch("/api/ecomviper/walmart/network-connections", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json().catch(() => null)) as NetworkConnectionsApiPayload | null;
+        if (!payload || cancelled) return;
+        setNetworkConnections(Array.isArray(payload.connections) ? payload.connections : []);
+      } catch {
+        // Intentionally silent; operator can still create connections manually.
+      }
+    }
+
     void loadPersistedHealth();
     void loadOpenAiConnection();
     void loadSerpApiConnection();
     void loadShopifyConnection();
+    void loadNetworkConnections();
 
     return () => {
       cancelled = true;
@@ -1096,6 +1185,90 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     }
   }
 
+  async function handleAddWordpressConnection() {
+    try {
+      setNetworkLoading(true);
+      const payload: WalmartNetworkConnectionInput = {
+        name: wordpressForm.siteName,
+        platform: "wordpress",
+        url: wordpressForm.siteUrl,
+        status: wordpressForm.status,
+        credentialLabel: wordpressForm.credentialLabel,
+        applicationPassword: wordpressForm.applicationPassword,
+        defaultPublishingStatus: wordpressForm.defaultPublishingStatus,
+        defaultCategory: wordpressForm.defaultCategory,
+        defaultAuthor: wordpressForm.defaultAuthor,
+        publishingMode: "draft_only",
+        guardrails: {
+          primaryNiche: wordpressForm.primaryNiche,
+          secondaryNiches: splitCsv(wordpressForm.secondaryNiches),
+          allowedTopics: splitCsv(wordpressForm.allowedTopics),
+          blockedTopics: splitCsv(wordpressForm.blockedTopics),
+          preferredContentTypes: splitCsv(wordpressForm.preferredContentTypes),
+          audience: wordpressForm.audience,
+          notesForIBrains: wordpressForm.notesForIBrains,
+        },
+        notes: wordpressForm.notes,
+      };
+
+      const response = await postJson<NetworkConnectionApiPayload>(
+        "/api/ecomviper/walmart/network-connections",
+        payload
+      );
+      setNetworkConnections((current) =>
+        [...current.filter((entry) => entry.id !== response.connection.id), response.connection].sort((left, right) =>
+          left.name.localeCompare(right.name)
+        )
+      );
+      setWordpressForm({
+        siteName: "",
+        siteUrl: "",
+        status: "connected",
+        credentialLabel: "",
+        applicationPassword: "",
+        defaultPublishingStatus: "draft",
+        defaultCategory: "",
+        defaultAuthor: "",
+        primaryNiche: "",
+        secondaryNiches: "",
+        allowedTopics: "",
+        blockedTopics: "",
+        preferredContentTypes: "",
+        audience: "",
+        notesForIBrains: "",
+        notes: "",
+      });
+      setMessage(response.message ?? "WordPress network connection saved.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Failed to save WordPress network connection.");
+      }
+    } finally {
+      setNetworkLoading(false);
+    }
+  }
+
+  async function handleRemoveConnection(connectionId: string) {
+    try {
+      setNetworkLoading(true);
+      await deleteJson<{ ok: boolean; message?: string }>(
+        `/api/ecomviper/walmart/network-connections?connectionId=${encodeURIComponent(connectionId)}`
+      );
+      setNetworkConnections((current) => current.filter((entry) => entry.id !== connectionId));
+      setMessage("Network connection removed.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Failed to remove network connection.");
+      }
+    } finally {
+      setNetworkLoading(false);
+    }
+  }
+
   async function copyDiagnostic() {
     try {
       const text = buildDiagnosticText(health.summary.diagnostic);
@@ -1109,13 +1282,13 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-connect-page">
       <WalmartPageHeader
-        title="Walmart Connection"
-        subtitle="Production connectivity doctor for Walmart Marketplace credentials and API health."
+        title="Network Connections"
+        subtitle="Connect Walmart Marketplace and owned publishing properties so iBrains Intelligence can recommend destination-aware drafts."
       />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
-          <h2 className="text-lg font-semibold text-[#0F172A]">Credentials</h2>
+          <h2 className="text-lg font-semibold text-[#0F172A]">Walmart Marketplace Credentials</h2>
           <p className="mt-1 text-sm text-[#64748B]">Client secret is accepted for this request only and is never returned in responses.</p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -1324,6 +1497,273 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
                 <StatusBadge status={permission.state} />
               </li>
             ))}
+          </ul>
+        </article>
+      </section>
+
+      <section
+        className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]"
+        data-testid="ecomviper-walmart-network-connections-panel"
+      >
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+          <h2 className="text-lg font-semibold text-[#0F172A]">Owned Publishing Properties (WordPress)</h2>
+          <p className="mt-1 text-sm text-[#64748B]">
+            Add connected WordPress properties with topical guardrails so iBrains can recommend the best destinations.
+          </p>
+          <p className="mt-1 text-sm text-[#64748B]">
+            iBrains Intelligence creates drafts and recommendations. You approve before anything is published externally.
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm text-[#334155]">
+              Site name
+              <input
+                value={wordpressForm.siteName}
+                onChange={(event) => setWordpressForm((current) => ({ ...current, siteName: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="consumersun.com"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Site URL
+              <input
+                value={wordpressForm.siteUrl}
+                onChange={(event) => setWordpressForm((current) => ({ ...current, siteUrl: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="https://consumersun.com"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Platform
+              <input
+                value="WordPress"
+                readOnly
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Connection status
+              <select
+                value={wordpressForm.status}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({
+                    ...current,
+                    status: event.target.value as WordPressConnectionForm["status"],
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+              >
+                <option value="connected">Connected</option>
+                <option value="needs_attention">Needs attention</option>
+                <option value="not_connected">Not connected</option>
+              </select>
+            </label>
+            <label className="text-sm text-[#334155]">
+              Username / credential label
+              <input
+                value={wordpressForm.credentialLabel}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({ ...current, credentialLabel: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="content-bot"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Application password / API credential
+              <input
+                type="password"
+                value={wordpressForm.applicationPassword}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({ ...current, applicationPassword: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="Accepted for save only"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Default publishing status
+              <select
+                value={wordpressForm.defaultPublishingStatus}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({
+                    ...current,
+                    defaultPublishingStatus: event.target.value as WordPressConnectionForm["defaultPublishingStatus"],
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+              >
+                <option value="draft">Draft</option>
+                <option value="pending_review">Pending review</option>
+              </select>
+            </label>
+            <label className="text-sm text-[#334155]">
+              Default category
+              <input
+                value={wordpressForm.defaultCategory}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({ ...current, defaultCategory: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="Buying Guides"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Default author
+              <input
+                value={wordpressForm.defaultAuthor}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({ ...current, defaultAuthor: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="IBrains Editorial"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Primary niche
+              <input
+                value={wordpressForm.primaryNiche}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({ ...current, primaryNiche: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="Product reviews"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Secondary niches
+              <input
+                value={wordpressForm.secondaryNiches}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({ ...current, secondaryNiches: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="consumer buying guides, supplement reviews"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Allowed topics
+              <input
+                value={wordpressForm.allowedTopics}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({ ...current, allowedTopics: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="product reviews, comparison articles"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Blocked topics
+              <input
+                value={wordpressForm.blockedTopics}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({ ...current, blockedTopics: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="pregnancy, children health"
+              />
+            </label>
+            <label className="text-sm text-[#334155] sm:col-span-2">
+              Preferred content types
+              <input
+                value={wordpressForm.preferredContentTypes}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({ ...current, preferredContentTypes: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="product reviews, roundup articles, comparison posts"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Audience
+              <input
+                value={wordpressForm.audience}
+                onChange={(event) => setWordpressForm((current) => ({ ...current, audience: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="General consumers researching products"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Notes for iBrains
+              <input
+                value={wordpressForm.notesForIBrains}
+                onChange={(event) =>
+                  setWordpressForm((current) => ({ ...current, notesForIBrains: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="Prioritize buyer guide angles."
+              />
+            </label>
+            <label className="text-sm text-[#334155] sm:col-span-2">
+              Connection notes
+              <textarea
+                value={wordpressForm.notes}
+                onChange={(event) => setWordpressForm((current) => ({ ...current, notes: event.target.value }))}
+                className="mt-1 min-h-20 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="Optional operational notes"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={networkLoading || !wordpressForm.siteName.trim()}
+              onClick={handleAddWordpressConnection}
+              className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Add WordPress connection
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-[#64748B]">
+            Credentials are accepted for save requests and never shown back in the UI.
+          </p>
+        </article>
+
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+          <h2 className="text-lg font-semibold text-[#0F172A]">Connected Properties</h2>
+          <ul className="mt-3 space-y-2" data-testid="ecomviper-walmart-network-connection-list">
+            <li className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]">
+              <p className="font-medium text-[#0F172A]">Walmart Marketplace</p>
+              <p className="text-xs text-[#64748B]">Connected via Walmart credentials and permissions.</p>
+            </li>
+            {wordpressConnections.map((connection) => (
+              <li
+                key={connection.id}
+                className="rounded-lg border border-[#E2E8F0] bg-white px-3 py-2"
+                data-testid="ecomviper-network-connection-row"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-[#0F172A]">{hostFromUrl(connection.url) || connection.name}</p>
+                    <p className="text-xs text-[#64748B]">WordPress · {connection.status.replace(/_/g, " ")}</p>
+                    <p className="mt-1 text-xs text-[#64748B]">
+                      Primary niche: {connection.guardrails?.primaryNiche || "Not set"}
+                    </p>
+                    <p className="mt-1 text-xs text-[#64748B]">
+                      Allowed topics: {joinList(connection.guardrails?.allowedTopics) || "Not set"}
+                    </p>
+                    <p className="mt-1 text-xs text-[#64748B]">
+                      Preferred content types: {joinList(connection.guardrails?.preferredContentTypes) || "Not set"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleRemoveConnection(connection.id);
+                    }}
+                    className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            ))}
+            {wordpressConnections.length === 0 ? (
+              <li className="rounded-lg border border-dashed border-[#D9E4F0] px-3 py-2 text-sm text-[#64748B]">
+                No WordPress properties connected yet. Add a property to enable destination-aware recommendations.
+              </li>
+            ) : null}
           </ul>
         </article>
       </section>

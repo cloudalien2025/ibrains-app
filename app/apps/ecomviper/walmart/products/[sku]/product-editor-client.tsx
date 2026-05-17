@@ -6801,7 +6801,7 @@ export default function ProductEditorClient({
         <p className="mt-3 text-xs text-[#64748B]">
           Sync history is available in{" "}
           <a href="/apps/ecomviper/walmart/connect" className="font-medium text-[#2563EB] hover:text-[#1D4ED8]">
-            Marketplace Health
+            Network Connections
           </a>
           .
         </p>
@@ -6991,7 +6991,7 @@ export default function ProductEditorClient({
             <p className="text-xs text-[#64748B]">
               Sync history is available in{" "}
               <a href="/apps/ecomviper/walmart/connect" className="font-medium text-[#2563EB] hover:text-[#1D4ED8]">
-                Marketplace Health
+                Network Connections
               </a>
               .
             </p>

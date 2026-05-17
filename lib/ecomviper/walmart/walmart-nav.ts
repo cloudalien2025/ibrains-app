@@ -12,6 +12,6 @@ export const walmartNavItems: WalmartNavItem[] = [
   { label: "Trust Signals", href: "/apps/ecomviper/walmart/feeds" },
   { label: "Semantic Gaps", href: "/apps/ecomviper/walmart/inventory" },
   { label: "Product Opportunities", href: "/apps/ecomviper/walmart/pricing" },
-  { label: "Marketplace Health", href: "/apps/ecomviper/walmart/connect" },
+  { label: "Network Connections", href: "/apps/ecomviper/walmart/connect" },
   { label: "Settings", href: "/apps/ecomviper/walmart/settings" },
 ];
