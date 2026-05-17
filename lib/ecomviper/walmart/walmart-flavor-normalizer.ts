@@ -39,6 +39,7 @@ const KNOWN_FLAVOR_PATTERN = KNOWN_FLAVOR_TERMS.map((entry) => entry.replace(/\s
 const FLAVOR_CLAIM_PATTERNS = [
   new RegExp(`\\b(${KNOWN_FLAVOR_PATTERN})\\s+flavou?r(?:ed)?\\b`, "gi"),
   new RegExp(`\\bflavou?red\\s+(${KNOWN_FLAVOR_PATTERN})\\b`, "gi"),
+  /\bunflavo(?:r|u)ed\s+flavou?r\b/gi,
   new RegExp(
     `(?:^|,\\s*)(${KNOWN_FLAVOR_PATTERN})(?=\\s*(?:,|$|\\d+\\s*(?:capsules?|tablets?|softgels?|gummies?|count|ct)\\b))`,
     "gi"
