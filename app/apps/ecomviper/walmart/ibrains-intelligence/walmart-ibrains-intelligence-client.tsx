@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
+import type { WalmartNetworkConnection } from "@/lib/ecomviper/walmart/walmart-network-connections";
+import { hostFromUrl } from "@/lib/ecomviper/walmart/walmart-network-connections";
 import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
 import {
   runWalmartIBrainsIntelligence,
@@ -9,23 +11,12 @@ import {
   type IBrainsIntelligenceOpportunity,
   type IBrainsIntelligenceRun,
   type IBrainsOpportunityStatus,
-  type IBrainsOpportunityType,
 } from "@/lib/ecomviper/walmart/walmart-ibrains-intelligence";
 
 interface WalmartIBrainsIntelligenceClientProps {
   products: WalmartEffectiveProductRecord[];
   loadError?: string | null;
-}
-
-function labelForOpportunityType(type: IBrainsOpportunityType): string {
-  if (type === "citation") return "Citation opportunities";
-  if (type === "community") return "Community/Q&A opportunities";
-  if (type === "marketplace") return "Marketplace optimization opportunities";
-  if (type === "owned_content") return "Owned content opportunities";
-  if (type === "image_media") return "Image and media opportunities";
-  if (type === "backlink_outreach") return "Backlink/outreach opportunities";
-  if (type === "competitor_gap") return "Competitor gap opportunities";
-  return "FAQ/content gap opportunities";
+  networkConnections?: WalmartNetworkConnection[];
 }
 
 function labelForStatus(status: IBrainsOpportunityStatus): string {
@@ -71,9 +62,14 @@ function scoreClass(score: number): string {
   return "text-rose-700";
 }
 
+function normalizeConnectionLabel(connection: WalmartNetworkConnection): string {
+  return hostFromUrl(connection.url) || connection.name;
+}
+
 export default function WalmartIBrainsIntelligenceClient({
   products,
   loadError,
+  networkConnections = [],
 }: WalmartIBrainsIntelligenceClientProps) {
   const [selectedSku, setSelectedSku] = useState(products[0]?.sku ?? "");
   const [runResult, setRunResult] = useState<IBrainsIntelligenceRun | null>(null);
@@ -83,6 +79,11 @@ export default function WalmartIBrainsIntelligenceClient({
   const selectedProduct = useMemo(
     () => products.find((product) => product.sku === selectedSku) ?? null,
     [products, selectedSku]
+  );
+
+  const connectedProperties = useMemo(
+    () => networkConnections.filter((connection) => connection.platform === "wordpress"),
+    [networkConnections]
   );
 
   const draftOpportunities = useMemo(
@@ -118,7 +119,9 @@ export default function WalmartIBrainsIntelligenceClient({
     setRunning(true);
     setCopyMessage(null);
 
-    const result = runWalmartIBrainsIntelligence(selectedProduct);
+    const result = runWalmartIBrainsIntelligence(selectedProduct, {
+      networkConnections,
+    });
     setRunResult(result);
     setRunning(false);
   }
@@ -127,7 +130,7 @@ export default function WalmartIBrainsIntelligenceClient({
     <div className="space-y-4" data-testid="ibrains-intelligence-page">
       <WalmartPageHeader
         title="iBrains Intelligence"
-        subtitle="Find and create trusted web signals that help AI agents, search engines, marketplaces, and recommendation systems discover, cite, recommend, and select your Walmart products."
+        subtitle="Find and draft destination-aware web signals that help AI agents, search engines, and marketplaces discover, cite, recommend, and select your Walmart products."
       />
 
       <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
@@ -162,7 +165,7 @@ export default function WalmartIBrainsIntelligenceClient({
         </div>
 
         <p className="mt-3 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-sm text-[#1E3A8A]">
-          iBrains Intelligence discovers and drafts. You approve before anything is published externally.
+          iBrains Intelligence creates drafts and recommendations. You approve before anything is published externally.
         </p>
 
         {loadError ? (
@@ -178,6 +181,29 @@ export default function WalmartIBrainsIntelligenceClient({
         ) : null}
       </section>
 
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+        data-testid="ibrains-intelligence-connected-properties"
+      >
+        <h2 className="text-lg font-semibold text-[#0F172A]">Connected Properties</h2>
+        <p className="mt-1 text-sm text-[#475569]">Walmart Marketplace and connected properties available for destination-aware recommendations.</p>
+        <ul className="mt-3 space-y-2">
+          <li className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]">
+            Walmart Marketplace - Connected
+          </li>
+          {connectedProperties.map((connection) => (
+            <li key={connection.id} className="rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-[#334155]">
+              {normalizeConnectionLabel(connection)} - WordPress - {connection.status === "connected" ? "Connected" : "Needs attention"}
+            </li>
+          ))}
+          {connectedProperties.length === 0 ? (
+            <li className="rounded-lg border border-dashed border-[#D9E4F0] px-3 py-2 text-sm text-[#64748B]">
+              No connected WordPress properties yet. Add destinations in Network Connections.
+            </li>
+          ) : null}
+        </ul>
+      </section>
+
       {runResult ? (
         <section
           data-testid="ibrains-intelligence-summary"
@@ -191,7 +217,7 @@ export default function WalmartIBrainsIntelligenceClient({
             <p className={`mt-2 text-3xl font-semibold ${scoreClass(runResult.summary.agenticVisibilityScore)}`}>
               {runResult.summary.agenticVisibilityScore}
             </p>
-            <p className="mt-1 text-xs text-[#64748B]">Product: {runResult.productName}</p>
+            <p className="mt-1 text-xs text-[#64748B]">Optimized using iBrains scoring guidance.</p>
           </article>
 
           <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
@@ -210,8 +236,8 @@ export default function WalmartIBrainsIntelligenceClient({
           </article>
 
           <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
-            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Drafts Ready</p>
-            <p className="mt-2 text-3xl font-semibold text-[#0F172A]">{runResult.summary.draftsReady}</p>
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Strong Destinations</p>
+            <p className="mt-2 text-3xl font-semibold text-[#0F172A]">{runResult.summary.strongDestinationMatches}</p>
           </article>
         </section>
       ) : null}
@@ -222,21 +248,33 @@ export default function WalmartIBrainsIntelligenceClient({
             className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
             data-testid="ibrains-intelligence-opportunities-table"
           >
-            <h2 className="text-lg font-semibold text-[#0F172A]">Opportunity Intelligence</h2>
+            <h2 className="text-lg font-semibold text-[#0F172A]">Destination-Aware Opportunities</h2>
             <p className="mt-1 text-sm text-[#475569]">
-              Prioritized opportunities to improve Agentic Visibility and Selection. High-impact rows are highlighted.
+              Each recommendation shows where to place content, what to draft, and why it helps Agentic Visibility and Selection.
             </p>
+
+            {runResult.summary.topDestinations.length > 0 ? (
+              <div className="mt-3 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]">
+                <span className="font-medium text-[#0F172A]">Best destinations in your network: </span>
+                {runResult.summary.topDestinations.map((destination) => destination.destinationName).join(", ")}
+              </div>
+            ) : (
+              <div className="mt-3 rounded-lg border border-dashed border-[#D9E4F0] px-3 py-2 text-sm text-[#475569]">
+                No strong matching connected property found for this topic yet. Use on Walmart listing, create a draft for manual use, or add a new WordPress property for this niche.
+              </div>
+            )}
 
             <div className="mt-3 overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead className="text-left text-xs uppercase tracking-[0.1em] text-[#64748B]">
                   <tr>
-                    <th className="py-2 pr-3">Category</th>
                     <th className="py-2 pr-3">Opportunity</th>
+                    <th className="py-2 pr-3">Recommended destination</th>
+                    <th className="py-2 pr-3">Recommended action</th>
+                    <th className="py-2 pr-3">Why this destination</th>
                     <th className="py-2 pr-3">Scores</th>
                     <th className="py-2 pr-3">Risk</th>
-                    <th className="py-2 pr-3">Status</th>
-                    <th className="py-2">Recommended action</th>
+                    <th className="py-2">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -248,16 +286,22 @@ export default function WalmartIBrainsIntelligenceClient({
                         data-testid="ibrains-intelligence-opportunity-row"
                         className={`border-t border-[#E2E8F0] align-top ${highImpact ? "bg-[#F8FBFF]" : ""}`}
                       >
-                        <td className="py-3 pr-3 text-[#334155]">{labelForOpportunityType(opportunity.type)}</td>
                         <td className="py-3 pr-3 text-[#334155]">
                           <p className="font-medium text-[#0F172A]">{opportunity.title}</p>
-                          <p className="mt-1 text-xs text-[#64748B]">
-                            {opportunity.sourceName} ({opportunity.sourceDomain})
-                          </p>
-                          {highImpact ? (
-                            <p className="mt-1 text-xs font-medium text-[#1D4ED8]">High-impact priority</p>
-                          ) : null}
+                          <p className="mt-1 text-xs text-[#64748B]">{opportunity.destination.contentAngle}</p>
                         </td>
+                        <td className="py-3 pr-3 text-[#334155]">
+                          <p className="font-medium text-[#0F172A]">{opportunity.destination.destinationName}</p>
+                          <p className="mt-1 text-xs text-[#64748B]">
+                            {opportunity.destination.destinationType === "wordpress_site"
+                              ? "WordPress"
+                              : opportunity.destination.destinationType === "marketplace_listing"
+                                ? "Marketplace listing"
+                                : "Manual"}
+                          </p>
+                        </td>
+                        <td className="py-3 pr-3 text-[#334155]">{opportunity.recommendedAction}</td>
+                        <td className="py-3 pr-3 text-[#334155]">{opportunity.destination.whyThisDestination}</td>
                         <td className="py-3 pr-3 text-[#334155]">
                           <p>Relevance: {opportunity.relevanceScore}</p>
                           <p>Citation: {opportunity.citationPotentialScore}</p>
@@ -270,16 +314,12 @@ export default function WalmartIBrainsIntelligenceClient({
                             {opportunity.complianceRisk.toUpperCase()}
                           </span>
                         </td>
-                        <td className="py-3 pr-3">
+                        <td className="py-3">
                           <span
                             className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${classForStatus(opportunity.status)}`}
                           >
                             {labelForStatus(opportunity.status)}
                           </span>
-                        </td>
-                        <td className="py-3 text-[#334155]">
-                          <p>{opportunity.recommendedAction}</p>
-                          <p className="mt-1 text-xs text-[#64748B]">{opportunity.rationale}</p>
                         </td>
                       </tr>
                     );
