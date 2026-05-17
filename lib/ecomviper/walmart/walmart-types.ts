@@ -603,6 +603,14 @@ export interface WalmartAiSuggestion {
     manufacturerConfidence?: "high" | "medium" | "low" | "unknown" | "none";
     manufacturerNeedsReview?: boolean;
     faqGenerationState?: "final" | "pending";
+    competitorResearchStatus?:
+      | "available"
+      | "skipped_no_credentials"
+      | "timeout"
+      | "provider_error"
+      | "empty";
+    competitorResearchWarnings?: string[];
+    optimizationFlow?: "full_docket_rules_engine";
     disclaimerStatus: "inserted" | "preserved" | "deduped" | "repaired" | "missing";
     finalDecision: "accepted" | "accepted_with_changes" | "rejected";
   };
