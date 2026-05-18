@@ -5,6 +5,10 @@ Last updated: 2026-05-18 (UTC)
 Sprint: `sprint-004-walmart-score-contract`  
 Type: Docs/planning contract from implementation evidence
 
+Canonical API payload boundary definitions now live in:
+
+- `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`
+
 ## 1) Purpose
 
 Walmart currently exposes multiple score/readiness models across Command Center, Product Editor, iBrains Intelligence, and lane-mapped surfaces. This document defines a canonical score vocabulary and ownership map so builders do not create drift between:

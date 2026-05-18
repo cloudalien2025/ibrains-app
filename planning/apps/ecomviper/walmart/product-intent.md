@@ -16,6 +16,10 @@ For canonical Walmart score semantics and cross-surface score ownership, see:
 
 - `planning/apps/ecomviper/walmart/score-contract.md`
 
+For the first canonical `ai_visibility_score` API payload boundary, see:
+
+- `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`
+
 For app-level orientation and navigation pointers, see:
 
 - `planning/apps/ecomviper/walmart/overview.md`
