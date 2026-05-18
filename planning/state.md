@@ -10,6 +10,7 @@ Last updated: 2026-05-18 (UTC)
 - Sprint 003: Completed (deterministic extraction precedence + extraction-source metadata + stable warning codes).
 - Sprint 004: Planned (typed warning/telemetry code contract).
 - Sprint 005: Completed (Shopify guarded publish execution scaffold).
+- Walmart planning sprint: Completed (`walmart-product-intent` docs baseline).
 
 ## Planning App Map
 
@@ -148,3 +149,18 @@ Warning:
 - Product editor Step 3 UI is not yet wired to server publish route; workflow remains client-local unless API is called directly.
 - Publish-attempt persistence is lightweight/best-effort in Sprint 005; formal migration governance/retention is pending.
 - Live execute is scaffolded and feature-flag gated (`ECOMVIPER_SHOPIFY_PUBLISH_EXECUTE_ENABLED`) and needs controlled rollout/testing.
+
+- Sprint: `Walmart Planning Sprint` - `Completed`
+- Title: `Walmart Product Intent Baseline from Implementation`
+- MR: `n/a`
+- Commit SHA: `n/a`
+- Pipeline/checks result: `n/a`
+- Merge commit SHA: `n/a`
+- Branch deletion status: `n/a`
+- Final local branch/status: `n/a`
+- Next recommended sprint: `Walmart Sprint 001 - align lane semantics, formalize live-write governance, and persist non-durable operational stores`
+
+### Walmart Planning Sprint Files Changed
+
+- `planning/apps/ecomviper/walmart/product-intent.md`
+- `planning/state.md`
