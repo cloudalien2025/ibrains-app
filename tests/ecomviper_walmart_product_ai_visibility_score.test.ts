@@ -62,6 +62,19 @@ describe("Walmart product ai visibility score adapter", () => {
     expect(diagnostics.ai_visibility_score.status).toBe("excellent");
   });
 
+  it("keeps current listing quality as overall when projected score is lower", () => {
+    const diagnostics = buildWalmartProductAiVisibilityDiagnostics({
+      listingQuality: buildListingQuality({ score: 79 }),
+      projectedScore: 55,
+      provenanceSource: "derived",
+    });
+
+    expect(diagnostics.listing_quality_score).toBe(79);
+    expect(diagnostics.projected_listing_quality_score).toBe(55);
+    expect(diagnostics.ai_visibility_score.overall).toBe(79);
+    expect(diagnostics.ai_visibility_score.status).toBe("good");
+  });
+
   it("normalizes product recommendations into canonical recommendation priorities", () => {
     const diagnostics = buildWalmartProductAiVisibilityDiagnostics({
       listingQuality: buildListingQuality({

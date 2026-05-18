@@ -172,6 +172,9 @@ Use explicit labels tied to this contract:
   - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
   - `tests/ecomviper_walmart_product_ai_visibility_score.test.ts`
   - `tests/ecomviper_walmart_product_editor_score_alignment.test.tsx`
+- Product-level test coverage explicitly guards:
+  - projected score floor behavior (lower projected score cannot replace current listing-quality baseline),
+  - product-editor adapter-consumer contract input alignment (`provenanceSource: derived` + listing-quality payload).
 - Product Editor listing-quality score and readiness/publish-status diagnostics.
 - iBrains opportunity scoring, compliance risk, destination fit, and summary counts.
 - Products list/source-confidence and catalog match confidence plumbing.

@@ -135,6 +135,9 @@ Ownership gaps today:
 - Product Editor score diagnostics now consume a canonical product-level adapter boundary through:
   - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
   - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+- Focused contract coverage now explicitly asserts adapter-input alignment and projected-score guardrails in:
+  - `tests/ecomviper_walmart_product_ai_visibility_score.test.ts`
+  - `tests/ecomviper_walmart_product_editor_score_alignment.test.tsx`
 - Product/editor and iBrains score diagnostics are implemented and tested.
 
 ### Partial/demo/fixture-backed

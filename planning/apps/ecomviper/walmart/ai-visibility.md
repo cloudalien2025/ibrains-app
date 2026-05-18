@@ -23,6 +23,8 @@ Implementation update: Product Editor `Agentic Visibility Score` now consumes a 
 
 - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
 - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+- `tests/ecomviper_walmart_product_ai_visibility_score.test.ts`
+- `tests/ecomviper_walmart_product_editor_score_alignment.test.tsx`
 
 ## 1) Purpose
 
