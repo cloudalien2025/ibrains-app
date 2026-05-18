@@ -1,5 +1,10 @@
 # EcomViper Hub Workflows
 
+## Private Shell Foundation Status
+
+Sprint 005 seeds static/demo Feed Control Center content in private Hub (`/apps/ecomviper/hub`) to represent intake posture from Walmart/eBay/Amazon/Shopify.
+No live sync or API-driven workflow execution is implemented in this sprint.
+
 ## Optimized Feed Sync From Marketplace Apps Into Private Hub
 
 1. Merchant optimizes listings/feeds in Walmart, Shopify, eBay, Amazon, or future channel apps

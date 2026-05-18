@@ -1,4 +1,5 @@
 import Link from "next/link";
+import HubFeedControlCenter from "@/app/apps/ecomviper/hub/_components/hub-feed-control-center";
 
 const foundationCards = [
   {
@@ -120,19 +121,9 @@ export default function HubWorkspaceClient() {
         </article>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        <article
-          id="feed-control-center"
-          className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
-          data-testid="ecomviper-hub-feed-control-panel"
-        >
-          <h2 className="text-lg font-semibold text-[#0F172A]">Feed Control Center</h2>
-          <p className="mt-2 text-sm text-[#334155]">
-            Planned for feed intake monitoring, validation diagnostics, freshness tracking, and replay/recovery workflow entry points.
-          </p>
-          <p className="mt-2 text-xs text-[#64748B]">Current shell behavior: static planning-aligned status content only.</p>
-        </article>
+      <HubFeedControlCenter />
 
+      <section className="grid gap-4 xl:grid-cols-2">
         <article
           id="marketplace-routing"
           className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
@@ -140,9 +131,22 @@ export default function HubWorkspaceClient() {
         >
           <h2 className="text-lg font-semibold text-[#0F172A]">Marketplace Routing</h2>
           <p className="mt-2 text-sm text-[#334155]">
-            Planned for queue-first routing decisions that push prioritized actions back into marketplace workspaces with explicit review gates.
+            Planned for queue-first routing decisions that push prioritized actions back into marketplace workspaces after canonicalization and visibility approvals.
           </p>
           <p className="mt-2 text-xs text-[#64748B]">No dispatch execution, queue APIs, or channel-side automation is implemented in this sprint.</p>
+        </article>
+
+        <article
+          className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+          data-testid="ecomviper-hub-publication-model-panel"
+        >
+          <h2 className="text-lg font-semibold text-[#0F172A]">Public Visibility Model</h2>
+          <p className="mt-2 text-sm text-[#334155]">
+            Private Hub controls canonical intelligence publication approvals before anything can flow to the preferred public discovery surface at ecomviper.com.
+          </p>
+          <p className="mt-2 text-xs text-[#64748B]">
+            No public routes are implemented in this sprint. This is static control-plane messaging only.
+          </p>
         </article>
       </section>
 

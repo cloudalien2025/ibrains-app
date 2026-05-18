@@ -12,6 +12,7 @@ Top-level control-plane summary for feed health, canonical quality, publication 
 ### Feed Control Center
 
 Zone for feed intake monitoring, validation diagnostics, freshness status, and replay/recovery controls.
+Sprint 005 seeds this zone in private Hub as static/demo cards, source table, and queue previews.
 
 ### Canonical Product Manager
 
