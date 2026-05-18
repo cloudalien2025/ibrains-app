@@ -9,6 +9,10 @@ Canonical score definitions now live in:
 
 - `planning/apps/ecomviper/walmart/score-contract.md`
 
+Canonical API payload boundary definitions now live in:
+
+- `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`
+
 ## 1) Purpose
 
 This document defines what "AI visibility" currently means in the Walmart workspace based on implemented routes, UI copy, data models, API handlers, fixtures, and tests.

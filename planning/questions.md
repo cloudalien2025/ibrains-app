@@ -29,11 +29,6 @@ Owner: Architecture
 Status: Open
 Notes: Need explicit minimum doc set for low-risk docs-only or bugfix sprints.
 
-### Which API payload should expose the canonical Walmart `ai_visibility_score` first?
-Owner: Walmart Product + Architecture
-Status: Open
-Notes: `planning/apps/ecomviper/walmart/score-contract.md` defines the vocabulary and ownership model; implementation still needs a first typed API payload boundary to prevent UI-specific drift.
-
 ### Should Prompt Match, Semantic Gaps, and Product Opportunities remain mapped to Activity/Inventory/Pricing, or get dedicated workflows?
 Owner: Walmart Product + UX
 Status: Open
@@ -50,3 +45,8 @@ Notes: Candidate priorities from implementation evidence include prompt/query ev
 Owner: Walmart Product + Architecture
 Status: Closed (resolved in docs contract)
 Resolution: Canonical vocabulary and ownership are now defined in `planning/apps/ecomviper/walmart/score-contract.md`. The top-level rollup is constrained to command-center readiness (`overallAiRecommendationReadinessScore`) while product editor and iBrains scores are documented as component/diagnostic scopes.
+
+### Which API payload should expose the canonical Walmart `ai_visibility_score` first?
+Owner: Walmart Product + Architecture
+Status: Closed (resolved in docs contract)
+Resolution: First canonical API payload boundary is documented in `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md` with `/api/ecomviper/walmart/health` as the initial additive host route for `ai_visibility_score`.

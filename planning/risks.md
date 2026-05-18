@@ -112,7 +112,7 @@ Last updated: 2026-05-18 (UTC)
 - Likelihood: Medium
 - Description: Walmart currently exposes multiple visibility/readiness score models across Command Center, Product Editor, and iBrains Intelligence without one canonical typed contract.
 - Impact: Operators and builders may interpret inconsistent scores as equivalent, causing triage and roadmap drift.
-- Mitigation: Canonical contract now documented in `planning/apps/ecomviper/walmart/score-contract.md`; enforce label alignment in future sprints with focused tests and API payload mapping before adding new score labels.
+- Mitigation: Canonical vocabulary is documented in `planning/apps/ecomviper/walmart/score-contract.md` and first payload boundary is documented in `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`; enforce label alignment with focused tests and additive API boundary adoption before adding new score labels.
 
 ## R-015 Lane Semantics Drift (Label vs Route Responsibility)
 
