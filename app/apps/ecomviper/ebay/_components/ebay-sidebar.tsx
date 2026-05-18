@@ -1,12 +1,7 @@
-"use client";
-
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { ebayNavItems } from "@/lib/ecomviper/ebay/ebay-nav";
 
 export default function EbaySidebar() {
-  const pathname = usePathname();
-
   return (
     <aside className="rounded-2xl border border-[#D9E4F0] bg-white/90 p-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
       <div className="mb-3 border-b border-[#E2E8F0] pb-3">
@@ -16,11 +11,12 @@ export default function EbaySidebar() {
       </div>
       <nav className="grid gap-1" data-testid="ecomviper-ebay-sidebar">
         {ebayNavItems.map((item, index) => {
-          const active = index === 0 ? pathname === item.href : false;
+          const active = index === 0;
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={`rounded-lg border px-3 py-2 text-sm transition ${
                 active
                   ? "border-[#BFDBFE] bg-[#EFF6FF] text-[#0F172A]"
