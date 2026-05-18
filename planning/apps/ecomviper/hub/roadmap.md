@@ -1,5 +1,8 @@
 # EcomViper Hub Roadmap
 
+This roadmap is architecture and planning guidance.
+It does not implement public routes, WordPress changes, DNS, SSL, droplets, or hosting changes in this sprint.
+
 ## Phase 0: Architecture Foundation
 
 ### Goals
@@ -9,37 +12,56 @@
 
 ### Likely Deliverables
 
-- Hub architecture markdown foundation in app folder
+- Hub architecture/planning foundation in `planning/apps/ecomviper/hub/`
 - Initial phased implementation plan
 
 ### Non-Goals / Deferrals
 
-- No runtime route/UI implementation
+- No public/private route implementation
 - No persistence or API implementation
 
-## Phase 1: App Shell And Navigation Entry
+## Phase 1: Private Hub Shell And Navigation
 
 ### Goals
 
-- Add first app shell for `/apps/ecomviper/hub`
+- Establish private Hub shell at `/apps/ecomviper/hub`
 - Make Hub discoverable inside EcomViper app navigation
 
 ### Likely Deliverables
 
-- Route scaffold and top-level hub landing page
-- Basic nav card/entry alignment with EcomViper family
+- Private control-plane shell and static workspace sections
+- Planning-aligned command-center framing
 
 ### Non-Goals / Deferrals
 
-- No full dashboard intelligence features
-- No deep integrations
+- No public Hub surface implementation
+- No deep integrations or live ingestion
 
-## Phase 2: Canonical Feed Aggregation
+## Phase 2: Public Surface Architecture And Publication Boundary
+
+### Goals
+
+- Formalize public/private surface model
+- Define publication boundary from private Hub to public Hub
+- Confirm preferred public domain direction (`ecomviper.com`)
+
+### Likely Deliverables
+
+- Public/private data boundary contracts
+- Publication eligibility and approval lifecycle definitions
+- Public URL family concepts
+
+### Non-Goals / Deferrals
+
+- No public route implementation
+- No DNS/SSL/hosting cutover
+
+## Phase 3: Canonical Feed Aggregation (Private Hub)
 
 ### Goals
 
 - Define typed feed intake contracts for selected channels
-- Build basic ingestion + validation + queueing foundation
+- Build intake validation/status/review foundations in private Hub
 
 ### Likely Deliverables
 
@@ -51,87 +73,108 @@
 - No broad marketplace write automation
 - No complete canonical merge automation
 
-## Phase 3: Canonical Product Graph
+## Phase 4: Canonical Product Graph And Publishing Eligibility
 
 ### Goals
 
 - Introduce canonical product entity lifecycle
 - Support identifier matching, confidence, and conflict states
+- Add publication eligibility modeling for public-safe outputs
 
 ### Likely Deliverables
 
 - Canonical product and mapping models
 - Merge/review queue concepts with operator controls
+- Publication status and public-safe projection model
 
 ### Non-Goals / Deferrals
 
 - No full graph optimization engine
-- No advanced recommendation ranking yet
+- No bulk public publishing automation
 
-## Phase 4: Marketplace Routing Layer
-
-### Goals
-
-- Route prioritized actions from canonical signals to channel destinations
-- Formalize manual vs automated routing gates
-
-### Likely Deliverables
-
-- Routing decision objects and action queue model
-- Initial outbound routing workflow surfaces
-
-### Non-Goals / Deferrals
-
-- No full auto-execution across all channels
-- No deep SLA automation
-
-## Phase 5: Agentic Visibility Center
+## Phase 5: Public Hub Shell On `ecomviper.com`
 
 ### Goals
 
-- Provide unified visibility diagnostics for answer-engine and agentic commerce readiness
-- Link diagnostics to actionable queue items
+- Launch first public Hub shell on preferred public surface
+- Serve approved canonical intelligence only
 
 ### Likely Deliverables
 
-- Visibility cards, diagnostic views, and remediation queue concepts
-- Shared score language alignment across Hub and channel apps
+- Public shell and foundational navigation
+- Public product/discovery placeholders with approved data boundary
 
 ### Non-Goals / Deferrals
 
-- No guaranteed external attribution integrations yet
-- No universal score formulas across every channel signal
+- No exposure of private merchant/operator data
+- No full content/search feature parity on first public release
 
-## Phase 6: AI-Native Discovery And APIs
+## Phase 6: Approved Canonical Product Pages And Discovery Families
 
 ### Goals
 
-- Expose stable intelligence APIs for internal agents and services
-- Support semantic discovery and retrieval-oriented use cases
+- Publish approved canonical product pages
+- Expand public discovery surfaces across categories/brands/use-cases/comparisons
 
 ### Likely Deliverables
 
-- API contracts for canonical entities, routing context, and trust evidence
-- Queryable discovery surfaces for internal consumers
+- Product pages (`/products/{slug}`)
+- Discovery pages (`/search`, `/categories/{slug}`, `/brands/{slug}`, `/use-cases/{slug}`)
+- Verified/trust public surfaces (`/verified`)
 
 ### Non-Goals / Deferrals
 
-- No public marketplace API commitments
-- No uncontrolled autonomous mutation paths
+- No unlimited automatic publishing without approval controls
+- No unrelated marketplace workflow rewrites
 
-## Phase 7: Trust Verification And Recommendation Systems
+## Phase 7: Trust, Routing, And AI-Readable Metadata
 
 ### Goals
 
-- Expand trust, verification, and recommendation quality systems
-- Strengthen review controls and measurable recommendation outcomes
+- Strengthen trust/verification and marketplace routing intelligence
+- Publish structured metadata for AI/search readability
 
 ### Likely Deliverables
 
-- Trust signal aggregation and verification workflows
-- Recommendation evaluation and governance model
+- Public trust markers and verification summaries
+- Structured metadata/schema guidance and rollout
+- Public-to-marketplace routing controls
 
 ### Non-Goals / Deferrals
 
-- No replacement of all channel-native trust programs
-- No fully autonomous end-to-end orchestration without human oversight
+- No opaque or unreviewed routing decisions
+- No replacement of channel-native compliance programs
+
+## Phase 8: Public Analytics And Attribution Feedback Loop
+
+### Goals
+
+- Capture public discovery/routing performance
+- Feed attribution and outcome signals back into private Hub control plane
+
+### Likely Deliverables
+
+- Public analytics event model
+- Attribution loop dashboards/panels in private Hub
+- Optimization feedback contracts to marketplace apps
+
+### Non-Goals / Deferrals
+
+- No broad marketing analytics platform rebuild
+- No uncontrolled tracking outside governance boundaries
+
+## Phase 9: Optional Infrastructure Separation
+
+### Goals
+
+- Evaluate separation of public Hub deployment from shared app infrastructure if required
+
+### Likely Deliverables
+
+- Decision criteria for traffic isolation, security boundaries, SEO/public performance, scaling, and release cadence
+- Migration plan options (dedicated app platform/edge/host)
+
+### Non-Goals / Deferrals
+
+- No mandatory separate DigitalOcean droplet at this stage
+- No immediate infrastructure split unless justified by operational criteria
