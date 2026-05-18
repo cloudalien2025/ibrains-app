@@ -7,8 +7,17 @@ DirectoryIQ is an operator workspace for improving directory-backed listing auth
 ## Current Status
 
 - Product intent baseline is implementation-derived in `planning/apps/directoryiq/product-intent.md`.
-- DirectoryIQ planning now has a source-of-truth intent document grounded in observed UI/API/model/test behavior.
-- The next implementation planning target is `sprint-001-directoryiq-foundation`.
+- DirectoryIQ planning now includes architecture/builder foundation docs grounded in observed UI/API/model/test behavior.
+- Sprint `sprint-001-directoryiq-foundation` establishes planning foundations and a workspace-shell alignment baseline.
+
+## Current Planning Docs
+
+- `planning/apps/directoryiq/product-intent.md`
+- `planning/apps/directoryiq/architecture.md`
+- `planning/apps/directoryiq/builder.md`
+- `planning/apps/directoryiq/implementation-map.md`
+- `planning/apps/directoryiq/testing.md`
+- `planning/apps/directoryiq/roadmap.md`
 
 ## What This File Covers
 
@@ -16,6 +25,7 @@ This overview is a high-level orientation document.
 
 - Use this file for current state, workflow area map, and sprint direction.
 - Use `planning/apps/directoryiq/product-intent.md` for detailed implementation-derived contracts, gaps, and evidence.
+- Use `planning/apps/directoryiq/architecture.md` and `planning/apps/directoryiq/implementation-map.md` for codebase mapping and architecture boundaries.
 
 ## Major Workflow Areas (from product intent)
 
@@ -27,9 +37,9 @@ This overview is a high-level orientation document.
 
 ## Next Sprint Direction
 
-Expected next active sprint: `sprint-001-directoryiq-foundation`.
+Current active sprint: `sprint-001-directoryiq-foundation`.
 
-The sprint should strengthen the existing DirectoryIQ foundation from current implementation evidence (contracts, workflow consistency, and guardrail coverage), without inventing net-new requirements.
+Scope remains foundation-only: planning architecture/builder alignment plus app-shell layout alignment without API or data-semantic changes.
 
 ## Source-of-Truth References
 

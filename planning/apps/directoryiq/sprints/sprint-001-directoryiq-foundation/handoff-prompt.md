@@ -17,51 +17,46 @@ Implement `sprint-001-directoryiq-foundation` only.
 
 ## Scope
 
-Focus on reinforcing existing DirectoryIQ foundation behavior from implementation evidence:
-
-- dashboard/readiness baseline consistency,
-- listing workflow contract consistency,
-- API/schema parity confidence for touched routes,
-- deterministic empty-state and guardrail-state handling,
-- focused DirectoryIQ test coverage for touched contracts.
+- Create missing DirectoryIQ architecture/builder planning files.
+- Align DirectoryIQ app shell to a left-sidebar/right-workspace structure.
+- Preserve existing DirectoryIQ behavior and API semantics.
+- Add focused shell contract test coverage.
 
 ## Source-of-Truth Constraint
 
 Do not invent requirements.
 
-All changes must be grounded in:
-- `planning/apps/directoryiq/product-intent.md`, and
-- observed implementation under `app/apps/directoryiq`, `app/api/directoryiq`, `lib/directoryiq`, `src/directoryiq`, and `tests/directoryiq_*`.
+Ground all work in:
 
-If implementation intent is unclear, mark it as unclear and keep scope minimal.
+- `planning/apps/directoryiq/product-intent.md`
+- implementation under `app/apps/directoryiq`, `app/api/directoryiq`, `lib/directoryiq`, `src/directoryiq`, and `tests/directoryiq_*`.
 
 ## Do Not
 
 - Do not add broad new DirectoryIQ features.
-- Do not perform cross-app changes.
-- Do not redesign schema or runtime architecture in this sprint.
-- Do not expand beyond the approved foundation scope.
+- Do not alter API behavior.
+- Do not modify schema.
+- Do not perform cross-app refactors.
 
 ## Delivery Flow (Mandatory)
 
-Follow `AGENTS.md` mandatory GitLab sprint flow end-to-end:
+Follow `AGENTS.md` GitLab sprint flow end-to-end:
 
-1. Start from clean `main`.
-2. Create branch `sprint-001-directoryiq-foundation`.
-3. Implement approved scope only.
-4. Run focused tests/checks.
-5. Commit/push, open MR.
-6. Wait for pipeline; fix only failing sprint-relevant checks.
-7. Merge when green.
-8. Delete remote and local sprint branches.
-9. Return local repo to clean `main`.
+1. clean `main`
+2. sprint branch
+3. scoped implementation
+4. focused checks
+5. commit/push/MR
+6. green pipeline only merge
+7. branch cleanup
+8. clean `main`
 
 ## Expected Return
 
 Report:
 
-- files changed,
-- contracts/workflows reinforced,
-- tests/checks run,
-- remaining risks,
-- recommended next sprint.
+- planning files created/updated
+- shell files changed
+- tests/checks run
+- MR + pipeline + merge results
+- final clean local git status

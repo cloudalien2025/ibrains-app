@@ -1,6 +1,6 @@
 # Sprint 001 Requirements
 
-Status: Planned
+Status: In Progress
 
 # Sprint 001
 DirectoryIQ Foundation
@@ -13,50 +13,42 @@ This sprint is aligned to:
 - `planning/apps/directoryiq/overview.md`
 - `planning/state.md`
 
-The purpose is to execute the first narrow implementation sprint after product-intent derivation, using observed implementation as source of truth.
-
 ## Problem Statement
 
-DirectoryIQ has an implementation-derived product intent, but the current runtime shows foundation drift risks:
-
-- mixed local/proxy ownership by route family,
-- split persistence patterns in some flows,
-- uneven operator workflow consistency across dashboard/listings/readiness surfaces,
-- and contract-heavy tests without a tightly scoped foundation sprint that consolidates baseline behavior.
-
-Without a first focused foundation sprint, future feature work risks compounding ambiguity.
+DirectoryIQ had product-intent and sprint-pack planning, but it lacked the architecture/builder foundation files and did not yet present a consistent left-sidebar/right-workspace command-center shell pattern used by EcomViper/Walmart.
 
 ## Goal
 
-Strengthen the existing DirectoryIQ workspace foundation by locking down a minimal, implementation-grounded baseline for dashboard/readiness and listing workflow contract consistency.
+Create the missing DirectoryIQ architecture/builder planning foundation and align the existing DirectoryIQ UI into a stable workspace shell without changing DirectoryIQ functionality or API behavior.
 
 ## Sprint Focus
 
-1. Stabilize baseline dashboard/readiness data contract behavior from current implementation.
-2. Improve API/schema parity confidence for currently implemented DirectoryIQ route families.
-3. Tighten empty-state/operator workflow consistency for existing DirectoryIQ listing workflows.
-4. Expand focused contract tests around existing guarded workflows where implementation is already present.
-5. Improve planning-to-implementation traceability for touched behaviors.
+1. Add DirectoryIQ architecture/builder planning files grounded in existing implementation.
+2. Map source-of-truth implementation paths for builders.
+3. Add DirectoryIQ testing guidance for focused sprint validation.
+4. Align DirectoryIQ app shell layout to left-sidebar/right-workspace pattern.
+5. Preserve existing DirectoryIQ route behavior, API behavior, and data semantics.
 
 ## Functional Requirements
 
-1. Any foundation changes must target existing DirectoryIQ behavior only (no net-new product capability).
-2. Dashboard/readiness and listing workflow contracts must be explicit and test-backed where behavior is already implemented.
-3. API responses for touched routes must remain backward compatible unless a product-intent-backed discrepancy is fixed.
-4. Step-based operator workflow states (including empty-state and guardrail states) must remain deterministic and documented.
-5. Tests added/updated in this sprint must be DirectoryIQ-focused and tied to existing implementation contracts.
+1. New planning docs must be implementation-derived, not speculative.
+2. App shell changes must be presentation/layout only.
+3. Existing DirectoryIQ content must remain available in the workspace area.
+4. Sidebar links must point only to existing DirectoryIQ routes.
+5. Add focused test coverage that fails when shell/sidebar landmarks are missing.
 
 ## Non-Goals
 
-- No broad feature expansion.
-- No new product surfaces outside existing DirectoryIQ app routes.
-- No schema redesign or broad migration program.
-- No cross-app changes (Shopify/Walmart/Studio/SiteForge).
-- No speculative requirements not supported by current code and product intent.
+- No new backend workflows.
+- No ingestion automation expansion.
+- No authority scoring redesign.
+- No API contract redesign.
+- No schema changes.
+- No cross-app behavior changes.
 
 ## Constraints
 
-- Ground all changes in `planning/apps/directoryiq/product-intent.md` and observed implementation files.
-- Prefer narrow deltas over architecture-wide refactors.
-- Preserve guarded execution behavior already present in Step 2 and Step 3 flows.
-- Follow mandatory GitLab sprint delivery flow from `AGENTS.md`.
+- Keep scope to DirectoryIQ planning + DirectoryIQ app shell alignment.
+- Use existing design/system conventions.
+- Avoid fake data and misleading capability copy.
+- Follow mandatory GitLab sprint flow from `AGENTS.md`.
