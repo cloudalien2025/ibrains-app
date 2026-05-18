@@ -8,6 +8,10 @@ For the focused Command Center implementation audit and next-step operator workf
 
 - `planning/apps/ecomviper/walmart/command-center-foundation.md`
 
+For the AI visibility workflow foundation derived from current implementation, see:
+
+- `planning/apps/ecomviper/walmart/ai-visibility.md`
+
 For app-level orientation and navigation pointers, see:
 
 - `planning/apps/ecomviper/walmart/overview.md`

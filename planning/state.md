@@ -12,11 +12,12 @@ Last updated: 2026-05-18 (UTC)
 - Sprint 005: Completed (Shopify guarded publish execution scaffold).
 - Walmart planning sprint: Completed and merged (`walmart-product-intent` docs baseline).
 - Walmart Sprint 001: Completed and merged (`walmart-command-center-foundation` docs baseline).
+- Walmart Sprint 003: In progress (`sprint-003-walmart-ai-visibility`, docs/planning AI visibility workflow foundation).
 - Studio product intent sprint: Completed (`studio-product-intent`, MR `!180`).
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
-- Current recommended sprint: `sprint-002-planning-architecture-alignment` (active).
+- Current recommended sprint: `sprint-003-walmart-ai-visibility` (active).
 
 ## Current Operating Reminder
 
@@ -154,6 +155,12 @@ Warning:
 
 - Execute Sprint 004 to define and apply a typed warning/telemetry code contract shared across Shopify capability and hydration consumers.
 
+## Active Sprint Context
+
+- Active sprint branch: `sprint-003-walmart-ai-visibility`
+- Sprint goal: document Walmart AI visibility workflow foundation from current implementation and tests.
+- Scope guard: docs/planning only; no broad app behavior changes.
+
 ## Sprint Completion Updates
 
 - Sprint: `Sprint 005` - `Completed`
@@ -251,3 +258,20 @@ Warning:
 - `planning/apps/ecomviper/product-intent.md`
 - `planning/apps/ecomviper/walmart/overview.md`
 - `planning/apps/ecomviper/walmart/product-intent.md`
+
+- Sprint: `Walmart Sprint 003` - `In Progress`
+- Title: `Walmart AI Visibility Workflow Foundation`
+- MR: `pending`
+- Commit SHA: `pending`
+- Pipeline/checks result: `pending`
+- Merge commit SHA: `pending`
+- Branch deletion status: `pending`
+- Final local branch/status: `sprint-003-walmart-ai-visibility (working)`
+- Next recommended sprint: `Prompt Match or Semantic Gaps implementation-alignment sprint after AI visibility foundation doc merge`
+
+### Walmart Sprint 003 Planned Files Changed
+
+- `planning/apps/ecomviper/walmart/ai-visibility.md`
+- `planning/apps/ecomviper/walmart/overview.md`
+- `planning/apps/ecomviper/walmart/product-intent.md`
+- `planning/state.md`

@@ -105,3 +105,19 @@ Last updated: 2026-05-18 (UTC)
 - Description: Legacy names across routes/modules/docs can conflict with current product identity.
 - Impact: Onboarding confusion and implementation mistakes.
 - Mitigation: Maintain explicit naming-clarification sections and treat legacy names as compatibility/history context.
+
+## R-014 AI Visibility Model Fragmentation Across Surfaces
+
+- Severity: High
+- Likelihood: Medium
+- Description: Walmart currently exposes multiple visibility/readiness score models across Command Center, Product Editor, and iBrains Intelligence without one canonical typed contract.
+- Impact: Operators and builders may interpret inconsistent scores as equivalent, causing triage and roadmap drift.
+- Mitigation: Define a canonical AI visibility score contract and map secondary scores explicitly as supporting diagnostics.
+
+## R-015 Lane Semantics Drift (Label vs Route Responsibility)
+
+- Severity: Medium
+- Likelihood: High
+- Description: Prompt Match/Semantic Gaps/Product Opportunities labels currently map to Activity/Inventory/Pricing routes rather than dedicated semantic workflows.
+- Impact: Workflow expectations can diverge from implementation reality and increase delivery ambiguity for future sprints.
+- Mitigation: Either formalize current mappings as intended behavior with clear copy or implement dedicated lane workflows and update nav semantics.
