@@ -29,10 +29,10 @@ Owner: Architecture
 Status: Open
 Notes: Need explicit minimum doc set for low-risk docs-only or bugfix sprints.
 
-### Which Walmart AI visibility score is canonical across Command Center, Product Editor, and iBrains Intelligence?
+### Which API payload should expose the canonical Walmart `ai_visibility_score` first?
 Owner: Walmart Product + Architecture
 Status: Open
-Notes: Current implementation has multiple score/readiness models (`listing quality`, `coverage readiness`, and `iBrains opportunity scoring`) without one typed cross-surface contract.
+Notes: `planning/apps/ecomviper/walmart/score-contract.md` defines the vocabulary and ownership model; implementation still needs a first typed API payload boundary to prevent UI-specific drift.
 
 ### Should Prompt Match, Semantic Gaps, and Product Opportunities remain mapped to Activity/Inventory/Pricing, or get dedicated workflows?
 Owner: Walmart Product + UX
@@ -46,4 +46,7 @@ Notes: Candidate priorities from implementation evidence include prompt/query ev
 
 ## Closed Questions
 
-None recorded yet.
+### Which Walmart AI visibility score is canonical across Command Center, Product Editor, and iBrains Intelligence?
+Owner: Walmart Product + Architecture
+Status: Closed (resolved in docs contract)
+Resolution: Canonical vocabulary and ownership are now defined in `planning/apps/ecomviper/walmart/score-contract.md`. The top-level rollup is constrained to command-center readiness (`overallAiRecommendationReadinessScore`) while product editor and iBrains scores are documented as component/diagnostic scopes.

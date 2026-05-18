@@ -5,6 +5,10 @@ Last updated: 2026-05-18 (UTC)
 Sprint: `sprint-003-walmart-ai-visibility`  
 Type: Docs/planning foundation from implementation evidence
 
+Canonical score definitions now live in:
+
+- `planning/apps/ecomviper/walmart/score-contract.md`
+
 ## 1) Purpose
 
 This document defines what "AI visibility" currently means in the Walmart workspace based on implemented routes, UI copy, data models, API handlers, fixtures, and tests.

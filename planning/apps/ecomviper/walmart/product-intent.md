@@ -12,6 +12,10 @@ For the AI visibility workflow foundation derived from current implementation, s
 
 - `planning/apps/ecomviper/walmart/ai-visibility.md`
 
+For canonical Walmart score semantics and cross-surface score ownership, see:
+
+- `planning/apps/ecomviper/walmart/score-contract.md`
+
 For app-level orientation and navigation pointers, see:
 
 - `planning/apps/ecomviper/walmart/overview.md`
