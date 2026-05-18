@@ -208,6 +208,9 @@ describe("Shopify product editor docket workflow", () => {
     expect(container.querySelector('[data-testid="ecomviper-shopify-editable-draft"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="ecomviper-shopify-save-draft"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="ecomviper-shopify-prepare-update"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ecomviper-shopify-request-publish-dry-run"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ecomviper-shopify-publish-confirmation"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ecomviper-shopify-diff-preview-summary"]')).not.toBeNull();
 
     const titleInput = container.querySelector('input[value="OPA Enzyme Balance"]') as HTMLInputElement;
     expect(titleInput).not.toBeNull();
@@ -228,5 +231,57 @@ describe("Shopify product editor docket workflow", () => {
     const currentPanel = container.querySelector('[data-testid="ecomviper-shopify-current-docket"]') as HTMLElement;
     expect(currentPanel.textContent).toContain("OPA Enzyme Balance");
     expect(currentPanel.textContent).not.toContain("Edited Draft Shopify Title");
+  });
+
+  it("keeps publish request guarded with confirmation gate and non-mutating dry-run blocking", async () => {
+    await act(async () => {
+      root.render(<ShopifyProductEditorClient initialState={createInitialState(true)} />);
+    });
+
+    const reviewTab = container.querySelector(
+      '[data-testid="ecomviper-shopify-tab-review-publish"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      reviewTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const publishButton = container.querySelector(
+      '[data-testid="ecomviper-shopify-request-publish-dry-run"]'
+    ) as HTMLButtonElement;
+    expect(publishButton).not.toBeNull();
+
+    await act(async () => {
+      publishButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const firstOutcome = container.querySelector(
+      '[data-testid="ecomviper-shopify-publish-dry-run-outcome"]'
+    ) as HTMLElement;
+    expect(firstOutcome).not.toBeNull();
+    expect(firstOutcome.textContent).toContain("confirmation_required");
+    expect(container.textContent).toContain("publish_blocked_confirmation_required");
+    expect(container.textContent).toContain("Publish confirmation is required before dry-run publish review.");
+
+    const confirmation = container.querySelector(
+      '[data-testid="ecomviper-shopify-publish-confirmation"]'
+    ) as HTMLInputElement;
+    expect(confirmation.checked).toBe(false);
+
+    await act(async () => {
+      confirmation.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(confirmation.checked).toBe(true);
+
+    await act(async () => {
+      publishButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const secondOutcome = container.querySelector(
+      '[data-testid="ecomviper-shopify-publish-dry-run-outcome"]'
+    ) as HTMLElement;
+    expect(secondOutcome.textContent).toContain("publish_not_enabled");
+    expect(secondOutcome.textContent).toContain("Live Shopify publish remains disabled in Sprint 004.");
+    expect(container.textContent).toContain("publish_intent_confirmed_dry_run");
+    expect(container.textContent).toContain("publish_blocked_not_enabled");
   });
 });
