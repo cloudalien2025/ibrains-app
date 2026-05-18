@@ -18,6 +18,7 @@ Last updated: 2026-05-18 (UTC)
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
+- eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Current recommended sprint: `Walmart Sprint 005 - Prompt Match score workflow alignment` (recommended).
 
 ## Current Operating Reminder
@@ -158,9 +159,9 @@ Warning:
 
 ## Active Sprint Context
 
-- Active sprint branch: `none (sprint-004-walmart-score-contract completed)`
-- Sprint goal: `recommend next scoped Walmart sprint from score-contract candidates`
-- Scope guard: docs/planning only; no broad app behavior changes.
+- Active sprint branch: `sprint-001-ebay-command-center-foundation`
+- Sprint goal: `establish eBay command-center foundation planning and align eBay app shell to EcomViper workspace conventions`
+- Scope guard: planning + lightweight shell alignment only; no live execution or marketplace write-path implementation.
 
 ## Sprint Completion Updates
 

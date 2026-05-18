@@ -4,6 +4,10 @@ Last updated: 2026-05-18 (UTC)
 
 This document is derived from observed implementation in this repository. It does not define net-new requirements.
 
+For the focused command-center architecture and shell alignment baseline, see:
+
+- `planning/apps/ecomviper/ebay/command-center-foundation.md`
+
 ## Product Definition
 
 eBay is currently implemented as a Phase 1, read-only, mock-first listing optimization workspace under EcomViper.

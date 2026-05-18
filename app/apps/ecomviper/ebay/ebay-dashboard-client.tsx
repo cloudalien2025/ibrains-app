@@ -43,6 +43,9 @@ export default function EbayDashboardClient({ connection }: EbayDashboardClientP
     if (!selectedSku) return auditRows[0];
     return auditRows.find((row) => row.listing.sku === selectedSku) ?? auditRows[0];
   }, [auditRows, selectedSku]);
+  const configuredChecklistCount = connection.checklist.filter((item) => item.configured).length;
+  const highPriorityCount = auditRows.filter((row) => row.score.priority === "high").length;
+  const mediumPriorityCount = auditRows.filter((row) => row.score.priority === "medium").length;
 
   async function handleImportListings(): Promise<void> {
     setIsImporting(true);
@@ -59,16 +62,19 @@ export default function EbayDashboardClient({ connection }: EbayDashboardClientP
   }
 
   return (
-    <main className="mx-auto max-w-7xl space-y-4 px-6 py-8" data-testid="ecomviper-ebay-dashboard">
+    <div className="space-y-4" data-testid="ecomviper-ebay-dashboard">
       <header className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_18px_42px_rgba(15,23,42,0.08)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="inline-flex rounded-full border border-[#D9E4F0] bg-[#EFF4F9] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#475569]">
-              eBay Marketplace
+              eBay Agentic Commerce
             </div>
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-[#0F172A]">Phase 1 Listing Optimization Dashboard</h1>
             <p className="mt-1 max-w-3xl text-sm text-[#475569]">
               Mock-first and read-only eBay listing optimization workspace. This phase audits listings and recommendations only.
+            </p>
+            <p className="mt-2 text-xs text-[#64748B]">
+              Command-center foundation shell aligned to EcomViper workspace patterns. Live import/write execution remains deferred.
             </p>
           </div>
           <div className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs font-medium text-[#334155]">
@@ -77,7 +83,34 @@ export default function EbayDashboardClient({ connection }: EbayDashboardClientP
         </div>
       </header>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" data-testid="ecomviper-ebay-metric-cards">
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
+          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Command Center State</p>
+          <p className="mt-2 text-2xl font-semibold text-[#0F172A]">{connectionStateLabel(connection.connectionState)}</p>
+          <p className="mt-1 text-xs text-[#64748B]">Mode: {connection.mode}</p>
+        </article>
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
+          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Connection Readiness</p>
+          <p className="mt-2 text-2xl font-semibold text-[#0F172A]">
+            {configuredChecklistCount}/{connection.checklist.length}
+          </p>
+          <p className="mt-1 text-xs text-[#64748B]">BYO credentials checklist items configured</p>
+        </article>
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
+          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Listing Intelligence</p>
+          <p className="mt-2 text-2xl font-semibold text-[#0F172A]">{auditRows.length}</p>
+          <p className="mt-1 text-xs text-[#64748B]">Imported listing rows currently in audit workspace</p>
+        </article>
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
+          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Priority Pressure</p>
+          <p className="mt-2 text-2xl font-semibold text-[#0F172A]">
+            {highPriorityCount} high / {mediumPriorityCount} medium
+          </p>
+          <p className="mt-1 text-xs text-[#64748B]">Derived from deterministic listing quality scoring</p>
+        </article>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2" id="listing-intelligence">
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_14px_34px_rgba(15,23,42,0.08)]" data-testid="ecomviper-ebay-connection-panel">
           <h2 className="text-lg font-semibold text-[#0F172A]">eBay Connection Panel</h2>
           <p className="mt-2 text-sm text-[#475569]">Connection state: {connectionStateLabel(connection.connectionState)}</p>
@@ -297,6 +330,72 @@ export default function EbayDashboardClient({ connection }: EbayDashboardClientP
           </div>
         )}
       </section>
-    </main>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <article
+          id="ai-visibility"
+          className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+          data-testid="ecomviper-ebay-ai-visibility-panel"
+        >
+          <h2 className="text-lg font-semibold text-[#0F172A]">AI Visibility / Readiness</h2>
+          <p className="mt-2 text-sm text-[#334155]">
+            Phase 1 currently exposes listing quality and recommendation diagnostics that can inform AI visibility readiness.
+          </p>
+          <p className="mt-2 text-xs text-[#64748B]">
+            Dedicated AI visibility scoring contracts, answer-engine readiness rollups, and action queue thresholds are deferred to future sprints.
+          </p>
+        </article>
+        <article
+          id="trust-and-reputation"
+          className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+          data-testid="ecomviper-ebay-trust-panel"
+        >
+          <h2 className="text-lg font-semibold text-[#0F172A]">Trust / Reputation</h2>
+          <p className="mt-2 text-sm text-[#334155]">
+            Current trust posture is bounded by read-only safeguards and compliance-safe recommendation guidance.
+          </p>
+          <p className="mt-2 text-xs text-[#64748B]">
+            Seller reputation, dispute telemetry, and live trust signal ingestion are intentionally not implemented in this phase.
+          </p>
+        </article>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <article
+          id="sync-and-reconciliation"
+          className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+          data-testid="ecomviper-ebay-sync-panel"
+        >
+          <h2 className="text-lg font-semibold text-[#0F172A]">Sync / Reconciliation</h2>
+          <p className="mt-2 text-sm text-[#334155]">
+            Live inventory import seams are wired but guarded. Phase 1 import remains deterministic mock data for safe command-center iteration.
+          </p>
+          <p className="mt-2 text-xs text-[#64748B]">
+            Durable reconciliation history, diff workflows, and multi-marketplace synchronization are deferred.
+          </p>
+        </article>
+        <article
+          id="operator-actions"
+          className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+          data-testid="ecomviper-ebay-operator-actions-panel"
+        >
+          <h2 className="text-lg font-semibold text-[#0F172A]">Operator Actions</h2>
+          <ol className="mt-3 space-y-2 text-sm text-[#334155]">
+            <li className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">
+              1. Confirm connection-readiness posture and read-only boundaries.
+            </li>
+            <li className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">
+              2. Import listing batch and triage high-priority score rows.
+            </li>
+            <li className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">
+              3. Review optimization recommendations and queue follow-up planning tasks.
+            </li>
+          </ol>
+          <p className="mt-2 text-xs text-[#64748B]">
+            No publish/execute action is available in this shell sprint.
+          </p>
+        </article>
+      </section>
+    </div>
   );
 }
