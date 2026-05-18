@@ -20,6 +20,16 @@ const marketplaceCards = [
     disabled: false,
   },
   {
+    id: "hub",
+    name: "EcomViper Hub",
+    status: "Active",
+    description:
+      "Canonical-first control plane for marketplace feed aggregation, product intelligence graph workflows, routing, and trust-aware operations.",
+    href: "/apps/ecomviper/hub",
+    actionLabel: "Open Hub",
+    disabled: false,
+  },
+  {
     id: "amazon",
     name: "Amazon",
     status: "Coming Soon",
