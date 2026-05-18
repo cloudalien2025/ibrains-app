@@ -12,10 +12,6 @@ vi.mock("next/link", async () => {
   };
 });
 
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/apps/ecomviper/ebay",
-}));
-
 describe("EcomViper eBay command-center shell", () => {
   it("renders the eBay workspace layout with sidebar and command-center navigation", () => {
     const page = EcomViperEbayDashboardPage();
@@ -30,6 +26,7 @@ describe("EcomViper eBay command-center shell", () => {
     expect(html).toContain(">Trust &amp; Reputation<");
     expect(html).toContain(">Sync &amp; Reconciliation<");
     expect(html).toContain(">Operator Actions<");
+    expect(html).toContain('aria-current="page"');
   });
 
   it("renders command-center metric and placeholder surfaces without exposing execute behavior", () => {
