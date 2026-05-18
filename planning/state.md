@@ -17,6 +17,7 @@ Last updated: 2026-05-18 (UTC)
 - Studio product intent sprint: Completed (`studio-product-intent`, MR `!180`).
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
+- DirectoryIQ Sprint 001: In progress (`sprint-001-directoryiq-foundation`, architecture/builder planning foundation + workspace shell alignment).
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Current recommended sprint: `Walmart Sprint 005 - Prompt Match score workflow alignment` (recommended).
@@ -40,7 +41,8 @@ Last updated: 2026-05-18 (UTC)
 - DirectoryIQ product intent is now the planning source of truth and was updated from implementation analysis in MR `!179`.
 - MR `!179` pipeline/check evidence: pipeline `2532737593` passed (`verify_frontdoor_integrity`), then merged into `main`.
 - Post-merge state for `directoryiq-product-intent`: remote and local branch deleted; local repository reset to clean `main`.
-- Next active DirectoryIQ planning/implementation direction: `sprint-001-directoryiq-foundation`.
+- Active DirectoryIQ planning/implementation direction: `sprint-001-directoryiq-foundation`.
+- Current sprint focus: add architecture/builder planning files and align DirectoryIQ app to left-sidebar/right-workspace shell pattern without changing API/data behavior.
 - Future DirectoryIQ sprint requirements must stay grounded in:
   - `planning/apps/directoryiq/product-intent.md`, and
   - observed implementation evidence under app/API/lib/tests.
@@ -159,9 +161,9 @@ Warning:
 
 ## Active Sprint Context
 
-- Active sprint branch: `sprint-001-ebay-command-center-foundation`
-- Sprint goal: `establish eBay command-center foundation planning and align eBay app shell to EcomViper workspace conventions`
-- Scope guard: planning + lightweight shell alignment only; no live execution or marketplace write-path implementation.
+- Active sprint branch: `sprint-001-directoryiq-foundation`
+- Sprint goal: `add DirectoryIQ architecture/builder planning foundation and align a lightweight workspace shell`
+- Scope guard: planning + layout shell alignment only; no API/data behavior changes or feature expansion.
 
 ## Sprint Completion Updates
 

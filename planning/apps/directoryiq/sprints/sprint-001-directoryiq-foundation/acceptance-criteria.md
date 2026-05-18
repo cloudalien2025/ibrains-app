@@ -1,33 +1,32 @@
 # Sprint 001 Acceptance Criteria
 
-Status: Planned
+Status: In Progress
 
 # Sprint 001
 DirectoryIQ Foundation
 
-## Functional Acceptance
+## Planning Acceptance
 
-1. Sprint scope is limited to strengthening existing DirectoryIQ foundation behavior.
-2. Touched dashboard/readiness and listing workflow contracts are implementation-aligned and documented.
-3. Touched API responses remain compatible with existing operator workflow expectations.
-4. Empty-state and guardrail-state handling for touched flows is deterministic and test-backed.
-5. Planning-to-implementation traceability is included in sprint summary/handoff.
+1. DirectoryIQ planning includes architecture/builder foundation docs aligned to repo conventions.
+2. New planning docs are grounded in current implementation paths.
+3. Overview and sprint-pack references are updated to reflect the foundation scope.
+
+## Shell Acceptance
+
+1. DirectoryIQ route uses a visible left-sidebar/right-workspace shell structure.
+2. Existing DirectoryIQ content remains accessible inside workspace panels.
+3. No new fake capabilities are presented as implemented behavior.
 
 ## Regression Acceptance
 
-1. Relevant existing `tests/directoryiq_*` continue to pass for touched areas.
-2. Any new or modified tests are focused on pre-existing DirectoryIQ contracts.
-3. No unrelated app behavior changes are introduced.
-
-## Scope Enforcement
-
-1. Changes are limited to DirectoryIQ app/API/lib/tests and DirectoryIQ planning docs.
-2. No Shopify/Walmart/Studio/SiteForge implementation files are modified.
-3. No broad feature additions or speculative capabilities are introduced.
+1. Existing DirectoryIQ functionality remains intact.
+2. No API behavior changes are introduced.
+3. Focused DirectoryIQ and shell tests pass for touched scope.
+4. No unrelated app behavior changes are introduced.
 
 ## Delivery Acceptance
 
-1. MR is created and pipeline/checks complete successfully.
-2. Any failing checks are fixed on the same branch with scope-limited changes.
-3. MR is merged to `main`, remote/local sprint branches are deleted.
-4. Local repo is reset to clean `main` (`git switch main`, `git pull --ff-only`, `git status`).
+1. MR is created and pipeline/checks pass.
+2. Merge occurs only after green pipeline.
+3. Remote and local sprint branches are deleted.
+4. Local repository returns to clean `main`.

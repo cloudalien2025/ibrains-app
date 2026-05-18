@@ -1,68 +1,50 @@
 # Sprint 001 Blueprint
 
-Status: Planned
+Status: In Progress
 
 # Sprint 001
 DirectoryIQ Foundation
 
 ## Intent
 
-Execute the first implementation sprint after the DirectoryIQ product-intent baseline by reinforcing existing foundation behavior rather than introducing broad new features.
-
-## Current Baseline Findings (from product intent)
-
-- Dashboard/readiness and listing workflow surfaces are implemented and operator-facing.
-- Ingestion + readiness + authority workflows exist but include mixed runtime ownership patterns.
-- Step 2 and Step 3 guarded execution contracts exist and are partially covered by focused tests.
-- Some route families remain split between local-first and proxy-only behavior.
+Execute a narrow foundation sprint that combines planning architecture alignment with layout-shell alignment.
 
 ## Implementation Strategy
 
-1. Select a narrow set of existing DirectoryIQ route/workflow contracts that are foundational to operator flow continuity.
-2. Align touched behavior with current implementation intent (not net-new requirements).
-3. Improve deterministic empty-state and readiness-state handling in already implemented surfaces when discrepancies are found.
-4. Add/update focused DirectoryIQ tests for touched contracts.
-5. Document implementation pointers and rationale in sprint summary for traceability.
+1. Inspect existing DirectoryIQ implementation and EcomViper/Walmart shell conventions.
+2. Create missing DirectoryIQ planning files:
+   - `architecture.md`
+   - `builder.md`
+   - `implementation-map.md`
+   - `testing.md`
+   - `roadmap.md`
+3. Update `planning/apps/directoryiq/overview.md` and sprint-pack docs for alignment.
+4. Implement a lightweight DirectoryIQ shell using:
+   - desktop left sidebar navigation
+   - right workspace content frame
+   - existing mobile navigation retained
+5. Add focused shell contract test coverage.
 
-## Proposed Change Areas (likely)
+## App Change Areas
 
-Application/UI:
-- `app/apps/directoryiq/page.tsx`
-- `app/apps/directoryiq/directoryiq-dashboard-client.tsx`
-- `app/apps/directoryiq/listings/directoryiq-listings-client.tsx`
-- `app/apps/directoryiq/listings/[listingId]/listing-optimization-client.tsx`
+- `app/apps/directoryiq/layout.tsx`
+- `app/apps/directoryiq/_components/directoryiq-sidebar.tsx` (new)
+- existing DirectoryIQ pages remain functionally unchanged
 
-API:
-- `app/api/directoryiq/dashboard/route.ts`
-- `app/api/directoryiq/listings/route.ts`
-- `app/api/directoryiq/listings/[listingId]/*`
-- `app/api/directoryiq/_utils/*`
+## Test Change Areas
 
-Library/service/repository:
-- `lib/directoryiq/*`
-- `src/directoryiq/services/*`
-- `src/directoryiq/repositories/*`
+- `tests/directoryiq_command_center_shell.test.tsx` (new)
 
-Tests:
-- `tests/directoryiq_*`
+## Delivery And Validation Plan
 
-The exact touched subset should remain minimal and tied to confirmed foundation gaps.
+1. Run focused shell and DirectoryIQ tests.
+2. Run route signature guardrail script.
+3. Confirm no DirectoryIQ API/lib behavior changes.
+4. Complete MR/pipeline/merge/cleanup flow.
 
-## Delivery and Validation Plan
+## Guardrails
 
-1. Start from clean `main` and create sprint branch (`sprint-001-directoryiq-foundation`).
-2. Confirm source-of-truth behavior from:
-- `planning/apps/directoryiq/product-intent.md`
-- touched implementation files
-- existing DirectoryIQ tests
-3. Implement only approved foundation scope.
-4. Run focused tests/checks for touched DirectoryIQ contracts.
-5. Push, open MR, wait for green pipeline, fix only failing sprint-relevant checks.
-6. Merge, delete branch, and return local repo to clean `main`.
-
-## Design Guardrails
-
-- Do not invent requirements beyond observed implementation and planning source files.
-- Do not expand into broad runtime ownership refactors unless explicitly required by scoped acceptance criteria.
-- Do not change schema unless a small, directly justified fix is required and approved in sprint scope.
-- Keep changes DirectoryIQ-scoped.
+- No invented requirements.
+- No fake production data.
+- No broad refactors.
+- No non-DirectoryIQ behavior changes.
