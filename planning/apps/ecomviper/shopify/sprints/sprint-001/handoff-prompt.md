@@ -14,10 +14,10 @@ Do not rebuild it.
 3. planning/state.md
 4. planning/domain.md
 5. planning/decisions.md
-6. planning/apps/shopify/overview.md
-7. planning/apps/shopify/sprints/sprint-001/requirements.md
-8. planning/apps/shopify/sprints/sprint-001/blueprint.md
-9. planning/apps/shopify/sprints/sprint-001/acceptance-criteria.md
+6. planning/apps/ecomviper/shopify/overview.md
+7. planning/apps/ecomviper/shopify/sprints/sprint-001/requirements.md
+8. planning/apps/ecomviper/shopify/sprints/sprint-001/blueprint.md
+9. planning/apps/ecomviper/shopify/sprints/sprint-001/acceptance-criteria.md
 
 ## Current Visible App
 

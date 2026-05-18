@@ -9,10 +9,10 @@ Shopify Guarded Publish Execution
 
 This sprint is aligned to:
 
-- `planning/apps/shopify/product-intent.md`
-- `planning/apps/shopify/sprints/sprint-004/requirements.md`
-- `planning/apps/shopify/sprints/sprint-004/blueprint.md`
-- `planning/apps/shopify/sprints/sprint-004/acceptance-criteria.md`
+- `planning/apps/ecomviper/shopify/product-intent.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-004/requirements.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-004/blueprint.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-004/acceptance-criteria.md`
 
 Sprint 004 established local Step 3 review/publish workflow contracts and dry-run blocking. Sprint 005 adds the first guarded server-side execution path.
 

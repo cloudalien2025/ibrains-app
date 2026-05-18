@@ -7,7 +7,7 @@ Shopify Product Editor Draft-to-Publish Workflow
 
 ## Intent
 
-Based on `planning/apps/shopify/product-intent.md`, Step 3 currently supports draft editing but not publish execution. Sprint 004 introduces guarded review-to-publish workflow foundations without enabling real Shopify write operations yet.
+Based on `planning/apps/ecomviper/shopify/product-intent.md`, Step 3 currently supports draft editing but not publish execution. Sprint 004 introduces guarded review-to-publish workflow foundations without enabling real Shopify write operations yet.
 
 ## Implementation Strategy
 

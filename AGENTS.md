@@ -70,3 +70,16 @@ Warning:
 - Do not stop after pushing the branch.
 - Do not stop after returning the MR URL.
 - Continue the GitLab flow until merge and clean `main` unless blocked by permissions or a failing check that requires human input.
+
+## Planning App Structure (Source of Truth)
+
+Planning should mirror the iBrains launcher app structure:
+
+- `planning/apps/ecomviper/`
+  - child apps: `shopify/`, `walmart/`, `ebay/`, `amazon/`
+- `planning/apps/studio/`
+  - child apps: `casaflix/`, `uap-forge/`, `future-studio-apps/`
+- `planning/apps/siteforge/`
+- `planning/apps/directoryiq/`
+
+When updating planning documents, use these paths and avoid introducing legacy standalone Shopify planning roots.

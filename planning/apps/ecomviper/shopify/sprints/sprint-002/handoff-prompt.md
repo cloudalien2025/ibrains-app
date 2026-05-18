@@ -12,10 +12,10 @@ Implement Sprint 002 only.
 3. planning/state.md
 4. planning/decisions.md
 5. planning/risks.md
-6. planning/apps/shopify/overview.md
-7. planning/apps/shopify/sprints/sprint-002/requirements.md
-8. planning/apps/shopify/sprints/sprint-002/blueprint.md
-9. planning/apps/shopify/sprints/sprint-002/acceptance-criteria.md
+6. planning/apps/ecomviper/shopify/overview.md
+7. planning/apps/ecomviper/shopify/sprints/sprint-002/requirements.md
+8. planning/apps/ecomviper/shopify/sprints/sprint-002/blueprint.md
+9. planning/apps/ecomviper/shopify/sprints/sprint-002/acceptance-criteria.md
 
 ## Background
 

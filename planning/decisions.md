@@ -98,3 +98,15 @@ Last updated: 2026-05-18 (UTC)
   - Do not stop after returning the MR URL.
   - Continue until merge and clean `main` unless blocked by permissions or a failing check requiring human input.
 - Rationale: Prevents partial handoffs and ensures each sprint is operationally closed, auditable, and ready for the next sprint.
+
+## D-009 Mirror Planning Hierarchy to iBrains Launcher App Structure
+
+- Status: Accepted
+- Decision: Planning paths must mirror the actual top-level iBrains launcher structure and app-family nesting.
+- Required hierarchy:
+  - `planning/apps/ecomviper/` with `shopify/`, `walmart/`, `ebay/`, `amazon/`
+  - `planning/apps/studio/` with `casaflix/`, `uap-forge/`, `future-studio-apps/`
+  - `planning/apps/siteforge/`
+  - `planning/apps/directoryiq/`
+- Migration rule: legacy Shopify planning references must use `planning/apps/ecomviper/shopify/`; do not use legacy standalone Shopify planning roots.
+- Rationale: Keeps planning discoverable, consistent with launcher navigation, and reduces cross-app documentation drift.
