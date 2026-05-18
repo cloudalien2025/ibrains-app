@@ -9,6 +9,7 @@ Last updated: 2026-05-18 (UTC)
 - Sprint 002: Completed (capability detection + telemetry scope).
 - Sprint 003: Completed (deterministic extraction precedence + extraction-source metadata + stable warning codes).
 - Sprint 004: Planned (typed warning/telemetry code contract).
+- Sprint 005: Completed (Shopify guarded publish execution scaffold).
 
 ## Mandatory Sprint Delivery Flow (GitLab)
 
@@ -68,3 +69,30 @@ Important: Do not start the next sprint until the current sprint MR is merged an
 ## Next Milestone
 
 - Execute Sprint 004 to define and apply a typed warning/telemetry code contract shared across Shopify capability and hydration consumers.
+
+## Sprint Completion Updates
+
+- Sprint: `Sprint 005` - `Completed`
+- MR: `n/a`
+- Commit SHA: `n/a`
+- Tests/checks: `passed - 4 files passed, 17 tests passed`
+- Next recommended sprint: `Sprint 006 - wire Step 3 UI to guarded route, formalize publish-attempt migration/governance, and add execute-path integration coverage`
+
+### Sprint 005 Files Changed
+
+- `app/api/ecomviper/shopify/products/publish/route.ts`
+- `lib/ecomviper/shopify/shopify-product-publish-service.ts`
+- `lib/ecomviper/shopify/shopify-product-publish-repository.ts`
+- `tests/ecomviper_shopify_publish_service.test.ts`
+- `tests/ecomviper_shopify_publish_route.test.ts`
+- `planning/apps/shopify/sprints/sprint-005/requirements.md`
+- `planning/apps/shopify/sprints/sprint-005/blueprint.md`
+- `planning/apps/shopify/sprints/sprint-005/acceptance-criteria.md`
+- `planning/apps/shopify/sprints/sprint-005/handoff-prompt.md`
+- `planning/apps/shopify/sprints/sprint-005/summary.md`
+
+### Sprint 005 Remaining Risks
+
+- Product editor Step 3 UI is not yet wired to server publish route; workflow remains client-local unless API is called directly.
+- Publish-attempt persistence is lightweight/best-effort in Sprint 005; formal migration governance/retention is pending.
+- Live execute is scaffolded and feature-flag gated (`ECOMVIPER_SHOPIFY_PUBLISH_EXECUTE_ENABLED`) and needs controlled rollout/testing.
