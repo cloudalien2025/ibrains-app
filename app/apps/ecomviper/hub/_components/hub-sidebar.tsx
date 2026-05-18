@@ -39,7 +39,7 @@ export default function HubSidebar() {
       <div className="mt-3 rounded-lg border border-dashed border-[#D9E4F0] bg-[#F8FBFF] p-3">
         <p className="text-[11px] uppercase tracking-[0.14em] text-[#64748B]">Shell Status</p>
         <p className="mt-1 text-xs text-[#475569]">
-          Initial command-center shell with static, planning-aligned content. Live routing, ingestion, and scoring are deferred.
+          Feed Control Center is a static foundation in this sprint. Live sync, ingestion, routing execution, and scoring remain deferred.
         </p>
       </div>
     </aside>
