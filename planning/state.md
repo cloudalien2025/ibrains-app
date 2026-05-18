@@ -14,12 +14,24 @@ Last updated: 2026-05-18 (UTC)
 - Walmart Sprint 001: Completed (`walmart-command-center-foundation` docs baseline).
 - Studio product intent sprint: Completed (`studio-product-intent`, MR `!180`).
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
+- DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
 
 ## Studio Naming Alignment Notes
 
 - MR `!180` established the implementation-derived Studio product intent baseline.
 - This sprint is scoped to docs/planning naming cleanup for Studio/CasaFlix.
 - No application behavior changes are included; only planning-language alignment and legacy-name clarifications.
+
+## DirectoryIQ Planning Continuity
+
+- DirectoryIQ product intent is now the planning source of truth and was updated from implementation analysis in MR `!179`.
+- MR `!179` pipeline/check evidence: pipeline `2532737593` passed (`verify_frontdoor_integrity`), then merged into `main`.
+- Post-merge state for `directoryiq-product-intent`: remote and local branch deleted; local repository reset to clean `main`.
+- Next active DirectoryIQ planning/implementation direction: `sprint-001-directoryiq-foundation`.
+- Future DirectoryIQ sprint requirements must stay grounded in:
+  - `planning/apps/directoryiq/product-intent.md`, and
+  - observed implementation evidence under app/API/lib/tests.
+- Do not invent requirements outside source-of-truth implementation and planning files.
 
 ## Planning App Map
 
