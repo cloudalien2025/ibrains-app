@@ -206,7 +206,7 @@ Warning:
 
 - Sprint: `eBay Product-Intent Sprint` - `Completed`
 - Title: `eBay Product Intent Baseline from Implementation`
-- MR: `pending`
+- MR: `!183 (https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/183)`
 - Commit SHA: `pending`
 - Pipeline/checks result: `pending`
 - Merge commit SHA: `pending`
