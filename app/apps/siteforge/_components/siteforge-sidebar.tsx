@@ -10,6 +10,7 @@ export default function SiteForgeSidebar() {
   return (
     <aside
       className="rounded-2xl border border-[#D9E4F0] bg-white/90 p-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)]"
+      aria-label="SiteForge command center sidebar"
       data-testid="siteforge-command-center-sidebar"
     >
       <div className="mb-3 border-b border-[#E2E8F0] pb-3">
@@ -18,7 +19,7 @@ export default function SiteForgeSidebar() {
         <p className="mt-1 text-xs text-[#64748B]">Connect, describe, and launch in one workspace</p>
       </div>
 
-      <nav className="grid gap-1" data-testid="siteforge-command-center-nav">
+      <nav aria-label="SiteForge command center navigation" className="grid gap-1" data-testid="siteforge-command-center-nav">
         {siteforgeSidebarItems.map((item) => {
           if (item.kind === "route") {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -26,6 +27,7 @@ export default function SiteForgeSidebar() {
               <Link
                 key={`${item.kind}-${item.label}`}
                 href={item.href}
+                aria-current={active ? "page" : undefined}
                 className={`rounded-lg border px-3 py-2 text-sm transition ${
                   active
                     ? "border-[#BFDBFE] bg-[#EFF6FF] text-[#0F172A]"
