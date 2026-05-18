@@ -1,11 +1,11 @@
 # EcomViper Hub Workflows
 
-## Merchant Feed Submission
+## Optimized Feed Sync From Marketplace Apps Into Private Hub
 
-1. Merchant/channel system submits feed package
-2. Intake validates payload shape and source metadata
-3. Feed is accepted, rejected, or queued for review
-4. Submission status and diagnostics are recorded
+1. Merchant optimizes listings/feeds in Walmart, Shopify, eBay, Amazon, or future channel apps
+2. Optimized feed package syncs into private Hub (`app.ibrains.ai/apps/ecomviper/hub`)
+3. Intake validates payload shape and source metadata
+4. Submission is accepted, rejected, or queued for manual review
 
 ## Marketplace Feed Intake
 
@@ -14,25 +14,39 @@
 3. Feed records are normalized into candidate mapping payloads
 4. Failures route to recovery queue with error families
 
-## Canonical Product Matching
+## Canonical Product Creation / Matching
 
-1. Candidate records evaluated against canonical identifiers and attributes
-2. Match confidence and conflict reasons computed
-3. Candidate mapped to existing canonical product or flagged for new canonical creation
+1. Candidate records are evaluated against canonical identifiers and attributes
+2. Match confidence and conflict reasons are computed
+3. Candidate maps to existing canonical product or triggers canonical create review
+4. Canonical record remains pending publication until visibility/trust checks pass
 
 ## Canonical Merge Review
 
-1. Merge proposal generated with evidence/provenance
-2. Operator reviews changes and trust implications
+1. Merge proposal is generated with evidence/provenance
+2. Operator reviews merge changes and trust implications
 3. Operator approves, edits, or rejects proposal
 4. Decision is logged with audit event
 
-## Marketplace Offer Routing
+## Public Visibility Approval Workflow
 
-1. Canonical insight emits routing candidate
-2. Priority and destination channel determined
-3. Execution posture assigned (`manual_review`, `ready_for_dispatch`, `blocked`)
-4. Action pushed to destination queue
+1. Canonical product enters visibility review queue
+2. Operator verifies public/private field classification
+3. Operator validates trust/compliance state and routing policy
+4. Operator sets visibility and publication eligibility status
+
+## Public Canonical Page Publication To `ecomviper.com`
+
+1. Publication-eligible canonical record enters publication queue
+2. Public-safe projection is generated and validated
+3. Operator approves publish action
+4. Canonical page is marked eligible for public Hub exposure at `ecomviper.com`
+
+## Public Route-To-Marketplace Offer Workflow
+
+1. Approved marketplace offers are selected per routing policy
+2. Public discovery surfaces expose route-to-marketplace pathways
+3. Routing outcomes and safety checks are tracked for review
 
 ## Agentic Visibility Review
 
@@ -41,15 +55,30 @@
 3. Operator confirms recommended remediation path
 4. Follow-up routing items are created
 
-## Optimization Feedback Loop Into Marketplace Apps
+## Public Analytics Feedback Into Private Hub
 
-1. Hub recommendations are exported to channel-specific workflows
-2. Channel outcomes (success/failure/warning) return to Hub
-3. Outcome telemetry updates signal quality and routing confidence
+1. Public discovery/routing events are collected
+2. Attribution is mapped back to canonical products and routing decisions
+3. Private Hub dashboards update signal quality and routing confidence
+4. Operators adjust publication/routing policy as needed
+
+## Trust / Compliance Escalation Before Publication
+
+1. Trust/compliance issues trigger escalation queue items
+2. Publication state is blocked or downgraded pending review
+3. Operator resolves, suppresses, or rejects publication candidate
+4. Resolution is logged in publication audit events
+
+## Unpublish / Suppression Workflow
+
+1. Risk signal, policy change, or quality issue triggers suppression review
+2. Operator executes unpublish/suppress action
+3. Public surface is updated to remove or restrict exposure
+4. Audit timeline records actor, reason, and recovery requirements
 
 ## Escalation And Recovery Workflows
 
-1. Intake or merge failures trigger escalation queue items
+1. Intake, merge, publication, or routing failures trigger escalation queue items
 2. Errors are grouped by failure family
 3. Operators apply smallest-scope remediation
 4. Replay/retry decisions are logged
@@ -60,7 +89,20 @@ Manual review is required for:
 
 - low-confidence canonical matches
 - trust/compliance conflicts
+- high-impact publication decisions
 - high-impact routing actions
 - unresolved source inconsistencies
 
 Manual decisions should always create explicit audit events and confidence updates.
+
+## Future Infrastructure Transition Workflow (Conceptual)
+
+If `ecomviper.com` requires separation from shared app infrastructure:
+
+1. Trigger criteria (traffic/security/SEO/scaling/release cadence) is validated
+2. Deployment target options are evaluated
+3. Publication pipeline cutover plan is approved
+4. Migration executes with rollback and audit controls
+
+This is a future operational workflow definition only.
+No DNS, SSL, droplet, or hosting changes are implemented in this sprint.

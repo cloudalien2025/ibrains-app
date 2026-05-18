@@ -26,6 +26,7 @@ Last updated: 2026-05-18 (UTC)
 - SiteForge Sprint 002: In progress (`sprint-002-siteforge-shell-render-fix`, shell render integration fix so `/apps/siteforge` visibly renders command-center sidebar + workspace).
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
+- Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
 - Current recommended sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (active).
 
 ## Current Operating Reminder
