@@ -13,6 +13,12 @@ Canonical API payload boundary definitions now live in:
 
 - `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`
 
+Implementation update: Command Center rollup/readiness display now consumes canonical score semantics through:
+
+- `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
+- `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
+- `app/apps/ecomviper/walmart/page.tsx`
+
 ## 1) Purpose
 
 This document defines what "AI visibility" currently means in the Walmart workspace based on implemented routes, UI copy, data models, API handlers, fixtures, and tests.
@@ -241,13 +247,13 @@ Current Walmart AI visibility is composed of multiple signal families, not one c
 
 ## 3.7 Important current-model caveat
 
-At least three different "visibility/readiness" scoring systems exist in current code:
+At least three different "visibility/readiness" scoring systems still exist in current code:
 
 - listing-quality score (`walmart-listing-quality.ts`),
 - command-center readiness scorecard (`walmart-agentic-optimization-coverage.ts`),
 - iBrains run summary score (`walmart-ibrains-intelligence.ts`).
 
-No single canonical Walmart AI visibility score contract is implemented yet.
+Canonical contract and first consumer alignment now exist (`walmart-ai-visibility-score.ts` + command-center rollup adapter), but product/editor/iBrains remain diagnostic scopes and broader cross-surface payload migration is still pending.
 
 ## 4) Current Operator Workflow (Implementation-Supported)
 

@@ -174,6 +174,8 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).toContain("ecomviper-walmart-capability-map");
     expect(html).toContain("ecomviper-walmart-agentic-coverage-panel");
     expect(html).toContain("Walmart Agentic Optimization Coverage");
+    expect(html).toContain("AI Recommendation Readiness");
+    expect(html).toContain("Confidence:");
     expect(html).toContain("ecomviper-walmart-missing-from-code");
     expect(html).toContain("ecomviper-walmart-next-best-actions");
     expect(html).toContain("Supported by current API path");

@@ -24,7 +24,8 @@ Primary objective: prevent score drift and label drift before broader production
 | File | Purpose | Score/signal names exposed | Current shape | Consumer surface | Backing | Boundary role |
 | --- | --- | --- | --- | --- | --- | --- |
 | `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | Command-center readiness + optimization coverage derivation | `overallAiRecommendationReadinessScore`, `aiConfidenceScore`, `recommendationProbability`, `subscores`, `missingFieldRecommendations`, `nextBestActions` | `WalmartOptimizationCoverageAudit` object with nested `readiness` | Command Center (`/apps/ecomviper/walmart`) | Derived/scaffold mix | Primary producer (v0 source for canonical boundary) |
-| `app/apps/ecomviper/walmart/page.tsx` | Command-center UI render | "AI Recommendation Readiness", "Confidence" labels and next actions | Direct in-process call to `buildWalmartOptimizationCoverageAudit(...)` | Command Center | Derived in server component | Consumer (currently bypasses API boundary) |
+| `app/apps/ecomviper/walmart/page.tsx` | Command-center UI render | "AI Recommendation Readiness", "Confidence" labels and next actions | Coverage audit + command-center score rollup adapter | Command Center | Derived in server component | Consumer aligned to canonical score adapter |
+| `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts` | Command-center rollup adapter | canonical `WalmartAiVisibilityScore` mapping into readiness/confidence display values | `{ aiVisibilityScore, readinessScore, confidenceScore, confidenceLevel }` | Command Center | Derived | Consumer boundary adapter |
 | `app/api/ecomviper/walmart/health/route.ts` | Authenticated Walmart health payload | `cards` (productsImported, draftChanges, feedErrors, listingsNeedingAttention), `connectionHealth` | `{ ok, mode, connectionHealth, cards }` | Connect page polling and potential command-center API consumers | Production-backed cards + derived counts | First canonical API boundary host (recommended) |
 | `app/apps/ecomviper/walmart/connect/connect-client.tsx` | Connection workspace polling for health | `connectionHealth` payload fields | `WalmartHealthResponse` expects `{ ok, connectionHealth? }` and ignores extra fields | Connect workspace | API-backed | Existing consumer (should tolerate additive `ai_visibility_score`) |
 | `lib/ecomviper/walmart/walmart-products.ts` | Dashboard snapshot counts and recent activity/products | `productsImported`, `draftChanges`, `feedErrors`, `listingsNeedingAttention` | `WalmartDashboardSnapshot` | Command Center + health route cards | Mixed persisted/runtime | Producer input to canonical boundary dimensions |
@@ -38,7 +39,7 @@ Primary objective: prevent score drift and label drift before broader production
 
 ### Current contract gap
 
-There is no canonical `ai_visibility_score` field in any Walmart API response today. Score payloads are currently UI/module-specific and differently named.
+Canonical `ai_visibility_score` now exists in the health API boundary and command-center adapter path, but broader surface migration remains incomplete.
 
 ## 3) Proposed First Canonical Boundary
 
@@ -129,7 +130,8 @@ Ownership gaps today:
 ### Built/current
 
 - Derivation logic exists for command-center readiness rollup + confidence + recommendations.
-- Health API route exists and can host additive canonical field.
+- Health API route now emits additive canonical `ai_visibility_score`.
+- Command Center rollup display now consumes canonical values through `walmart-command-center-score-rollup.ts`.
 - Product/editor and iBrains score diagnostics are implemented and tested.
 
 ### Partial/demo/fixture-backed
@@ -140,7 +142,7 @@ Ownership gaps today:
 
 ### Missing/unclear
 
-- No live API field currently emits canonical `ai_visibility_score`.
+- Command Center is aligned through an in-process adapter, but does not yet consume canonical rollup via health-route fetch.
 - No dedicated producer for some canonical dimensions (notably Prompt Match coverage).
 
 ### Deferred
@@ -151,6 +153,8 @@ Ownership gaps today:
 ## 7) Source-of-Truth Files Inspected
 
 - `app/apps/ecomviper/walmart/page.tsx`
+- `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
+- `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
 - `app/apps/ecomviper/walmart/products/[sku]/page.tsx`
 - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
 - `app/apps/ecomviper/walmart/ibrains-intelligence/page.tsx`
@@ -167,6 +171,7 @@ Ownership gaps today:
 - `lib/ecomviper/walmart/walmart-nav.ts`
 - `lib/ecomviper/walmart/walmart-types.ts`
 - `tests/ecomviper_walmart_agentic_optimization_coverage.test.ts`
+- `tests/ecomviper_walmart_command_center_score_rollup.test.ts`
 - `tests/ecomviper_walmart_connect_auth.test.tsx`
 - `tests/ecomviper_walmart_route_contract.test.tsx`
 
@@ -184,8 +189,8 @@ Ownership gaps today:
 
 ## 9) Next Sprint Candidates (Not Commitments)
 
-1. Implement additive `ai_visibility_score` field on `GET /api/ecomviper/walmart/health` with focused route tests.
-2. Add adapter module (`walmart-ai-visibility-score`) to normalize readiness/audit outputs into canonical boundary shape.
-3. Align Command Center to consume boundary payload (or equivalent server adapter) instead of local naming drift.
-4. Add focused tests enforcing canonical payload keys and label consistency across command-center/editor/iBrains surfaces.
-5. Define first production-backed dimension expansion (likely catalog readiness + trust health) with explicit provenance tagging.
+1. Move Command Center from canonical adapter consumption to boundary-first route consumption (`/api/ecomviper/walmart/health`) if/when dashboard data fetch path is centralized.
+2. Add focused tests enforcing canonical payload keys and label consistency across command-center/editor/iBrains surfaces.
+3. Define first production-backed dimension expansion (likely catalog readiness + trust health) with explicit provenance tagging.
+4. Add product-editor context wiring to consume canonical rollup where appropriate without replacing per-SKU listing diagnostics.
+5. Define prompt-match and semantic-gap producers for currently omitted/partial dimensions.

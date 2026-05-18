@@ -19,6 +19,7 @@ Walmart is an active EcomViper channel workspace focused on guarded catalog and 
 - Use `ai-visibility.md` for the implementation-derived AI visibility workflow baseline across Prompt Match, Semantic Gaps, Product Opportunities, iBrains Intelligence, and queue/readiness signals.
 - Use `score-contract.md` for the canonical Walmart AI visibility score vocabulary and ownership contract across Command Center, Product Editor, iBrains Intelligence, and lane-mapped surfaces.
 - Use `ai-visibility-api-boundary.md` for the first canonical `ai_visibility_score` API payload boundary and producer/consumer contract guidance.
+- Current implementation note: Command Center rollup/readiness now aligns to canonical score semantics via `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`.
 
 ## Roadmap Candidate Topics (Not Yet Established As Files)
 

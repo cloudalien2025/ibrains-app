@@ -39,6 +39,11 @@ Owner: Walmart Product + Engineering
 Status: Open
 Notes: Candidate priorities from implementation evidence include prompt/query evidence, queue state transitions, and durable activity/feed visibility timelines.
 
+### Should Walmart Command Center move from in-process canonical adapter consumption to boundary-first `/api/ecomviper/walmart/health` consumption?
+Owner: Walmart Product + Architecture
+Status: Open
+Notes: Sprint 007 aligned Command Center rollup semantics through `walmart-command-center-score-rollup.ts`, but dashboard still computes in-process server data rather than reading canonical route payload.
+
 ## Closed Questions
 
 ### Which Walmart AI visibility score is canonical across Command Center, Product Editor, and iBrains Intelligence?
@@ -50,3 +55,8 @@ Resolution: Canonical vocabulary and ownership are now defined in `planning/apps
 Owner: Walmart Product + Architecture
 Status: Closed (resolved in docs contract)
 Resolution: First canonical API payload boundary is documented in `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md` with `/api/ecomviper/walmart/health` as the initial additive host route for `ai_visibility_score`.
+
+### Has Walmart Command Center adopted canonical `ai_visibility_score` semantics as its rollup source?
+Owner: Walmart Product + Architecture
+Status: Closed (resolved in implementation)
+Resolution: Sprint 007 aligned Command Center readiness/confidence rollups to canonical `WalmartAiVisibilityScore` semantics via `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts` consumed by `app/apps/ecomviper/walmart/page.tsx`, with focused test coverage in `tests/ecomviper_walmart_command_center_score_rollup.test.ts`.
