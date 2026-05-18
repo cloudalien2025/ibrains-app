@@ -18,6 +18,7 @@ Last updated: 2026-05-18 (UTC)
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
 - DirectoryIQ Sprint 001: In progress (`sprint-001-directoryiq-foundation`, architecture/builder planning foundation + workspace shell alignment).
+- SiteForge Sprint 001: In progress (`sprint-001-siteforge-command-center-foundation`, architecture/builder planning foundation + command-center shell alignment).
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Current recommended sprint: `Walmart Sprint 005 - Prompt Match score workflow alignment` (recommended).
@@ -47,6 +48,22 @@ Last updated: 2026-05-18 (UTC)
   - `planning/apps/directoryiq/product-intent.md`, and
   - observed implementation evidence under app/API/lib/tests.
 - Do not invent requirements outside source-of-truth implementation and planning files.
+
+## SiteForge Planning Continuity
+
+- SiteForge now has a command-center foundation sprint active: `sprint-001-siteforge-command-center-foundation`.
+- Sprint scope is constrained to:
+  - architecture/builder planning files under `planning/apps/siteforge/*`
+  - lightweight shell alignment under `app/apps/siteforge/*` (sidebar + workspace frame)
+  - focused shell contract tests
+- Scope guard:
+  - preserve existing SiteForge functionality and API semantics
+  - no workflow rewrites, no data model changes, no dependency additions
+- Source-of-truth evidence areas:
+  - `app/apps/siteforge/*`
+  - `app/api/siteforge/*`
+  - `lib/siteforge/*`
+  - `tests/siteforge*`
 
 ## Planning App Map
 
@@ -161,11 +178,33 @@ Warning:
 
 ## Active Sprint Context
 
-- Active sprint branch: `sprint-001-directoryiq-foundation`
-- Sprint goal: `add DirectoryIQ architecture/builder planning foundation and align a lightweight workspace shell`
+- Active sprint branch: `sprint-001-siteforge-command-center-foundation`
+- Sprint goal: `add SiteForge architecture/builder planning foundation and align a lightweight command-center shell`
 - Scope guard: planning + layout shell alignment only; no API/data behavior changes or feature expansion.
 
 ## Sprint Completion Updates
+
+- Sprint: `SiteForge Sprint 001` - `In Progress`
+- Title: `SiteForge Command Center Foundation`
+- Branch: `sprint-001-siteforge-command-center-foundation`
+- Scope: `planning architecture/builder docs + lightweight SiteForge command-center shell`
+- Files changed (planned in this sprint):
+  - `planning/apps/siteforge/overview.md`
+  - `planning/apps/siteforge/product-intent.md`
+  - `planning/apps/siteforge/command-center-foundation.md`
+  - `planning/apps/siteforge/architecture.md`
+  - `planning/apps/siteforge/builder-workflow.md`
+  - `planning/apps/siteforge/roadmap.md`
+  - `app/apps/siteforge/layout.tsx`
+  - `app/apps/siteforge/_components/siteforge-sidebar.tsx`
+  - `lib/siteforge/siteforge-nav.ts`
+  - `tests/siteforge_command_center_shell.test.tsx`
+  - `planning/state.md`
+- Validation executed:
+  - `bash scripts/check_route_signatures.sh`
+  - `npm test -- --run tests/siteforge*.test.ts tests/siteforge*.test.tsx`
+  - `git diff --check`
+- Functionality preservation statement: `SiteForge workflow/API behavior preserved; shell is presentation/layout-only.`
 
 - Sprint: `Sprint 005` - `Completed`
 - MR: `n/a`
