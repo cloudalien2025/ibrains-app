@@ -100,6 +100,16 @@ function unique(items: string[]): string[] {
   return Array.from(new Set(items.map((entry) => entry.trim()).filter(Boolean)));
 }
 
+const LOW_QUALITY_COPY_PATTERNS = [
+  /\blisting quality - keep structured attributes complete and label-accurate\b/i,
+  /\bsupport focus - designed to\b/i,
+  /\b[a-z][a-z\s-]{1,60}\s*-\s*(?:label-backed|dosage facts|count and routine)\b/i,
+  /\bunflavo(?:r|u)ed\s+flavou?r\b/i,
+  /\bsupports supports\b/i,
+  /\bdesigned to supports\b/i,
+  /\b%dv\b/i,
+];
+
 function asObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -173,6 +183,33 @@ function inferMissingSearchBrowseAttributes(attributes: Record<string, string>):
   ];
 
   return required.filter((key) => !attributes[key]?.trim());
+}
+
+function sanitizeSuggestedBullets(values: string[]): string[] {
+  return unique(
+    values
+      .map((entry) => pickMeaningfulAiText(entry) ?? "")
+      .filter(Boolean)
+  ).slice(0, 8);
+}
+
+function hasLowQualityCopyArtifacts(input: {
+  title: string;
+  shortDescription: string;
+  longDescription: string;
+  bullets: string[];
+}): boolean {
+  const corpus = [
+    input.title,
+    input.shortDescription,
+    input.longDescription,
+    ...input.bullets,
+  ]
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .join(" ");
+  if (!corpus) return true;
+  return LOW_QUALITY_COPY_PATTERNS.some((pattern) => pattern.test(corpus));
 }
 
 function buildEntitySetFromFacts(facts: CanonicalProductFacts, fallback: WalmartProductRecord) {
@@ -529,10 +566,30 @@ function applyRulesEngineToSuggestion(params: {
   const rulesOutput = rulesResult.output;
   const rulesSearchBrowse = mapRulesOutputToSearchBrowseAttributes(rulesOutput);
 
-  const nextTitle = rulesOutput.content.productTitle;
-  const nextShortDescription = rulesOutput.content.shortDescription;
-  const nextLongDescription = rulesOutput.content.longDescription;
-  const nextBullets = rulesOutput.content.bullets;
+  const aiDraftCopy = {
+    title: pickMeaningfulAiText(params.suggestion.suggestedTitle) ?? "",
+    shortDescription: pickMeaningfulAiText(params.suggestion.suggestedShortDescription ?? "") ?? "",
+    longDescription: pickMeaningfulAiText(params.suggestion.suggestedDescription) ?? "",
+    bullets: sanitizeSuggestedBullets(params.suggestion.suggestedBullets ?? []),
+  };
+  const aiDraftHasMinimumShape =
+    aiDraftCopy.title.length > 0 &&
+    aiDraftCopy.shortDescription.length > 0 &&
+    aiDraftCopy.longDescription.length > 0 &&
+    aiDraftCopy.bullets.length >= 4;
+  const aiDraftHasLowQualityArtifacts = hasLowQualityCopyArtifacts(aiDraftCopy);
+  const retainModelCopy =
+    aiDraftHasMinimumShape &&
+    !aiDraftHasLowQualityArtifacts;
+
+  const nextTitle = retainModelCopy ? aiDraftCopy.title : rulesOutput.content.productTitle;
+  const nextShortDescription = retainModelCopy
+    ? aiDraftCopy.shortDescription
+    : rulesOutput.content.shortDescription;
+  const nextLongDescription = retainModelCopy
+    ? aiDraftCopy.longDescription
+    : rulesOutput.content.longDescription;
+  const nextBullets = retainModelCopy ? aiDraftCopy.bullets : rulesOutput.content.bullets;
 
   const suggestedAttributes = {
     ...(params.suggestion.suggestedAttributes ?? {}),
@@ -554,6 +611,17 @@ function applyRulesEngineToSuggestion(params: {
 
   const complianceWarnings = unique([
     ...(params.suggestion.complianceWarnings ?? []),
+    ...(!retainModelCopy
+      ? [
+          "Model-authored copy failed deterministic quality/shape checks; deterministic rules copy was applied.",
+          ...(!aiDraftHasMinimumShape
+            ? ["Model-authored copy was missing one or more required fields (title, short description, long description, or 4+ bullets)."]
+            : []),
+          ...(aiDraftHasLowQualityArtifacts
+            ? ["Model-authored copy contained low-quality artifacts and was replaced."]
+            : []),
+        ]
+      : []),
     ...rulesOutput.validation.warnings,
     ...rulesOutput.validation.blockers,
     ...(rulesOutput.validation.removedClaims.length > 0
@@ -564,7 +632,9 @@ function applyRulesEngineToSuggestion(params: {
 
   const complianceNotes = unique([
     ...(params.suggestion.complianceNotes ?? []),
-    "Deterministic Walmart copy template output applied for title, short description, long description, and bullets.",
+    retainModelCopy
+      ? "Retained model-authored Walmart copy after compliance and deterministic QA checks."
+      : "Deterministic Walmart copy template output applied for title, short description, long description, and bullets.",
     ...rulesOutput.content.complianceNotes,
     ...rulesOutput.pricingInventory.priceNotes,
     ...rulesOutput.pricingInventory.inventoryNotes,
@@ -591,6 +661,7 @@ function applyRulesEngineToSuggestion(params: {
     complianceChanges: unique([
       ...(params.suggestion.applyDiagnostics?.complianceChanges ?? []),
       "rules_engine_applied",
+      retainModelCopy ? "model_copy_retained" : "rules_copy_applied",
     ]),
     staleFieldsCleared: unique([
       ...(params.suggestion.applyDiagnostics?.staleFieldsCleared ?? []),
@@ -644,7 +715,7 @@ function applyRulesEngineToSuggestion(params: {
     suggestedBullets: deterministicFallback.suggestedBullets,
     complianceWarnings: unique([
       ...(candidate.complianceWarnings ?? []),
-      "Rules-engine output failed compliance checks and deterministic compliant fallback was applied.",
+      "Selected copy failed compliance checks and deterministic compliant fallback was applied.",
       ...candidateCompliance.violations,
     ]),
     applyDiagnostics: {

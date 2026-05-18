@@ -155,7 +155,6 @@ describe("EcomViper Walmart OpenAI BYO flow", () => {
     expect(payload.suggestion?.sku).toBe("OPA-OMEGA3-120");
     expect(payload.suggestion?.suggestedTitle?.length ?? 0).toBeGreaterThan(20);
     expect(payload.suggestion?.suggestedTitle?.toLowerCase()).not.toContain("viagra");
-    expect(payload.suggestion?.suggestedTitle).not.toContain("|");
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
@@ -219,6 +218,134 @@ describe("EcomViper Walmart OpenAI BYO flow", () => {
       bulletPoints: payload.suggestion?.suggestedBullets,
     });
     expect(compliance.valid).toBe(true);
+  });
+
+  it("retains high-quality model copy when all core fields are compliant", async () => {
+    seedProduct();
+    const rawApiKey = "sk-test-openai-secret-123456";
+
+    const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/openai", {
+      method: "POST",
+      body: JSON.stringify({ apiKey: rawApiKey }),
+    });
+    await saveOpenAiRoute(saveReq);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  suggestedTitle:
+                    "OPA Nutrition Omega-3 Daily Wellness Softgels 120ct | Agentic Selection Ready",
+                  suggestedShortDescription:
+                    "OPA Nutrition Omega-3 softgels deliver label-backed daily wellness support for adults in a 120-count format.",
+                  suggestedDescription:
+                    "OPA Nutrition Omega-3 Daily Wellness Softgels provide daily nutritional support with clear product identity, serving context, and shopper-relevant ingredient clarity. These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
+                  suggestedBullets: [
+                    "Omega-3 softgels designed for adult daily wellness routines.",
+                    "120-count format supports consistent supplement planning.",
+                    "Structured product facts help shoppers and AI agents evaluate fit.",
+                    "Label-backed positioning avoids unsupported medical claims.",
+                  ],
+                  missingAttributes: [],
+                  complianceWarnings: [],
+                  qualityScore: 89,
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const req = new NextRequest("http://localhost/api/ecomviper/walmart/ai/generate", {
+      method: "POST",
+      body: JSON.stringify({ sku: "OPA-OMEGA3-120" }),
+    });
+
+    const resp = await generateWalmartAiRoute(req);
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(200);
+    expect(payload.suggestion?.suggestedTitle).toContain("| Agentic Selection Ready");
+    expect(
+      payload.suggestion?.complianceNotes?.some((entry: string) =>
+        entry.includes("Retained model-authored Walmart copy after compliance and deterministic QA checks.")
+      )
+    ).toBe(true);
+    expect(
+      payload.suggestion?.complianceNotes?.some((entry: string) =>
+        entry.includes("Deterministic Walmart copy template output applied")
+      )
+    ).toBe(false);
+  });
+
+  it("replaces low-quality model phrasing with deterministic rules copy", async () => {
+    seedProduct();
+    const rawApiKey = "sk-test-openai-secret-123456";
+
+    const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/openai", {
+      method: "POST",
+      body: JSON.stringify({ apiKey: rawApiKey }),
+    });
+    await saveOpenAiRoute(saveReq);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  suggestedTitle: "Supplement identity - OPA Nutrition Formula",
+                  suggestedShortDescription: "Support focus - designed to support daily wellness.",
+                  suggestedDescription:
+                    "Listing quality - keep structured attributes complete and label-accurate.",
+                  suggestedBullets: [
+                    "Support focus - designed to support daily wellness.",
+                    "Listing quality - keep structured attributes complete and label-accurate.",
+                    "%DV",
+                    "Dosage facts - Magnesium 30 mg",
+                  ],
+                  missingAttributes: [],
+                  complianceWarnings: [],
+                  qualityScore: 84,
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const req = new NextRequest("http://localhost/api/ecomviper/walmart/ai/generate", {
+      method: "POST",
+      body: JSON.stringify({ sku: "OPA-OMEGA3-120" }),
+    });
+
+    const resp = await generateWalmartAiRoute(req);
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(200);
+    expect(
+      payload.suggestion?.complianceNotes?.some((entry: string) =>
+        entry.includes("Deterministic Walmart copy template output applied")
+      )
+    ).toBe(true);
+    expect(
+      payload.suggestion?.complianceNotes?.some((entry: string) =>
+        entry.includes("Retained model-authored Walmart copy after compliance and deterministic QA checks.")
+      )
+    ).toBe(false);
+    expect(payload.suggestion?.complianceWarnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Model-authored copy contained low-quality artifacts"),
+      ])
+    );
   });
 
   it("returns 401 on OpenAI routes when unauthenticated", async () => {
