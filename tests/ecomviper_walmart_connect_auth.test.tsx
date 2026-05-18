@@ -311,6 +311,14 @@ describe("EcomViper Walmart connect auth", () => {
 
     expect(healthPayload.connectionHealth.summary.clientSecretStored).toBe(true);
     expect(healthPayload.connectionHealth.summary.maskedClientId).toBe("pe***t_id");
+    expect(healthPayload.ai_visibility_score?.provenance?.source).toBe("derived");
+    expect(healthPayload.ai_visibility_score).toEqual(
+      expect.objectContaining({
+        overall: expect.any(Number),
+        status: expect.stringMatching(/excellent|good|warning|critical|unknown/),
+        dimensions: expect.any(Object),
+      })
+    );
     expect(JSON.stringify(healthPayload)).not.toContain("persisted_secret");
 
     const disconnectReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/save", {
@@ -367,6 +375,8 @@ describe("EcomViper Walmart connect auth", () => {
     expect(healthPayload.connectionHealth.summary.maskedClientId).toBe("he***ient");
     expect(healthPayload.cards.productsImported).toBe(0);
     expect(healthPayload.cards.listingsNeedingAttention.count).toBe(0);
+    expect(healthPayload.ai_visibility_score?.provenance?.source).toBe("derived");
+    expect(healthPayload.ai_visibility_score?.dimensions?.prompt_match_coverage).toEqual(expect.any(Number));
   });
 
   it("scopes persisted Walmart connection records by user and prevents cross-user status bleed", async () => {

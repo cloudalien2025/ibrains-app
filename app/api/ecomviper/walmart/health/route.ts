@@ -2,6 +2,10 @@ export const runtime = "nodejs";
 
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import {
+  buildWalmartAiVisibilityScoreFixture,
+  type WalmartAiVisibilityScore,
+} from "@/lib/ecomviper/walmart/walmart-ai-visibility-score";
 import { getWalmartConnectionHealthForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { getWalmartDashboardSnapshotForUser } from "@/lib/ecomviper/walmart/walmart-products";
 
@@ -29,6 +33,15 @@ export async function GET() {
         categories: [] as string[],
       },
     };
+    let aiVisibilityScore: WalmartAiVisibilityScore = {
+      overall: 0,
+      status: "unknown",
+      dimensions: {},
+      provenance: {
+        source: "unknown",
+      },
+      recommendations: [],
+    };
 
     try {
       const dashboard = await getWalmartDashboardSnapshotForUser(userId);
@@ -43,11 +56,20 @@ export async function GET() {
       // Connection status should still load even when dashboard metrics are unavailable.
     }
 
+    try {
+      aiVisibilityScore = buildWalmartAiVisibilityScoreFixture({
+        provenanceSource: "derived",
+      });
+    } catch {
+      // Keep health payload stable even when visibility fixture generation fails.
+    }
+
     return ok({
       ok: true,
       mode,
       connectionHealth: health,
       cards,
+      ai_visibility_score: aiVisibilityScore,
     });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to load Walmart health.");

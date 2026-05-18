@@ -14,7 +14,8 @@ Last updated: 2026-05-18 (UTC)
 - Walmart Sprint 001: Completed and merged (`walmart-command-center-foundation` docs baseline).
 - Walmart Sprint 003: Completed and merged (`sprint-003-walmart-ai-visibility`, docs/planning AI visibility workflow foundation).
 - Walmart Sprint 004: Completed and merged (`sprint-004-walmart-score-contract`, docs/planning canonical AI visibility score contract).
-- Walmart Sprint 005: In progress (`sprint-005-walmart-ai-visibility-api-boundary`, docs/planning first canonical `ai_visibility_score` API payload boundary).
+- Walmart Sprint 005: Completed and merged (`sprint-005-walmart-ai-visibility-api-boundary`, docs/planning first canonical `ai_visibility_score` API payload boundary).
+- Walmart Sprint 006: In progress (`sprint-006-walmart-ai-visibility-payload-fixture`, additive canonical `ai_visibility_score` payload fixture/type contract).
 - Studio product intent sprint: Completed (`studio-product-intent`, MR `!180`).
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
@@ -23,7 +24,7 @@ Last updated: 2026-05-18 (UTC)
 - SiteForge Sprint 002: In progress (`sprint-002-siteforge-shell-render-fix`, shell render integration fix so `/apps/siteforge` visibly renders command-center sidebar + workspace).
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
-- Current recommended sprint: `Walmart Sprint 005 - AI visibility API boundary definition` (active).
+- Current recommended sprint: `Walmart Sprint 006 - AI visibility payload fixture contract` (active).
 
 ## Current Operating Reminder
 
@@ -184,29 +185,27 @@ Warning:
 
 ## Active Sprint Context
 
-- Active sprint branch: `sprint-005-walmart-ai-visibility-api-boundary`
-- Sprint goal: `define first canonical Walmart ai_visibility_score API payload boundary from current implementation evidence`
-- Scope guard: docs/planning boundary sprint only; no broad app behavior changes, no new API execution paths, no backend refactors.
+- Active sprint branch: `sprint-006-walmart-ai-visibility-payload-fixture`
+- Sprint goal: `implement the first additive canonical Walmart ai_visibility_score payload fixture/type contract from the Sprint 005 API boundary`
+- Scope guard: additive type/fixture and focused route/test alignment only; no broad app behavior changes, no backend refactors.
 
 ## Sprint Completion Updates
 
-- Sprint: `Walmart Sprint 005` - `In Progress`
-- Title: `Walmart AI Visibility API Boundary`
-- Branch: `sprint-005-walmart-ai-visibility-api-boundary`
-- Goal: `define first canonical ai_visibility_score payload boundary and producer/consumer ownership guidance`
+- Sprint: `Walmart Sprint 006` - `In Progress`
+- Title: `Walmart AI Visibility Payload Fixture Contract`
+- Branch: `sprint-006-walmart-ai-visibility-payload-fixture`
+- Goal: `land first canonical ai_visibility_score type + fixture mapper and expose additive ai_visibility_score on Walmart health route`
 - Planned files:
-  - `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`
-  - `planning/apps/ecomviper/walmart/overview.md`
-  - `planning/apps/ecomviper/walmart/product-intent.md`
-  - `planning/apps/ecomviper/walmart/ai-visibility.md`
-  - `planning/apps/ecomviper/walmart/score-contract.md`
-  - `planning/questions.md`
-  - `planning/risks.md`
+  - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
+  - `app/api/ecomviper/walmart/health/route.ts`
+  - `tests/ecomviper_walmart_ai_visibility_score_fixture.test.ts`
+  - `tests/ecomviper_walmart_connect_auth.test.tsx`
   - `planning/state.md`
 - Validation plan:
+  - `bash scripts/check_route_signatures.sh`
+  - `npm test -- --run tests/ecomviper_walmart_ai_visibility_score_fixture.test.ts tests/ecomviper_walmart_connect_auth.test.tsx tests/ecomviper_walmart_agentic_optimization_coverage.test.ts`
+  - `npm test -- --run tests/ecomviper_walmart_route_contract.test.tsx`
   - `git diff --check`
-  - `rg -n \"score-contract|ai-visibility-api-boundary|ai_visibility_score|AI visibility\" planning/apps/ecomviper/walmart planning/state.md planning/questions.md planning/risks.md -S`
-  - `rg -n \"ai_visibility_score|overallAiRecommendationReadinessScore|aiConfidenceScore|Agentic Visibility Score|score|readiness|confidence|route.ts|payload|response|schema|type|interface|test\" app/apps/ecomviper/walmart app/api/ecomviper/walmart lib/ecomviper/walmart tests/ecomviper_walmart* -S`
 
 - Sprint: `SiteForge Sprint 002` - `In Progress`
 - Title: `SiteForge Shell Render Fix`
