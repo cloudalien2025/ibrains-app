@@ -110,3 +110,45 @@ Last updated: 2026-05-18 (UTC)
   - `planning/apps/directoryiq/`
 - Migration rule: legacy Shopify planning references must use `planning/apps/ecomviper/shopify/`; do not use legacy standalone Shopify planning roots.
 - Rationale: Keeps planning discoverable, consistent with launcher navigation, and reduces cross-app documentation drift.
+
+## D-010 Keep Planning As In-Repo Source Of Truth
+
+- Status: Accepted
+- Decision: Primary planning and sprint continuity live inside this repository.
+- Rationale: Builders and operators need cold-start continuity without relying on external chat history.
+
+## D-011 Use AGENTS As Builder Router And README As Human Overview
+
+- Status: Accepted
+- Decision:
+  - `AGENTS.md` is the builder execution router and workflow contract.
+  - `README.md` is the human-facing repo entrypoint.
+- Rationale: Separates execution policy from high-level orientation and reduces onboarding ambiguity.
+
+## D-012 Product Intent Precedes Major Infrastructure Or Feature Expansion
+
+- Status: Accepted
+- Decision: Product intent must be established from implementation evidence before broad infrastructure or feature work.
+- Rationale: Prevents speculative architecture work and reduces rework from invented requirements.
+
+## D-013 Derive Requirements From Implementation Where Applicable
+
+- Status: Accepted
+- Decision: Builders must not invent requirements when source-of-truth code/UI/tests are available.
+- Rationale: Keeps planning and delivery grounded in real system behavior.
+
+## D-014 Enforce Branch -> MR -> Green Pipeline -> Merge -> Cleanup -> Clean Main
+
+- Status: Accepted
+- Decision: All sprints must complete full GitLab delivery closure before new sprint work begins.
+- Rationale: Prevents partial handoffs and preserves operational reliability.
+
+## D-015 Use Four-File Sprint Packs For Major Sprints
+
+- Status: Accepted
+- Decision: For major scoped sprints, prefer:
+  - `requirements.md`
+  - `blueprint.md`
+  - `acceptance-criteria.md`
+  - `handoff-prompt.md`
+- Rationale: Improves Architect-to-Builder handoff quality and reduces scope drift during implementation.

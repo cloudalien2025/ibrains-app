@@ -1,78 +1,72 @@
-This is the iBrains app repository, built on [Next.js](https://nextjs.org).
+# iBrains App Repository
 
-## Getting Started
+This repository contains the iBrains application suite and in-repo planning system used for structured delivery.
 
-First, run the development server:
+## Operating Model
+
+Work follows a strict delivery OS:
+
+Architect -> Builder -> GitLab Delivery -> Clean Main
+
+The repo is no longer managed through ad-hoc chat context. Planning and sprint continuity live in this repository.
+
+## Where To Start (Cold Entry)
+
+Read in order:
+
+1. `AGENTS.md`
+2. `planning/state.md`
+3. `planning/decisions.md`
+4. `planning/risks.md`
+5. `planning/questions.md`
+6. app planning docs in `planning/apps/**`
+
+## Planning Layout
+
+Planning mirrors app structure:
+
+- `planning/apps/ecomviper/` (Shopify, Walmart, eBay, Amazon)
+- `planning/apps/studio/` (CasaFlix, UAP Forge, Future Studio Apps)
+- `planning/apps/siteforge/`
+- `planning/apps/directoryiq/`
+
+Each app should have an `overview.md` and `product-intent.md` baseline.
+
+For major sprints, use sprint packs where appropriate:
+
+- `requirements.md`
+- `blueprint.md`
+- `acceptance-criteria.md`
+- `handoff-prompt.md`
+
+## Delivery Discipline (High Level)
+
+Every sprint is branch + MR + pipeline gated:
+
+1. Start from clean `main`
+2. Create sprint branch
+3. Implement approved scope only
+4. Run focused checks
+5. Open MR and wait for green pipeline
+6. Merge
+7. Delete remote/local branch
+8. Return to clean `main`
+
+A sprint is not complete at push or MR creation.
+
+## Development Basics
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm test
+npm run lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000` for local development.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Operational Notes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) for font optimization.
+- Route-signature guard: `scripts/check_route_signatures.sh`
+- Release metadata endpoint: `GET /api/meta/release` (alias `GET /api/_meta/release`)
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) for framework details.
-
-## Operational Scripts
-
-- `scripts/prod_smoke.sh`: quick production health checks.
-- `scripts/api_smoke.sh`: minimal guard against `308`/`405` on `POST /api/brains/:id/ingest`.
-- `scripts/verify_runs_post.sh`: capture local + public POST verification logs to `_artifacts/phase3/`.
-- `scripts/verify_diagnostics_auth.sh`: start a run, fetch diagnostics, and report PASS/FAIL.
-- `scripts/verify_worker_key_routing.sh`: verify worker vs master key routing for runs + diagnostics.
-
-## Non-Negotiable Route Signatures
-
-- Next.js route handlers must use inline `{ params }: { params: { ... } }` for the second argument.
-- Do not use `RouteContext` or any custom `ctx` type aliases.
-- Run `scripts/check_route_signatures.sh` before building.
-
-## Release Metadata
-
-Use `GET /api/meta/release` (or legacy alias `GET /api/_meta/release`) to see the exact build running in an environment.
-
-Fields:
-- `service`: app/service name (`ibrains`).
-- `environment`: `production`, `staging`, `development`, or `local`.
-- `git_sha`: full commit SHA (if available).
-- `git_sha_short`: short SHA (first 7 chars).
-- `build_timestamp`: UTC build time (`YYYY-MM-DDTHH:mm:ssZ`) or `null` if unknown.
-- `build_id`: CI/build identifier (if available).
-- `local`: boolean indicating local/dev fallback.
-- `sources`: where each value came from (`env`, `file`, `default`, or `missing`).
-
-Compare deployments:
-- Fetch `/api/meta/release` locally and in production, then compare `git_sha` and `build_timestamp`.
-- A stale deployment is obvious if production `git_sha` does not match the expected commit or the `build_timestamp` is older than the intended release.
-
-Local/dev fallback:
-- If CI metadata is absent, the endpoint returns `environment: "local"` and `git_sha`/`build_timestamp` may be `null`.
-- For deterministic local testing, set `RELEASE_GIT_SHA`, `RELEASE_BUILD_TIMESTAMP`, and `APP_ENV` or provide `app/_meta/release.json`.
-
-## Droplet Rebuild + Restart
-
-```bash
-rm -rf .next && npm run build && sudo systemctl restart ibrains-next
-```
-
-Check env loaded:
-
-```bash
-sudo systemctl show ibrains-next --property=Environment | tr ' ' '\n' | egrep 'BRAINS_(MASTER_KEY|X_API_KEY)='
-```
+Use `planning/state.md` as the continuity handoff before starting or ending any sprint.

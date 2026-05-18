@@ -8,6 +8,10 @@ For the focused Command Center implementation audit and next-step operator workf
 
 - `planning/apps/ecomviper/walmart/command-center-foundation.md`
 
+For app-level orientation and navigation pointers, see:
+
+- `planning/apps/ecomviper/walmart/overview.md`
+
 ## 1) What This Walmart App Is Supposed To Do
 
 The Walmart app is an operator-facing "Agentic Commerce Command Center" inside EcomViper for managing Walmart catalog quality, draft operations, AI-assisted optimization, and guarded publish/feed preparation.
