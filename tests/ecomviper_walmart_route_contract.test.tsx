@@ -147,6 +147,7 @@ describe("EcomViper Walmart route contracts", () => {
     const html = renderToStaticMarkup(await EcomViperDashboardPage());
     expect(html).toContain("ecomviper-overview-page");
     expect(html).toContain(">Walmart<");
+    expect(html).toContain(">EcomViper Hub<");
     expect(html).toContain(">Amazon<");
     expect(html).toContain(">eBay<");
     expect(html).toContain(">Shopify Source Catalog<");
