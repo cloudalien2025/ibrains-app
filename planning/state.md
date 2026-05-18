@@ -42,12 +42,50 @@ Every sprint must follow this flow:
 
 Important: Do not start the next sprint until the current sprint MR is merged and local `main` is clean.
 
+### End-to-End Completion Rule (Mandatory)
+
+A sprint is **not complete** when:
+
+- the branch is pushed, or
+- the MR URL is returned.
+
+A sprint is complete only when all items below are done:
+
+1. The Merge Request is created.
+2. GitLab pipeline/checks finish successfully.
+3. Any failed checks are fixed on the same branch.
+4. The MR is merged into `main`.
+5. The remote source branch is deleted.
+6. The local sprint branch is deleted.
+7. Local repo is reset to `main`:
+   - `git switch main`
+   - `git pull`
+   - `git status`
+8. `git status` confirms clean `main`.
+9. This file is updated with:
+   - sprint number/title
+   - MR number/link
+   - pipeline result
+   - merge commit SHA
+   - branch deletion status
+   - final local branch/status
+   - recommended next sprint
+
+Warning:
+
+- Do not stop after pushing the branch.
+- Do not stop after returning the MR URL.
+- Continue the GitLab flow until merge and clean `main` unless blocked by permissions or a failing check that requires human input.
+
 ### Sprint Completion Update Template
 
 - Sprint: `Sprint ###` - `Completed`
-- MR: `!<number>`
-- Commit SHA: `<sha-or-n/a>`
-- Tests/checks: `<passed/failed + summary>`
+- Title: `<sprint title>`
+- MR: `!<number> (<link>)`
+- Pipeline/checks result: `<passed/failed + summary>`
+- Merge commit SHA: `<merge sha>`
+- Branch deletion status: `<remote deleted yes/no, local deleted yes/no>`
+- Final local branch/status: `<branch + git status summary>`
 - Next recommended sprint: `<short recommendation>`
 
 ## Current Implemented Baseline (from code in repo)
