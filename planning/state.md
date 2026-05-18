@@ -13,12 +13,12 @@ Last updated: 2026-05-18 (UTC)
 - Walmart planning sprint: Completed and merged (`walmart-product-intent` docs baseline).
 - Walmart Sprint 001: Completed and merged (`walmart-command-center-foundation` docs baseline).
 - Walmart Sprint 003: Completed and merged (`sprint-003-walmart-ai-visibility`, docs/planning AI visibility workflow foundation).
-- Walmart Sprint 004: In progress (`sprint-004-walmart-score-contract`, docs/planning canonical AI visibility score contract).
+- Walmart Sprint 004: Completed and merged (`sprint-004-walmart-score-contract`, docs/planning canonical AI visibility score contract).
 - Studio product intent sprint: Completed (`studio-product-intent`, MR `!180`).
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
-- Current recommended sprint: `sprint-004-walmart-score-contract` (active).
+- Current recommended sprint: `Walmart Sprint 005 - Prompt Match score workflow alignment` (recommended).
 
 ## Current Operating Reminder
 
@@ -158,8 +158,8 @@ Warning:
 
 ## Active Sprint Context
 
-- Active sprint branch: `sprint-004-walmart-score-contract`
-- Sprint goal: define canonical Walmart AI visibility score contract from current implementation and planning docs.
+- Active sprint branch: `none (sprint-004-walmart-score-contract completed)`
+- Sprint goal: `recommend next scoped Walmart sprint from score-contract candidates`
 - Scope guard: docs/planning only; no broad app behavior changes.
 
 ## Sprint Completion Updates
@@ -279,17 +279,17 @@ Warning:
 - `planning/risks.md`
 - `planning/state.md`
 
-- Sprint: `Walmart Sprint 004` - `In Progress`
+- Sprint: `Walmart Sprint 004` - `Completed`
 - Title: `Walmart Score Contract`
-- MR: `pending`
-- Commit SHA: `pending`
-- Pipeline/checks result: `pending`
-- Merge commit SHA: `pending`
-- Branch deletion status: `pending`
-- Final local branch/status: `sprint-004-walmart-score-contract (working)`
-- Next recommended sprint: `Prompt Match score workflow alignment or Trust Signals health contract wiring`
+- MR: `!186 (https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/186)`
+- Commit SHA: `0b1483b325f191bdae6cb1fcee140cd2b33f8bc2`
+- Pipeline/checks result: `passed (pipeline 2534341247)`
+- Merge commit SHA: `554abb4b33b3808aa78db3fda79ae66f71a297f5`
+- Branch deletion status: `remote deleted yes, local deleted yes`
+- Final local branch/status: `main clean`
+- Next recommended sprint: `Walmart Sprint 005 - Prompt Match workflow alignment and typed prompt-match coverage payload`
 
-### Walmart Sprint 004 Planned Files Changed
+### Walmart Sprint 004 Files Changed
 
 - `planning/apps/ecomviper/walmart/score-contract.md`
 - `planning/apps/ecomviper/walmart/overview.md`
