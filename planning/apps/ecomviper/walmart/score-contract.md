@@ -163,6 +163,10 @@ Use explicit labels tied to this contract:
 ## Built/current
 
 - Command Center cards and optimization coverage/readiness panel.
+- Command Center readiness/confidence rollup now aligns to canonical score semantics via:
+  - `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
+  - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
+  - `app/apps/ecomviper/walmart/page.tsx`
 - Product Editor listing-quality score and readiness/publish-status diagnostics.
 - iBrains opportunity scoring, compliance risk, destination fit, and summary counts.
 - Products list/source-confidence and catalog match confidence plumbing.

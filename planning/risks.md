@@ -112,7 +112,7 @@ Last updated: 2026-05-18 (UTC)
 - Likelihood: Medium
 - Description: Walmart currently exposes multiple visibility/readiness score models across Command Center, Product Editor, and iBrains Intelligence without one canonical typed contract.
 - Impact: Operators and builders may interpret inconsistent scores as equivalent, causing triage and roadmap drift.
-- Mitigation: Canonical vocabulary is documented in `planning/apps/ecomviper/walmart/score-contract.md` and first payload boundary is documented in `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`; enforce label alignment with focused tests and additive API boundary adoption before adding new score labels.
+- Mitigation: Canonical vocabulary is documented in `planning/apps/ecomviper/walmart/score-contract.md` and first payload boundary is documented in `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`; Sprint 007 aligns Command Center readiness/confidence rollups to canonical semantics via `walmart-command-center-score-rollup.ts` + focused tests. Continue migration for remaining surfaces before adding new score labels.
 
 ## R-015 Lane Semantics Drift (Label vs Route Responsibility)
 
@@ -128,4 +128,4 @@ Last updated: 2026-05-18 (UTC)
 - Likelihood: Medium
 - Description: Recommendation-only or fixture-derived readiness/opportunity values may be interpreted as stable production analytics contracts.
 - Impact: Builders can overfit implementation to placeholder values, causing score contract breakage and operator confusion.
-- Mitigation: Require score-label provenance tags (production-backed vs derived vs recommendation-only) in contract docs/tests and block new score labels unless `score-contract.md` is updated.
+- Mitigation: Require score-label provenance tags (production-backed vs derived vs recommendation-only) in contract docs/tests and block new score labels unless `score-contract.md` is updated; preserve canonical adapter provenance metadata and keep command-center tests asserting canonical rollup-source usage.

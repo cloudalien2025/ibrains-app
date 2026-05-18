@@ -39,7 +39,19 @@ Source pointers:
 - `app/apps/ecomviper/walmart/page.tsx`
 - `lib/ecomviper/walmart/walmart-products.ts` (`getWalmartDashboardSnapshotForUser`)
 - `lib/ecomviper/walmart/walmart-auth.ts` (`getWalmartConnectionHealthForUser`)
+- `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
+- `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
 - `tests/ecomviper_walmart_route_contract.test.tsx`
+
+### Canonical score rollup boundary (implemented)
+
+Command Center readiness/confidence rollups now consume the canonical `ai_visibility_score` adapter boundary through:
+
+- `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
+- `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
+- `app/apps/ecomviper/walmart/page.tsx`
+
+This keeps existing UI labels stable while sourcing rollup values from canonical score semantics.
 
 ## What Is Real vs Placeholder Right Now
 

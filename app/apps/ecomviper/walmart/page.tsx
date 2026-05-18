@@ -9,6 +9,7 @@ import {
   buildWalmartOptimizationCoverageAudit,
   type WalmartOptimizationStatus,
 } from "@/lib/ecomviper/walmart/walmart-agentic-optimization-coverage";
+import { buildWalmartCommandCenterScoreRollup } from "@/lib/ecomviper/walmart/walmart-command-center-score-rollup";
 import type {
   WalmartConnectionHealth,
   WalmartDashboardSnapshot,
@@ -150,6 +151,9 @@ export default async function WalmartDashboardPage() {
   const connectionUi = buildWalmartDashboardConnectionUi(snapshot, connection);
   const coverageAudit = buildWalmartOptimizationCoverageAudit({
     product: snapshot.attentionProducts[0] ?? snapshot.recentProducts[0] ?? null,
+  });
+  const commandCenterScoreRollup = buildWalmartCommandCenterScoreRollup({
+    coverageAudit,
   });
 
   return (
@@ -336,10 +340,10 @@ export default async function WalmartDashboardPage() {
           <div className="rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-4 py-2">
             <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">AI Recommendation Readiness</p>
             <p className="text-2xl font-semibold text-[#0F172A]">
-              {coverageAudit.readiness.overallAiRecommendationReadinessScore}/100
+              {commandCenterScoreRollup.readinessScore}/100
             </p>
             <p className="text-xs text-[#64748B]">
-              Confidence: {coverageAudit.readiness.aiConfidenceScore}/100 ({coverageAudit.readiness.recommendationProbability})
+              Confidence: {commandCenterScoreRollup.confidenceScore}/100 ({commandCenterScoreRollup.confidenceLevel})
             </p>
           </div>
         </div>

@@ -15,7 +15,8 @@ Last updated: 2026-05-18 (UTC)
 - Walmart Sprint 003: Completed and merged (`sprint-003-walmart-ai-visibility`, docs/planning AI visibility workflow foundation).
 - Walmart Sprint 004: Completed and merged (`sprint-004-walmart-score-contract`, docs/planning canonical AI visibility score contract).
 - Walmart Sprint 005: Completed and merged (`sprint-005-walmart-ai-visibility-api-boundary`, docs/planning first canonical `ai_visibility_score` API payload boundary).
-- Walmart Sprint 006: In progress (`sprint-006-walmart-ai-visibility-payload-fixture`, additive canonical `ai_visibility_score` payload fixture/type contract).
+- Walmart Sprint 006: Completed and merged (`sprint-006-walmart-ai-visibility-payload-fixture`, canonical payload fixture/type contract + additive health-route payload field).
+- Walmart Sprint 007: In progress (`sprint-007-walmart-command-center-score-rollup`, command-center rollup alignment to canonical `ai_visibility_score` semantics).
 - Studio product intent sprint: Completed (`studio-product-intent`, MR `!180`).
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
@@ -24,7 +25,7 @@ Last updated: 2026-05-18 (UTC)
 - SiteForge Sprint 002: In progress (`sprint-002-siteforge-shell-render-fix`, shell render integration fix so `/apps/siteforge` visibly renders command-center sidebar + workspace).
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
-- Current recommended sprint: `Walmart Sprint 006 - AI visibility payload fixture contract` (active).
+- Current recommended sprint: `Walmart Sprint 007 - Command Center score rollup alignment` (active).
 
 ## Current Operating Reminder
 
@@ -185,27 +186,44 @@ Warning:
 
 ## Active Sprint Context
 
-- Active sprint branch: `sprint-006-walmart-ai-visibility-payload-fixture`
-- Sprint goal: `implement the first additive canonical Walmart ai_visibility_score payload fixture/type contract from the Sprint 005 API boundary`
-- Scope guard: additive type/fixture and focused route/test alignment only; no broad app behavior changes, no backend refactors.
+- Active sprint branch: `sprint-007-walmart-command-center-score-rollup`
+- Sprint goal: `align Walmart Command Center score/readiness rollups to canonical ai_visibility_score contract semantics`
+- Scope guard: command-center rollup wiring + focused tests + planning updates only; no broad UI redesign, no scoring-service expansion.
 
 ## Sprint Completion Updates
 
-- Sprint: `Walmart Sprint 006` - `In Progress`
+- Sprint: `Walmart Sprint 006` - `Completed`
 - Title: `Walmart AI Visibility Payload Fixture Contract`
-- Branch: `sprint-006-walmart-ai-visibility-payload-fixture`
-- Goal: `land first canonical ai_visibility_score type + fixture mapper and expose additive ai_visibility_score on Walmart health route`
+- MR: `!197 (https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/197)`
+- Pipeline/checks result: `passed (pipeline 2534838600)`
+- Merge commit SHA: `48487a3a843471e864b65654d4cdd1520485b1b6`
+- Branch deletion status: `remote deleted yes, local deleted yes`
+- Final local branch/status: `main clean`
+- Next recommended sprint: `Walmart Sprint 007 - align Command Center rollup/readiness to canonical ai_visibility_score semantics`
+
+- Sprint: `Walmart Sprint 007` - `In Progress`
+- Title: `Walmart Command Center Score Rollup Alignment`
+- Branch: `sprint-007-walmart-command-center-score-rollup`
+- Goal: `make Command Center a canonical score consumer by sourcing readiness/confidence rollups from ai_visibility_score adapter semantics`
 - Planned files:
-  - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
-  - `app/api/ecomviper/walmart/health/route.ts`
-  - `tests/ecomviper_walmart_ai_visibility_score_fixture.test.ts`
-  - `tests/ecomviper_walmart_connect_auth.test.tsx`
+  - `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
+  - `app/apps/ecomviper/walmart/page.tsx`
+  - `tests/ecomviper_walmart_command_center_score_rollup.test.ts`
+  - `tests/ecomviper_walmart_route_contract.test.tsx`
+  - `planning/apps/ecomviper/walmart/command-center-foundation.md`
+  - `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`
+  - `planning/apps/ecomviper/walmart/score-contract.md`
+  - `planning/apps/ecomviper/walmart/ai-visibility.md`
+  - `planning/apps/ecomviper/walmart/overview.md`
+  - `planning/questions.md`
+  - `planning/risks.md`
   - `planning/state.md`
 - Validation plan:
-  - `bash scripts/check_route_signatures.sh`
-  - `npm test -- --run tests/ecomviper_walmart_ai_visibility_score_fixture.test.ts tests/ecomviper_walmart_connect_auth.test.tsx tests/ecomviper_walmart_agentic_optimization_coverage.test.ts`
-  - `npm test -- --run tests/ecomviper_walmart_route_contract.test.tsx`
   - `git diff --check`
+  - `rg -n \"ai_visibility_score|WalmartAiVisibilityScore|overallAiRecommendationReadinessScore|aiConfidenceScore|prompt_match_coverage|semantic_gap_health|opportunity_priority|trust_signal_health|catalog_readiness_coverage\" app/apps/ecomviper/walmart app/api/ecomviper/walmart lib/ecomviper/walmart tests/ecomviper_walmart* planning/apps/ecomviper/walmart planning/state.md planning/questions.md planning/risks.md -S`
+  - `npm test -- --run tests/ecomviper_walmart_ai_visibility_score_fixture.test.ts tests/ecomviper_walmart_connect_auth.test.tsx tests/ecomviper_walmart_command_center_score_rollup.test.ts`
+  - `npm test -- --run tests/ecomviper_walmart_route_contract.test.tsx tests/ecomviper_walmart_agentic_optimization_coverage.test.ts`
+  - `bash scripts/check_route_signatures.sh`
 
 - Sprint: `SiteForge Sprint 002` - `In Progress`
 - Title: `SiteForge Shell Render Fix`
