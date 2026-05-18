@@ -10,9 +10,10 @@
 EcomViper Hub is the AI-native commerce intelligence and orchestration control plane for the EcomViper ecosystem.
 It is intended to unify canonical product intelligence, marketplace feed aggregation, routing decisions, trust signals, and agentic visibility workflows across marketplace apps.
 
-## Why Architecture Files Live Inside The Hub App Folder
+## Why Architecture Files Live In The Planning Tree
 
-This sprint establishes Hub as an application-first architecture surface. Keeping foundational docs in `app/apps/ecomviper/hub/` makes the app route and architecture intent evolve together and avoids splitting early product truth across disconnected doc trees.
+Hub architecture and planning docs live under `planning/apps/ecomviper/hub/`.
+This keeps planning as source-of-truth documentation while app implementation at `/apps/ecomviper/hub` remains a future sprint deliverable.
 
 ## File Map
 
@@ -29,13 +30,13 @@ This sprint establishes Hub as an application-first architecture surface. Keepin
 
 ## Current Sprint Scope
 
-- Create the first Hub architecture/content foundation under `app/apps/ecomviper/hub/`
+- Create and maintain the Hub architecture/content foundation under `planning/apps/ecomviper/hub/`
 - Define Hub as canonical-first product intelligence and orchestration, not a listing database
 - Establish shared language for future Hub app-shell, feed, graph, routing, and visibility sprints
 
 ## Non-Goals
 
-- No Hub UI route implementation in this sprint
+- No Hub app route or UI implementation in this sprint
 - No marketplace API integration
 - No feed ingestion implementation
 - No database migration or persistence implementation
