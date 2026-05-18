@@ -19,6 +19,11 @@ Implementation update: Command Center rollup/readiness display now consumes cano
 - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
 - `app/apps/ecomviper/walmart/page.tsx`
 
+Implementation update: Product Editor `Agentic Visibility Score` now consumes a canonical product-level adapter boundary through:
+
+- `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
+- `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+
 ## 1) Purpose
 
 This document defines what "AI visibility" currently means in the Walmart workspace based on implemented routes, UI copy, data models, API handlers, fixtures, and tests.
@@ -164,6 +169,7 @@ It is not yet a single canonical production analytics metric.
 - Surface: SKU editor visibility/readiness controls
 - Route/component location:
   - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+  - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
   - `lib/ecomviper/walmart/walmart-listing-quality.ts`
   - `lib/ecomviper/walmart/walmart-publish-lanes.ts`
   - `lib/ecomviper/walmart/walmart-source-confidence.ts`

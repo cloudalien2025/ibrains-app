@@ -44,6 +44,16 @@ Owner: Walmart Product + Architecture
 Status: Open
 Notes: Sprint 007 aligned Command Center rollup semantics through `walmart-command-center-score-rollup.ts`, but dashboard still computes in-process server data rather than reading canonical route payload.
 
+### Should Product Editor consume canonical `ai_visibility_score` from route payloads (`/api/ecomviper/walmart/health` or SKU-level route) instead of in-process adapter mapping?
+Owner: Walmart Product + Architecture
+Status: Open
+Notes: Sprint 008 aligned Product Editor to canonical semantics via in-process adapter (`walmart-product-ai-visibility-score.ts`), but route-first consumption and SKU-level API ownership are still deferred.
+
+### Which canonical dimensions should Prompt Match / Semantic Gaps / Product Opportunities become first-class producers for?
+Owner: Walmart Product + Architecture
+Status: Open
+Notes: Product Editor and Command Center now share canonical score semantics, but producer ownership for prompt/semantic/opportunity dimensions remains partial.
+
 ## Closed Questions
 
 ### Which Walmart AI visibility score is canonical across Command Center, Product Editor, and iBrains Intelligence?
@@ -60,3 +70,8 @@ Resolution: First canonical API payload boundary is documented in `planning/apps
 Owner: Walmart Product + Architecture
 Status: Closed (resolved in implementation)
 Resolution: Sprint 007 aligned Command Center readiness/confidence rollups to canonical `WalmartAiVisibilityScore` semantics via `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts` consumed by `app/apps/ecomviper/walmart/page.tsx`, with focused test coverage in `tests/ecomviper_walmart_command_center_score_rollup.test.ts`.
+
+### Is Product Editor score ownership aligned so `Agentic Visibility Score` does not become a second top-level score contract?
+Owner: Walmart Product + Architecture
+Status: Closed (resolved in implementation)
+Resolution: Sprint 008 aligned Product Editor score diagnostics to canonical semantics through `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`, consumed by `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx` with focused adapter and consumer tests.

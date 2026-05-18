@@ -59,12 +59,14 @@ const DEFAULT_INPUT_REFS = [
   "app/api/ecomviper/walmart/health/route.ts",
 ];
 
-function clampScore(value: number): number {
+export function clampWalmartAiVisibilityScoreValue(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function scoreStatus(overall: number): WalmartAiVisibilityScoreStatus {
+export function toWalmartAiVisibilityScoreStatus(
+  overall: number
+): WalmartAiVisibilityScoreStatus {
   if (!Number.isFinite(overall)) return "unknown";
   if (overall >= 85) return "excellent";
   if (overall >= 70) return "good";
@@ -106,19 +108,29 @@ export function mapWalmartAiVisibilityScoreFromAudit(input: {
   inputRefs?: string[];
 }): WalmartAiVisibilityScore {
   const readiness = input.audit.readiness;
-  const overall = clampScore(readiness.overallAiRecommendationReadinessScore);
+  const overall = clampWalmartAiVisibilityScoreValue(
+    readiness.overallAiRecommendationReadinessScore
+  );
 
   return {
     overall,
-    status: scoreStatus(overall),
+    status: toWalmartAiVisibilityScoreStatus(overall),
     dimensions: {
-      prompt_match_coverage: clampScore(readiness.subscores["Search/AI Semantics"]),
-      semantic_gap_health: clampScore(readiness.subscores["Structured Attributes"]),
-      trust_signal_health: clampScore(readiness.subscores["Compliance Safety"]),
-      catalog_readiness_coverage: clampScore(readiness.subscores["PDP Content"]),
+      prompt_match_coverage: clampWalmartAiVisibilityScoreValue(
+        readiness.subscores["Search/AI Semantics"]
+      ),
+      semantic_gap_health: clampWalmartAiVisibilityScoreValue(
+        readiness.subscores["Structured Attributes"]
+      ),
+      trust_signal_health: clampWalmartAiVisibilityScoreValue(
+        readiness.subscores["Compliance Safety"]
+      ),
+      catalog_readiness_coverage: clampWalmartAiVisibilityScoreValue(
+        readiness.subscores["PDP Content"]
+      ),
     },
     confidence: {
-      value: clampScore(readiness.aiConfidenceScore),
+      value: clampWalmartAiVisibilityScoreValue(readiness.aiConfidenceScore),
       level: confidenceLevelFromProbability(readiness.recommendationProbability),
     },
     provenance: {

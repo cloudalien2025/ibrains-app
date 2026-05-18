@@ -20,6 +20,10 @@ For the first canonical `ai_visibility_score` API payload boundary, see:
 
 - `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`
 
+Implementation status note: Product-level `Agentic Visibility Score` diagnostics now align through a canonical adapter boundary in:
+
+- `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
+
 For app-level orientation and navigation pointers, see:
 
 - `planning/apps/ecomviper/walmart/overview.md`
