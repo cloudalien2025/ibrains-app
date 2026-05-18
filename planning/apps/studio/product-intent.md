@@ -34,24 +34,34 @@ CasaFlix runtime is a phase-driven command center with sections:
 
 CasaFlix supports deterministic fallback behavior when live integrations are missing, and preserves workflow state in server-side campaign records.
 
+## Naming Clarification
+
+Current Studio sub-app identity is **CasaFlix**.
+
+Legacy names still exist in implementation surfaces:
+- `domara` appears in API/lib namespaces (`/api/studio/domara/*`, `lib/studio/domara/*`).
+- `casahud` appears in backward-compatible routes, table names, and test/module identifiers.
+
+In this document, CasaFlix is used as the current product/sub-app name. Legacy names are kept only when referencing exact implementation paths or historical compatibility behavior.
+
 ## Operator Workflow
 
 Observed primary operator workflow:
 1. Generate viral title opportunity (`POST /api/studio/domara/opportunity`).
 2. Create campaign from selected title (`POST /api/studio/domara/campaigns`).
 3. Add property evidence:
-- discover listings (`POST /campaigns/:id/discover-listings`), and/or
-- import listing URLs (`POST /campaigns/:id/import-listing-urls`), and/or
-- browser-assisted import (`POST /campaigns/:id/browser-import`) plus manual listing edits (`PATCH /campaigns/:id/listing-candidates/:listingId`).
-4. Validate/rank listings (`POST /campaigns/:id/validate-listings`).
-5. Build location intelligence (`POST /campaigns/:id/location-intelligence`).
-6. Generate script narrative (`POST /campaigns/:id/script`).
-7. Build media plan (`POST /campaigns/:id/media-plan`).
-8. Build YouTube review package/render plan (`POST /campaigns/:id/youtube-package`).
+- discover listings (`POST /api/studio/domara/campaigns/:id/discover-listings`), and/or
+- import listing URLs (`POST /api/studio/domara/campaigns/:id/import-listing-urls`), and/or
+- browser-assisted import (`POST /api/studio/domara/campaigns/:id/browser-import`) plus manual listing edits (`PATCH /api/studio/domara/campaigns/:id/listing-candidates/:listingId`).
+4. Validate/rank listings (`POST /api/studio/domara/campaigns/:id/validate-listings`).
+5. Build location intelligence (`POST /api/studio/domara/campaigns/:id/location-intelligence`).
+6. Generate script narrative (`POST /api/studio/domara/campaigns/:id/script`).
+7. Build media plan (`POST /api/studio/domara/campaigns/:id/media-plan`).
+8. Build YouTube review package/render plan (`POST /api/studio/domara/campaigns/:id/youtube-package`).
 9. Execute render/publish/schedule endpoints:
-- render (`POST /campaigns/:id/render`)
-- publish (`POST /campaigns/:id/publish`)
-- schedule (`POST /campaigns/:id/schedule`)
+- render (`POST /api/studio/domara/campaigns/:id/render`)
+- publish (`POST /api/studio/domara/campaigns/:id/publish`)
+- schedule (`POST /api/studio/domara/campaigns/:id/schedule`)
 
 State transitions are guarded. Routes return explicit 409/400/503 errors if prerequisites are missing.
 
@@ -60,7 +70,7 @@ State transitions are guarded. Routes return explicit 409/400/503 errors if prer
 ### Studio -> CasaFlix
 - `/apps/studio` is a launcher.
 - `/apps/studio/casaflix` is the active CasaFlix workspace.
-- `/apps/studio/casahud` is kept as backward-compatible alias to same CasaFlix workspace.
+- `/apps/studio/casahud` is a backward-compatible legacy alias to the same CasaFlix workspace.
 - `/apps/studio/casaflix/import` and `/apps/studio/casahud/import` share the browser import review client.
 
 ### Studio -> UAP Forge
@@ -85,7 +95,7 @@ The implemented CasaFlix pipeline is campaign-centric and evidence-gated:
 - YouTube package/review/render-plan creation.
 - Render/publish/schedule execution state updates.
 
-A second orchestration path also exists (`/api/studio/domara/ai-channel/runs`) with durable run-stage persistence; this path is implemented but not wired as the primary path used by the CasaFlix command-center client.
+A second orchestration path also exists (`/api/studio/domara/ai-channel/runs`, legacy namespace) with durable run-stage persistence; this path is implemented but not wired as the primary path used by the CasaFlix command-center client.
 
 ## AI Narrative Workflow
 
@@ -119,6 +129,8 @@ Source attribution is retained for imported/browser-assisted listings via source
 ## API and Data Model Surface
 
 ### API surface (Studio)
+All currently implemented Studio API routes use the legacy `domara` namespace.
+
 - Campaign lifecycle: `/api/studio/domara/campaigns*`
 - Opportunity: `/api/studio/domara/opportunity`
 - Integrations: `/api/studio/domara/integrations*`
@@ -128,8 +140,8 @@ Source attribution is retained for imported/browser-assisted listings via source
 - AI channel run endpoint: `/api/studio/domara/ai-channel/runs`
 
 ### Data model and persistence
-- Campaign-centric persistence via `casahud_projects` with rich JSON metadata (`provider_metadata`).
-- AI channel-run persistence tables exist (`casahud_generation_runs`, stage outputs, packages, review/publish records, run outputs, etc.).
+- Campaign-centric persistence via `casahud_projects` (legacy table name) with rich JSON metadata (`provider_metadata`).
+- AI channel-run persistence tables exist (`casahud_generation_runs` and related legacy table names for stage outputs, packages, review/publish records, and run outputs).
 - Studio integration secrets are stored in `directoryiq_signal_source_credentials` under `studio_domara_*` connector ids.
 
 ## Existing Tests
@@ -169,7 +181,7 @@ Not implemented:
 1. Studio app family is only partially realized at runtime (CasaFlix implemented, UAP Forge/Future apps not implemented).
 2. Live YouTube upload/scheduling is not enabled, even when YouTube is configured.
 3. Two Studio orchestration models coexist (campaign command-center flow and AI-channel run engine) without a clearly documented canonical integration boundary.
-4. Naming remains mixed (`casahud`, `domara`, and `casaflix`) across UI/routes/lib, increasing architectural ambiguity.
+4. Legacy namespaces remain mixed (`casahud`, `domara`, and `casaflix`) across UI/routes/lib, increasing architectural ambiguity.
 5. Integration-secret storage currently reuses a DirectoryIQ credential table namespace; long-term ownership boundary is unclear (pending architecture interview).
 
 ## Recommended Roadmap (From Observed Code)
@@ -178,7 +190,7 @@ Not implemented:
 - command-center campaign flow vs AI-channel run engine responsibilities
 - data ownership boundaries between `casahud_projects` and run tables
 2. Implement/enable real publish/schedule path (or formalize long-term blocked mode) for CasaFlix execution endpoints.
-3. Normalize Studio naming conventions (`casaflix`/`casahud`/`domara`) to reduce cognitive and maintenance overhead.
+3. Continue migration toward CasaFlix-first naming while preserving backward-compatible route/storage aliases where required.
 4. Define dedicated UAP Forge runtime skeleton if it remains on the Studio launcher.
 5. Clarify long-term credential-store ownership for Studio integrations (currently stored via `directoryiq_signal_source_credentials`).
 
@@ -189,10 +201,10 @@ Where product direction is not explicit in code, architecture intent is unclear 
 | File | What it proves |
 | --- | --- |
 | `app/apps/studio/page.tsx` | Studio launcher cards: CasaFlix active, UAP Forge disabled, future apps placeholder. |
-| `app/apps/studio/casaflix/page.tsx` | CasaFlix route mounts Studio Domara/CasaHud client. |
-| `app/apps/studio/casahud/page.tsx` | Backward-compatible CasaHud alias points to same workspace. |
-| `app/apps/studio/studio-domara-client.tsx` | Single client entrypoint into command center. |
-| `app/apps/studio/studio-casahud-command-center.tsx` | Primary operator UI sections, next-step logic, and API wiring. |
+| `app/apps/studio/casaflix/page.tsx` | CasaFlix route mounts the current command-center client implementation. |
+| `app/apps/studio/casahud/page.tsx` | Backward-compatible legacy alias points to the same CasaFlix workspace. |
+| `app/apps/studio/studio-domara-client.tsx` | Single client entrypoint (legacy module name) into the command center. |
+| `app/apps/studio/studio-casahud-command-center.tsx` | Primary operator UI sections, next-step logic, and API wiring (legacy module name). |
 | `app/apps/studio/casahud/import/review-client.tsx` | Browser-assisted import review/edit/save workflow. |
 | `app/api/studio/domara/opportunity/route.ts` | Viral title opportunity generation endpoint and provider resolution. |
 | `app/api/studio/domara/campaigns/route.ts` | Campaign create/list endpoints and duplicate-title handling. |
