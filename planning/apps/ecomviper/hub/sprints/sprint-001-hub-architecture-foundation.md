@@ -6,7 +6,7 @@ Create the first architecture/content baseline for EcomViper Hub at `/apps/ecomv
 
 ## Scope
 
-- Create Hub architecture markdown files under `app/apps/ecomviper/hub/`
+- Create Hub architecture markdown files under `planning/apps/ecomviper/hub/`
 - Define product intent, architecture boundaries, workflows, data model concepts, integrations, and phased roadmap
 - Document future UI zone structure and first sprint contract
 
@@ -20,31 +20,31 @@ Create the first architecture/content baseline for EcomViper Hub at `/apps/ecomv
 
 ## Files Created
 
-- `app/apps/ecomviper/hub/README.md`
-- `app/apps/ecomviper/hub/overview.md`
-- `app/apps/ecomviper/hub/product-intent.md`
-- `app/apps/ecomviper/hub/roadmap.md`
-- `app/apps/ecomviper/hub/architecture.md`
-- `app/apps/ecomviper/hub/workflows.md`
-- `app/apps/ecomviper/hub/integrations.md`
-- `app/apps/ecomviper/hub/data-models.md`
-- `app/apps/ecomviper/hub/operations.md`
-- `app/apps/ecomviper/hub/ui-zones.md`
-- `app/apps/ecomviper/hub/sprints/sprint-001-hub-architecture-foundation.md`
+- `planning/apps/ecomviper/hub/README.md`
+- `planning/apps/ecomviper/hub/overview.md`
+- `planning/apps/ecomviper/hub/product-intent.md`
+- `planning/apps/ecomviper/hub/roadmap.md`
+- `planning/apps/ecomviper/hub/architecture.md`
+- `planning/apps/ecomviper/hub/workflows.md`
+- `planning/apps/ecomviper/hub/integrations.md`
+- `planning/apps/ecomviper/hub/data-models.md`
+- `planning/apps/ecomviper/hub/operations.md`
+- `planning/apps/ecomviper/hub/ui-zones.md`
+- `planning/apps/ecomviper/hub/sprints/sprint-001-hub-architecture-foundation.md`
 
 ## Expected Checks
 
 - `git status`
 - lightweight docs/markdown/route/frontdoor integrity check if available
 - `git diff --stat`
-- `git diff -- app/apps/ecomviper/hub`
+- `git diff -- planning/apps/ecomviper/hub`
 
 ## Acceptance Criteria
 
-- All required Hub architecture markdown files exist under `app/apps/ecomviper/hub/`
+- All required Hub architecture markdown files exist under `planning/apps/ecomviper/hub/`
 - Files contain concrete starter content (not placeholders)
 - Hub is clearly defined as canonical-first control plane
-- Scope stays markdown-only and confined to Hub architecture folder
+- Scope stays markdown-only and confined to Hub planning architecture folder
 - Delivery completes full GitLab flow through merged MR and clean `main`
 
 ## Follow-Up Sprint Candidates
