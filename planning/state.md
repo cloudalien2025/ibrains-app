@@ -211,18 +211,13 @@ Warning:
 - Sprint: `Walmart Sprint 008` - `In Progress`
 - Title: `Walmart Product Editor Score Alignment`
 - Branch: `sprint-008-walmart-product-editor-score-alignment`
-- Goal: `align Product Editor/product-level Agentic Visibility and listing quality diagnostics to canonical WalmartAiVisibilityScore contract semantics`
-- Planned files:
-  - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
-  - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
-  - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+- Goal: `validate and harden Product Editor/product-level canonical WalmartAiVisibilityScore adapter-consumer contract coverage without broad UI/API changes`
+- Current sprint delta files:
   - `tests/ecomviper_walmart_product_ai_visibility_score.test.ts`
   - `tests/ecomviper_walmart_product_editor_score_alignment.test.tsx`
   - `planning/apps/ecomviper/walmart/score-contract.md`
   - `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`
   - `planning/apps/ecomviper/walmart/ai-visibility.md`
-  - `planning/apps/ecomviper/walmart/product-intent.md`
-  - `planning/apps/ecomviper/walmart/overview.md`
   - `planning/questions.md`
   - `planning/risks.md`
   - `planning/state.md`

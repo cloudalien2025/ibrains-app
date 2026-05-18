@@ -47,7 +47,7 @@ Notes: Sprint 007 aligned Command Center rollup semantics through `walmart-comma
 ### Should Product Editor consume canonical `ai_visibility_score` from route payloads (`/api/ecomviper/walmart/health` or SKU-level route) instead of in-process adapter mapping?
 Owner: Walmart Product + Architecture
 Status: Open
-Notes: Sprint 008 aligned Product Editor to canonical semantics via in-process adapter (`walmart-product-ai-visibility-score.ts`), but route-first consumption and SKU-level API ownership are still deferred.
+Notes: Sprint 008 aligned Product Editor to canonical semantics via in-process adapter (`walmart-product-ai-visibility-score.ts`) and strengthened adapter-consumer contract tests (`ecomviper_walmart_product_ai_visibility_score.test.ts`, `ecomviper_walmart_product_editor_score_alignment.test.tsx`), but route-first consumption and SKU-level API ownership are still deferred.
 
 ### Which canonical dimensions should Prompt Match / Semantic Gaps / Product Opportunities become first-class producers for?
 Owner: Walmart Product + Architecture

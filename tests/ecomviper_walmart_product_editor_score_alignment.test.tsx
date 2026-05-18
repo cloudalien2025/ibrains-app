@@ -87,6 +87,14 @@ describe("Walmart product editor score alignment", () => {
     );
 
     expect(productAiVisibilityDiagnosticsMock).toHaveBeenCalled();
+    expect(productAiVisibilityDiagnosticsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        listingQuality: expect.objectContaining({
+          score: expect.any(Number),
+        }),
+        provenanceSource: "derived",
+      })
+    );
     expect(html).toContain("Agentic Visibility Score");
     expect(html).toContain("Current 33%");
     expect(html).toContain("aria-label=\"Agentic Visibility Score 33% (Poor)\"");
