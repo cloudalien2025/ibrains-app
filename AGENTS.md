@@ -2,61 +2,102 @@
 
 Last updated: 2026-05-18 (UTC)
 
-## Mandatory Sprint Delivery Flow (GitLab)
+## Repository Operating Model
 
-Every sprint must follow this GitLab flow:
+This repository follows a strict operating model:
 
-1. Start from clean main
+Architect -> Builder -> GitLab Delivery -> Clean Main
+
+- Architect defines scoped sprint intent and constraints.
+- Builder executes only approved scope from branch through merge.
+- Delivery is complete only after MR + green pipeline + merge + branch cleanup.
+- Local repository must end on clean `main` before next sprint starts.
+
+## Required Builder Read Order
+
+Before changing code or docs for any sprint, read in this order:
+
+1. `AGENTS.md`
+2. `README.md`
+3. `planning/state.md`
+4. `planning/decisions.md`
+5. `planning/risks.md`
+6. `planning/questions.md`
+7. Relevant app planning docs under `planning/apps/**`:
+   - app `overview.md`
+   - app `product-intent.md`
+   - relevant sprint pack docs (`requirements.md`, `blueprint.md`, `acceptance-criteria.md`, `handoff-prompt.md`) when present
+
+Do not rely on old chat history as source of truth when repo planning files exist.
+
+## Planning Source Of Truth
+
+Planning lives in-repo and mirrors the iBrains app launcher structure:
+
+- `planning/apps/ecomviper/`
+  - `shopify/`
+  - `walmart/`
+  - `ebay/`
+  - `amazon/`
+- `planning/apps/studio/`
+  - `casaflix/`
+  - `uap-forge/`
+  - `future-studio-apps/`
+- `planning/apps/siteforge/`
+- `planning/apps/directoryiq/`
+
+EcomViper is the parent family for channel commerce work (Shopify/Walmart/eBay/Amazon).
+
+## Requirements Discipline
+
+- Do not invent requirements.
+- Derive product intent and sprint scope from implementation evidence where applicable.
+- Product intent should be established before broad infrastructure or feature expansion.
+- Keep each sprint scoped and reversible.
+
+## Sprint Delivery Flow (Mandatory)
+
+Every sprint must follow this end-to-end flow:
+
+1. Start from clean `main`:
    - `git switch main`
    - `git pull`
    - `git status` must be clean
-2. Create a sprint branch
-   - Branch name format: `sprint-###-short-description`
-3. Implement only the approved sprint scope
-4. Run focused tests and relevant checks
-5. Commit changes with a clear sprint commit message
-6. Push branch to GitLab
-7. Create a Merge Request
-8. Wait for GitLab checks/pipeline to complete
-9. If checks fail:
-   - Inspect failed job
-   - Fix only the failure
-   - Rerun tests/checks
-   - Push fix to same branch
-10. When checks are green:
-   - Merge the MR
-11. Delete the branch
-12. Reset local repo to main
+2. Create sprint branch (`sprint-###-short-description` when applicable).
+3. Implement only approved sprint scope.
+4. Run focused tests/checks.
+5. Commit with clear message.
+6. Push branch.
+7. Create Merge Request.
+8. Wait for pipeline/check completion.
+9. If checks fail: inspect failure, fix only failure family, rerun focused checks, push to same branch.
+10. Merge only after green checks.
+11. Delete remote source branch.
+12. Delete local sprint branch.
+13. Reset local repo to clean `main`:
    - `git switch main`
    - `git pull`
    - `git status` must be clean
-13. Update `planning/state.md` with:
-   - Sprint completed
-   - MR number
-   - Commit SHA if available
-   - Tests/checks result
-   - Next recommended sprint
-
-Important: Do not start the next sprint until the current sprint MR is merged and local `main` is clean.
+14. Update `planning/state.md` with sprint completion details.
 
 ## Sprint Completion Definition (Mandatory)
 
-A sprint is **not complete** when the branch is pushed or when an MR URL is returned.
+A sprint is not complete when:
 
-A sprint is complete only when all steps below are finished:
+- the branch is pushed, or
+- an MR URL is returned.
 
-1. The Merge Request is created.
-2. GitLab pipeline/checks finish successfully.
-3. Any failed checks are fixed on the same branch.
-4. The MR is merged into `main`.
-5. The remote source branch is deleted.
-6. The local sprint branch is deleted.
-7. Local repo is reset to `main`:
-   - `git switch main`
-   - `git pull`
-   - `git status`
+A sprint is complete only after all of the following are done:
+
+1. MR created.
+2. Pipeline/checks succeeded.
+3. Any failed checks fixed on same branch.
+4. MR merged into `main`.
+5. Remote branch deleted.
+6. Local branch deleted.
+7. Local repository reset to `main`.
 8. `git status` confirms clean `main`.
-9. `planning/state.md` is updated with:
+9. `planning/state.md` updated with:
    - sprint number/title
    - MR number/link
    - pipeline result
@@ -65,21 +106,19 @@ A sprint is complete only when all steps below are finished:
    - final local branch/status
    - recommended next sprint
 
-Warning:
+## Sprint Pack Pattern (Recommended)
 
-- Do not stop after pushing the branch.
-- Do not stop after returning the MR URL.
-- Continue the GitLab flow until merge and clean `main` unless blocked by permissions or a failing check that requires human input.
+For major implementation sprints, prefer a four-file sprint pack:
 
-## Planning App Structure (Source of Truth)
+- `requirements.md`
+- `blueprint.md`
+- `acceptance-criteria.md`
+- `handoff-prompt.md`
 
-Planning should mirror the iBrains launcher app structure:
+Use this pattern where it adds clarity; keep smaller sprints lightweight when appropriate.
 
-- `planning/apps/ecomviper/`
-  - child apps: `shopify/`, `walmart/`, `ebay/`, `amazon/`
-- `planning/apps/studio/`
-  - child apps: `casaflix/`, `uap-forge/`, `future-studio-apps/`
-- `planning/apps/siteforge/`
-- `planning/apps/directoryiq/`
+## Tooling And Context Notes
 
-When updating planning documents, use these paths and avoid introducing legacy standalone Shopify planning roots.
+Tool-specific files and prompts are adapters for execution context; they are not the whole project brain.
+
+Canonical planning and architecture truth should remain in repo docs listed above.

@@ -49,3 +49,59 @@ Last updated: 2026-05-18 (UTC)
 - Description: Planning docs can drift from actual launcher app hierarchy (top-level app families and child apps).
 - Impact: Sprint artifacts become harder to locate and path references become stale across handoff docs.
 - Mitigation: Keep planning hierarchy mirrored to `ecomviper`, `studio`, `siteforge`, and `directoryiq`; treat `planning/apps/ecomviper/shopify/` as canonical Shopify planning path.
+
+## R-007 Planning Drift From Implementation Reality
+
+- Severity: High
+- Likelihood: Medium
+- Description: Planning docs can diverge from current code, routes, UI behavior, or tests.
+- Impact: Builders implement incorrect scope or re-open already settled behavior.
+- Mitigation: Require implementation-derived product-intent updates and source-of-truth file pointers before major sprint planning.
+
+## R-008 Placeholder Or Demo Paths Mistaken For Production Behavior
+
+- Severity: High
+- Likelihood: Medium
+- Description: Mock/preview/staged behavior can be interpreted as live execution capability.
+- Impact: Incorrect rollout assumptions and unsafe execution expectations.
+- Mitigation: Label placeholder/demo behavior explicitly in product-intent and sprint docs; treat live execution as separately gated scope.
+
+## R-009 Invented Requirements Without Source Evidence
+
+- Severity: High
+- Likelihood: Medium
+- Description: Requirements may be added without support in implementation or approved planning files.
+- Impact: Scope creep, rework, and architecture misalignment.
+- Mitigation: Enforce \"no invented requirements\" policy in AGENTS + sprint handoff prompts.
+
+## R-010 Broad Infrastructure Work Started Before Product Intent Baseline
+
+- Severity: Medium
+- Likelihood: Medium
+- Description: Teams may begin refactors before defining the app/product baseline.
+- Impact: Low-value churn and delayed operator outcomes.
+- Mitigation: Require product-intent sprint completion before broad infrastructure expansion.
+
+## R-011 Old Chat Context Used Instead Of Repo Planning Files
+
+- Severity: Medium
+- Likelihood: Medium
+- Description: Builders may rely on prior conversation memory instead of in-repo planning docs.
+- Impact: Decisions appear inconsistent and sprint continuity degrades.
+- Mitigation: Enforce required read order rooted in AGENTS/README/planning docs.
+
+## R-012 Pipeline/Local Check Mismatch
+
+- Severity: Medium
+- Likelihood: Medium
+- Description: Local focused checks pass but CI pipeline fails due to missing parity or hidden constraints.
+- Impact: Delivery delay and repeated MR churn.
+- Mitigation: Record verification commands in MR description and fix only failing check families on same branch.
+
+## R-013 Naming Drift Across Legacy Surfaces
+
+- Severity: Medium
+- Likelihood: Medium
+- Description: Legacy names across routes/modules/docs can conflict with current product identity.
+- Impact: Onboarding confusion and implementation mistakes.
+- Mitigation: Maintain explicit naming-clarification sections and treat legacy names as compatibility/history context.

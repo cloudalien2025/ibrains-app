@@ -4,18 +4,27 @@ Last updated: 2026-05-18 (UTC)
 
 ## Program Status
 
-- Track: `EcomViper Shopify Agentic Workspace`.
+- Track: `iBrains multi-app planning architecture and scoped sprint delivery`.
 - Sprint 001: Completed (stabilization scope).
 - Sprint 002: Completed (capability detection + telemetry scope).
 - Sprint 003: Completed (deterministic extraction precedence + extraction-source metadata + stable warning codes).
 - Sprint 004: Planned (typed warning/telemetry code contract).
 - Sprint 005: Completed (Shopify guarded publish execution scaffold).
-- Walmart planning sprint: Completed (`walmart-product-intent` docs baseline).
-- Walmart Sprint 001: Completed (`walmart-command-center-foundation` docs baseline).
+- Walmart planning sprint: Completed and merged (`walmart-product-intent` docs baseline).
+- Walmart Sprint 001: Completed and merged (`walmart-command-center-foundation` docs baseline).
 - Studio product intent sprint: Completed (`studio-product-intent`, MR `!180`).
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
-- eBay product-intent sprint: Completed (`ebay-product-intent` docs baseline from implementation analysis).
+- eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
+- Current recommended sprint: `sprint-002-planning-architecture-alignment` (active).
+
+## Current Operating Reminder
+
+- Do not begin a new sprint unless local repository is clean on `main`.
+- Required baseline before any sprint:
+  - `git switch main`
+  - `git pull`
+  - `git status` must be clean
 
 ## Studio Naming Alignment Notes
 
@@ -174,12 +183,12 @@ Warning:
 
 - Sprint: `Walmart Planning Sprint` - `Completed`
 - Title: `Walmart Product Intent Baseline from Implementation`
-- MR: `n/a`
+- MR: `merged (number not recorded in this file at time of merge)`
 - Commit SHA: `n/a`
-- Pipeline/checks result: `n/a`
+- Pipeline/checks result: `passed`
 - Merge commit SHA: `n/a`
-- Branch deletion status: `n/a`
-- Final local branch/status: `n/a`
+- Branch deletion status: `completed`
+- Final local branch/status: `main clean after merge`
 - Next recommended sprint: `Walmart Sprint 001 - align lane semantics, formalize live-write governance, and persist non-durable operational stores`
 
 ### Walmart Planning Sprint Files Changed
@@ -189,12 +198,12 @@ Warning:
 
 - Sprint: `Sprint 001` - `Completed`
 - Title: `Walmart Command Center Foundation`
-- MR: `pending`
-- Commit SHA: `pending`
-- Pipeline/checks result: `pending`
-- Merge commit SHA: `pending`
-- Branch deletion status: `pending`
-- Final local branch/status: `pending`
+- MR: `merged (number not recorded in this file at time of merge)`
+- Commit SHA: `n/a`
+- Pipeline/checks result: `passed`
+- Merge commit SHA: `n/a`
+- Branch deletion status: `completed`
+- Final local branch/status: `main clean after merge`
 - Next recommended sprint: `Sprint 002 - wire a single guarded execute path from command-center triage to publish status feedback, preserving current write protections`
 
 ### Sprint 001 Files Changed
@@ -207,11 +216,11 @@ Warning:
 - Sprint: `eBay Product-Intent Sprint` - `Completed`
 - Title: `eBay Product Intent Baseline from Implementation`
 - MR: `!183 (https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/183)`
-- Commit SHA: `pending`
-- Pipeline/checks result: `pending`
-- Merge commit SHA: `pending`
-- Branch deletion status: `pending`
-- Final local branch/status: `pending`
+- Commit SHA: `a61b3dcda1f324e339347794d8c84c4e18a90d32`
+- Pipeline/checks result: `passed (pipeline 2532820975)`
+- Merge commit SHA: `1ca90aaffaa7d664fda469dc9bfd5293db71e8d3`
+- Branch deletion status: `remote deleted yes, local deleted yes`
+- Final local branch/status: `main clean`
 - Next recommended sprint: `eBay Sprint 001 - establish read-only API boundary + persistence baseline for listing intelligence before guarded execution scope`
 
 ### eBay Product-Intent Sprint Files Changed
@@ -219,3 +228,26 @@ Warning:
 - `planning/apps/ecomviper/ebay/product-intent.md`
 - `planning/apps/ecomviper/ebay/overview.md`
 - `planning/state.md`
+
+- Sprint: `Sprint 002` - `In Progress`
+- Title: `Planning Architecture Alignment`
+- MR: `pending`
+- Commit SHA: `pending`
+- Pipeline/checks result: `pending`
+- Merge commit SHA: `pending`
+- Branch deletion status: `pending`
+- Final local branch/status: `pending`
+- Next recommended sprint: `Walmart AI visibility planning sprint or remaining app planning alignment (recommended, not committed)`
+
+### Sprint 002 Planned Files Changed
+
+- `AGENTS.md`
+- `README.md`
+- `planning/state.md`
+- `planning/decisions.md`
+- `planning/risks.md`
+- `planning/questions.md`
+- `planning/apps/ecomviper/overview.md`
+- `planning/apps/ecomviper/product-intent.md`
+- `planning/apps/ecomviper/walmart/overview.md`
+- `planning/apps/ecomviper/walmart/product-intent.md`
