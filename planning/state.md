@@ -19,6 +19,7 @@ Last updated: 2026-05-18 (UTC)
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
 - DirectoryIQ Sprint 001: In progress (`sprint-001-directoryiq-foundation`, architecture/builder planning foundation + workspace shell alignment).
 - SiteForge Sprint 001: In progress (`sprint-001-siteforge-command-center-foundation`, architecture/builder planning foundation + command-center shell alignment).
+- SiteForge Sprint 002: In progress (`sprint-002-siteforge-shell-render-fix`, shell render integration fix so `/apps/siteforge` visibly renders command-center sidebar + workspace).
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Current recommended sprint: `Walmart Sprint 005 - Prompt Match score workflow alignment` (recommended).
@@ -52,6 +53,7 @@ Last updated: 2026-05-18 (UTC)
 ## SiteForge Planning Continuity
 
 - SiteForge now has a command-center foundation sprint active: `sprint-001-siteforge-command-center-foundation`.
+- Follow-up render-fix sprint active: `sprint-002-siteforge-shell-render-fix`.
 - Sprint scope is constrained to:
   - architecture/builder planning files under `planning/apps/siteforge/*`
   - lightweight shell alignment under `app/apps/siteforge/*` (sidebar + workspace frame)
@@ -59,6 +61,9 @@ Last updated: 2026-05-18 (UTC)
 - Scope guard:
   - preserve existing SiteForge functionality and API semantics
   - no workflow rewrites, no data model changes, no dependency additions
+- Render-fix diagnosis target:
+  - shell files existed but route presentation still appeared standalone
+  - verify and enforce layout ownership of shell framing so page content renders inside workspace region
 - Source-of-truth evidence areas:
   - `app/apps/siteforge/*`
   - `app/api/siteforge/*`
@@ -178,11 +183,17 @@ Warning:
 
 ## Active Sprint Context
 
-- Active sprint branch: `sprint-001-siteforge-command-center-foundation`
-- Sprint goal: `add SiteForge architecture/builder planning foundation and align a lightweight command-center shell`
-- Scope guard: planning + layout shell alignment only; no API/data behavior changes or feature expansion.
+- Active sprint branch: `sprint-002-siteforge-shell-render-fix`
+- Sprint goal: `fix SiteForge route rendering so command-center shell is visibly applied at /apps/siteforge`
+- Scope guard: shell/render integration fix only; preserve existing SiteForge workflow and API behavior.
 
 ## Sprint Completion Updates
+
+- Sprint: `SiteForge Sprint 002` - `In Progress`
+- Title: `SiteForge Shell Render Fix`
+- Branch: `sprint-002-siteforge-shell-render-fix`
+- Goal: `ensure /apps/siteforge visibly renders left sidebar + right workspace shell around existing workflow`
+- Root-cause hypothesis under validation: `page-level standalone shell frame still dominated presentation; tests previously proved component existence but not route-shell ownership semantics`
 
 - Sprint: `SiteForge Sprint 001` - `In Progress`
 - Title: `SiteForge Command Center Foundation`

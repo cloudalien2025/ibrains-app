@@ -1680,44 +1680,47 @@ export default function SiteForgeAppPage() {
   }
 
   return (
-    <div className="ibrains-shell min-h-screen text-[#0F172A]">
-      <main className="mx-auto max-w-[1280px] px-4 py-6 md:px-8">
-        <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_18px_44px_rgba(15,23,42,0.09)]">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="text-xs uppercase tracking-[0.2em] text-[#2563EB]">SiteForge 2050</div>
-              <h1 className="mt-2 text-3xl font-semibold text-[#0F172A]">Your AI website partner</h1>
-              <p className="mt-2 max-w-3xl text-sm text-[#334155]">Connect once, describe what you want, and launch.</p>
-            </div>
-            <div className="rounded-xl border border-[#D9E4F0] bg-[#EAF1F8]/75 px-4 py-3 text-xs text-[#334155]">
-              <div>Project: {activeProject?.name ?? "No project selected"}</div>
-              <div className="mt-1">Connection: {isConnected ? "connected" : "pending"}</div>
-              <div className="mt-1">Thrive: {isThriveDetected ? "detected" : "not detected"}</div>
-            </div>
+    <div className="px-1 py-1 md:px-2" data-testid="siteforge-workspace-content">
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_18px_44px_rgba(15,23,42,0.09)]"
+        data-testid="siteforge-primary-workspace"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="text-xs uppercase tracking-[0.2em] text-[#2563EB]">SiteForge 2050</div>
+            <h1 className="mt-2 text-3xl font-semibold text-[#0F172A]">Your AI website partner</h1>
+            <p className="mt-2 max-w-3xl text-sm text-[#334155]">Connect once, describe what you want, and launch.</p>
           </div>
-
-          <div className="mt-5 flex flex-wrap gap-2 border-b border-[#D9E4F0] pb-3">
-            {journeyFlow.map((phase) => (
-              <button
-                key={phase.id}
-                type="button"
-                onClick={() => setActivePhase(phase.id)}
-                className={`rounded-full border px-4 py-2 text-sm transition ${
-                  activePhase === phase.id
-                    ? "border-[#2563EB] bg-[#2563EB] text-white"
-                    : "border-[#D9E4F0] bg-white text-[#334155] hover:bg-[#F8FBFF]"
-                }`}
-              >
-                {phase.label}
-              </button>
-            ))}
+          <div className="rounded-xl border border-[#D9E4F0] bg-[#EAF1F8]/75 px-4 py-3 text-xs text-[#334155]">
+            <div>Project: {activeProject?.name ?? "No project selected"}</div>
+            <div className="mt-1">Connection: {isConnected ? "connected" : "pending"}</div>
+            <div className="mt-1">Thrive: {isThriveDetected ? "detected" : "not detected"}</div>
           </div>
+        </div>
 
-          {error ? <div className="mt-4 rounded-xl border border-amber-300/50 bg-amber-100 px-4 py-3 text-sm text-amber-700">{error}</div> : null}
-        </section>
+        <div className="mt-5 flex flex-wrap gap-2 border-b border-[#D9E4F0] pb-3">
+          {journeyFlow.map((phase) => (
+            <button
+              key={phase.id}
+              type="button"
+              onClick={() => setActivePhase(phase.id)}
+              className={`rounded-full border px-4 py-2 text-sm transition ${
+                activePhase === phase.id
+                  ? "border-[#2563EB] bg-[#2563EB] text-white"
+                  : "border-[#D9E4F0] bg-white text-[#334155] hover:bg-[#F8FBFF]"
+              }`}
+            >
+              {phase.label}
+            </button>
+          ))}
+        </div>
 
-        <section className="mt-4">{renderPhase()}</section>
-      </main>
+        {error ? <div className="mt-4 rounded-xl border border-amber-300/50 bg-amber-100 px-4 py-3 text-sm text-amber-700">{error}</div> : null}
+      </section>
+
+      <section className="mt-4" data-testid="siteforge-workspace-phase-panel">
+        {renderPhase()}
+      </section>
     </div>
   );
 }
