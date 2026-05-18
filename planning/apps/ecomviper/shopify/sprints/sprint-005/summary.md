@@ -35,10 +35,10 @@ Shopify Guarded Publish Execution
 - `lib/ecomviper/shopify/shopify-product-publish-repository.ts`
 - `tests/ecomviper_shopify_publish_service.test.ts`
 - `tests/ecomviper_shopify_publish_route.test.ts`
-- `planning/apps/shopify/sprints/sprint-005/requirements.md`
-- `planning/apps/shopify/sprints/sprint-005/blueprint.md`
-- `planning/apps/shopify/sprints/sprint-005/acceptance-criteria.md`
-- `planning/apps/shopify/sprints/sprint-005/handoff-prompt.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-005/requirements.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-005/blueprint.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-005/acceptance-criteria.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-005/handoff-prompt.md`
 - `planning/state.md`
 
 ## Tests Run

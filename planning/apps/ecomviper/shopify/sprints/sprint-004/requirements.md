@@ -9,7 +9,7 @@ Shopify Product Editor Draft-to-Publish Workflow
 
 This sprint is aligned to:
 
-- `planning/apps/shopify/product-intent.md`
+- `planning/apps/ecomviper/shopify/product-intent.md`
 
 Specifically, `product-intent.md` states that Step 3 in the product editor is currently draft-prep only and does not publish updates to Shopify.
 

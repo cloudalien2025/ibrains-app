@@ -11,6 +11,20 @@ Last updated: 2026-05-18 (UTC)
 - Sprint 004: Planned (typed warning/telemetry code contract).
 - Sprint 005: Completed (Shopify guarded publish execution scaffold).
 
+## Planning App Map
+
+- `planning/apps/ecomviper/`
+  - `shopify/`
+  - `walmart/`
+  - `ebay/`
+  - `amazon/`
+- `planning/apps/studio/`
+  - `casaflix/`
+  - `uap-forge/`
+  - `future-studio-apps/`
+- `planning/apps/siteforge/`
+- `planning/apps/directoryiq/`
+
 ## Mandatory Sprint Delivery Flow (GitLab)
 
 Every sprint must follow this flow:
@@ -123,11 +137,11 @@ Warning:
 - `lib/ecomviper/shopify/shopify-product-publish-repository.ts`
 - `tests/ecomviper_shopify_publish_service.test.ts`
 - `tests/ecomviper_shopify_publish_route.test.ts`
-- `planning/apps/shopify/sprints/sprint-005/requirements.md`
-- `planning/apps/shopify/sprints/sprint-005/blueprint.md`
-- `planning/apps/shopify/sprints/sprint-005/acceptance-criteria.md`
-- `planning/apps/shopify/sprints/sprint-005/handoff-prompt.md`
-- `planning/apps/shopify/sprints/sprint-005/summary.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-005/requirements.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-005/blueprint.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-005/acceptance-criteria.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-005/handoff-prompt.md`
+- `planning/apps/ecomviper/shopify/sprints/sprint-005/summary.md`
 
 ### Sprint 005 Remaining Risks
 

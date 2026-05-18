@@ -41,3 +41,11 @@ Last updated: 2026-05-18 (UTC)
 - Description: Fallback product snapshot may be stale relative to live storefront data.
 - Impact: Users may see non-current product details when live hydration fails.
 - Mitigation: Preserve explicit source labeling/warnings and continue encouraging live sync recovery.
+
+## R-006 Planning Path Drift from Launcher Structure
+
+- Severity: Medium
+- Likelihood: Medium
+- Description: Planning docs can drift from actual launcher app hierarchy (top-level app families and child apps).
+- Impact: Sprint artifacts become harder to locate and path references become stale across handoff docs.
+- Mitigation: Keep planning hierarchy mirrored to `ecomviper`, `studio`, `siteforge`, and `directoryiq`; treat `planning/apps/ecomviper/shopify/` as canonical Shopify planning path.
