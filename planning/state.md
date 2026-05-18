@@ -11,6 +11,7 @@ Last updated: 2026-05-18 (UTC)
 - Sprint 004: Planned (typed warning/telemetry code contract).
 - Sprint 005: Completed (Shopify guarded publish execution scaffold).
 - Walmart planning sprint: Completed (`walmart-product-intent` docs baseline).
+- Walmart Sprint 001: Completed (`walmart-command-center-foundation` docs baseline).
 
 ## Planning App Map
 
@@ -162,5 +163,22 @@ Warning:
 
 ### Walmart Planning Sprint Files Changed
 
+- `planning/apps/ecomviper/walmart/product-intent.md`
+- `planning/state.md`
+
+- Sprint: `Sprint 001` - `Completed`
+- Title: `Walmart Command Center Foundation`
+- MR: `pending`
+- Commit SHA: `pending`
+- Pipeline/checks result: `pending`
+- Merge commit SHA: `pending`
+- Branch deletion status: `pending`
+- Final local branch/status: `pending`
+- Next recommended sprint: `Sprint 002 - wire a single guarded execute path from command-center triage to publish status feedback, preserving current write protections`
+
+### Sprint 001 Files Changed
+
+- `planning/apps/ecomviper/walmart/command-center-foundation.md`
+- `planning/apps/ecomviper/walmart/overview.md`
 - `planning/apps/ecomviper/walmart/product-intent.md`
 - `planning/state.md`
