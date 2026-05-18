@@ -30,7 +30,7 @@ Primary objective: prevent score drift and label drift before broader production
 | `app/apps/ecomviper/walmart/connect/connect-client.tsx` | Connection workspace polling for health | `connectionHealth` payload fields | `WalmartHealthResponse` expects `{ ok, connectionHealth? }` and ignores extra fields | Connect workspace | API-backed | Existing consumer (should tolerate additive `ai_visibility_score`) |
 | `lib/ecomviper/walmart/walmart-products.ts` | Dashboard snapshot counts and recent activity/products | `productsImported`, `draftChanges`, `feedErrors`, `listingsNeedingAttention` | `WalmartDashboardSnapshot` | Command Center + health route cards | Mixed persisted/runtime | Producer input to canonical boundary dimensions |
 | `lib/ecomviper/walmart/walmart-listing-quality.ts` | Per-product listing quality diagnostics | `score`, `factors`, recommendation severities | `WalmartListingQualityAssessment` | Product Editor score ring/readiness helpers | Derived | Secondary producer (product diagnostic adapter) |
-| `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx` | Product editor score/readiness UI | "Agentic Visibility Score", readiness labels, publish status | In-process score display from listing-quality and projected suggestion | Product Editor | Derived | Consumer (component-level diagnostic; not canonical rollup producer) |
+| `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx` | Product editor score/readiness UI | "Agentic Visibility Score", readiness labels, publish status | In-process canonical adapter consumption via `buildWalmartProductAiVisibilityDiagnostics` | Product Editor | Derived | Consumer (component-level diagnostic aligned to canonical score boundary) |
 | `lib/ecomviper/walmart/walmart-ibrains-intelligence.ts` | iBrains opportunity scoring | `agenticVisibilityScore` (summary + per opportunity), destination fit, risk/status | `IBrainsIntelligenceRun` summary/opportunities object | iBrains Intelligence | Derived/recommendation engine | Secondary producer (opportunity diagnostics; not top-level canonical rollup) |
 | `app/apps/ecomviper/walmart/ibrains-intelligence/walmart-ibrains-intelligence-client.tsx` | iBrains score presentation | "Agentic Visibility Score", opportunity/risk cards | Client-side run result object | iBrains UI | Derived | Consumer |
 | `lib/ecomviper/walmart/walmart-nav.ts` | Lane labels/routes | Prompt Match / Semantic Gaps / Product Opportunities / Trust Signals mappings | Nav label -> route map | Sidebar/lane routing | Static | Naming/ownership adapter evidence |
@@ -132,6 +132,9 @@ Ownership gaps today:
 - Derivation logic exists for command-center readiness rollup + confidence + recommendations.
 - Health API route now emits additive canonical `ai_visibility_score`.
 - Command Center rollup display now consumes canonical values through `walmart-command-center-score-rollup.ts`.
+- Product Editor score diagnostics now consume a canonical product-level adapter boundary through:
+  - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
+  - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
 - Product/editor and iBrains score diagnostics are implemented and tested.
 
 ### Partial/demo/fixture-backed
@@ -142,7 +145,7 @@ Ownership gaps today:
 
 ### Missing/unclear
 
-- Command Center is aligned through an in-process adapter, but does not yet consume canonical rollup via health-route fetch.
+- Command Center and Product Editor are aligned through in-process adapters, but neither surface consumes canonical rollup via health-route fetch yet.
 - No dedicated producer for some canonical dimensions (notably Prompt Match coverage).
 
 ### Deferred
@@ -155,6 +158,7 @@ Ownership gaps today:
 - `app/apps/ecomviper/walmart/page.tsx`
 - `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
 - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
+- `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
 - `app/apps/ecomviper/walmart/products/[sku]/page.tsx`
 - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
 - `app/apps/ecomviper/walmart/ibrains-intelligence/page.tsx`
@@ -174,6 +178,8 @@ Ownership gaps today:
 - `tests/ecomviper_walmart_command_center_score_rollup.test.ts`
 - `tests/ecomviper_walmart_connect_auth.test.tsx`
 - `tests/ecomviper_walmart_route_contract.test.tsx`
+- `tests/ecomviper_walmart_product_ai_visibility_score.test.ts`
+- `tests/ecomviper_walmart_product_editor_score_alignment.test.tsx`
 
 ## 8) Builder Guardrails
 

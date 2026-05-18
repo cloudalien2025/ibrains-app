@@ -65,6 +65,7 @@ import {
   compareDraftUpdatedAtDesc,
   normalizeWalmartDraftsForEditor,
 } from "@/lib/ecomviper/walmart/walmart-product-editor-hardening";
+import { buildWalmartProductAiVisibilityDiagnostics } from "@/lib/ecomviper/walmart/walmart-product-ai-visibility-score";
 import {
   generateEditableDraftState,
   generateOptimizedProposalState,
@@ -5386,11 +5387,27 @@ export default function ProductEditorClient({
       </section>
     );
   };
-  const projectedScore = projectedQuality?.score ?? inlineAiSuggestion?.qualityScore ?? listingQuality.score;
-  const currentVisibilityScore = currentListingQuality.score;
-  const proposedVisibilityScore = inlineAiSuggestion
-    ? Math.max(projectedScore, currentVisibilityScore)
-    : null;
+  const projectedScore =
+    projectedQuality?.score ?? inlineAiSuggestion?.qualityScore ?? listingQuality.score;
+  const currentAiVisibilityDiagnostics = useMemo(
+    () =>
+      buildWalmartProductAiVisibilityDiagnostics({
+        listingQuality: currentListingQuality,
+        provenanceSource: "derived",
+      }),
+    [currentListingQuality]
+  );
+  const proposedAiVisibilityDiagnostics = useMemo(() => {
+    if (!inlineAiSuggestion) return null;
+    return buildWalmartProductAiVisibilityDiagnostics({
+      listingQuality: currentListingQuality,
+      projectedScore,
+      provenanceSource: "derived",
+    });
+  }, [currentListingQuality, inlineAiSuggestion, projectedScore]);
+  const currentVisibilityScore = currentAiVisibilityDiagnostics.ai_visibility_score.overall;
+  const proposedVisibilityScore =
+    proposedAiVisibilityDiagnostics?.ai_visibility_score.overall ?? null;
   const optimizationStatusLabel = getOptimizationStatusLabel({
     inlineAiState,
     aiSuggestionApplied,

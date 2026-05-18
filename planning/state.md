@@ -16,7 +16,8 @@ Last updated: 2026-05-18 (UTC)
 - Walmart Sprint 004: Completed and merged (`sprint-004-walmart-score-contract`, docs/planning canonical AI visibility score contract).
 - Walmart Sprint 005: Completed and merged (`sprint-005-walmart-ai-visibility-api-boundary`, docs/planning first canonical `ai_visibility_score` API payload boundary).
 - Walmart Sprint 006: Completed and merged (`sprint-006-walmart-ai-visibility-payload-fixture`, canonical payload fixture/type contract + additive health-route payload field).
-- Walmart Sprint 007: In progress (`sprint-007-walmart-command-center-score-rollup`, command-center rollup alignment to canonical `ai_visibility_score` semantics).
+- Walmart Sprint 007: Completed and merged (`sprint-007-walmart-command-center-score-rollup`, command-center rollup alignment to canonical `ai_visibility_score` semantics).
+- Walmart Sprint 008: In progress (`sprint-008-walmart-product-editor-score-alignment`, product editor/product-level score diagnostics alignment to canonical `WalmartAiVisibilityScore` semantics).
 - Studio product intent sprint: Completed (`studio-product-intent`, MR `!180`).
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
@@ -25,7 +26,7 @@ Last updated: 2026-05-18 (UTC)
 - SiteForge Sprint 002: In progress (`sprint-002-siteforge-shell-render-fix`, shell render integration fix so `/apps/siteforge` visibly renders command-center sidebar + workspace).
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
-- Current recommended sprint: `Walmart Sprint 007 - Command Center score rollup alignment` (active).
+- Current recommended sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (active).
 
 ## Current Operating Reminder
 
@@ -186,9 +187,9 @@ Warning:
 
 ## Active Sprint Context
 
-- Active sprint branch: `sprint-007-walmart-command-center-score-rollup`
-- Sprint goal: `align Walmart Command Center score/readiness rollups to canonical ai_visibility_score contract semantics`
-- Scope guard: command-center rollup wiring + focused tests + planning updates only; no broad UI redesign, no scoring-service expansion.
+- Active sprint branch: `sprint-008-walmart-product-editor-score-alignment`
+- Sprint goal: `align Walmart Product Editor/product-level score diagnostics to canonical WalmartAiVisibilityScore semantics`
+- Scope guard: product-level adapter + product-editor consumer alignment + focused tests + planning updates only; no broad UI redesign, no scoring-service expansion.
 
 ## Sprint Completion Updates
 
@@ -201,29 +202,29 @@ Warning:
 - Final local branch/status: `main clean`
 - Next recommended sprint: `Walmart Sprint 007 - align Command Center rollup/readiness to canonical ai_visibility_score semantics`
 
-- Sprint: `Walmart Sprint 007` - `In Progress`
+- Sprint: `Walmart Sprint 007` - `Completed`
 - Title: `Walmart Command Center Score Rollup Alignment`
-- Branch: `sprint-007-walmart-command-center-score-rollup`
-- Goal: `make Command Center a canonical score consumer by sourcing readiness/confidence rollups from ai_visibility_score adapter semantics`
+- Outcome: `Command Center readiness/confidence rollups align to canonical ai_visibility_score semantics through walmart-command-center-score-rollup adapter boundary.`
+- Next recommended sprint: `Walmart Sprint 008 - align Product Editor product-level diagnostics to canonical score semantics`
+
+- Sprint: `Walmart Sprint 008` - `In Progress`
+- Title: `Walmart Product Editor Score Alignment`
+- Branch: `sprint-008-walmart-product-editor-score-alignment`
+- Goal: `align Product Editor/product-level Agentic Visibility and listing quality diagnostics to canonical WalmartAiVisibilityScore contract semantics`
 - Planned files:
-  - `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
-  - `app/apps/ecomviper/walmart/page.tsx`
-  - `tests/ecomviper_walmart_command_center_score_rollup.test.ts`
-  - `tests/ecomviper_walmart_route_contract.test.tsx`
-  - `planning/apps/ecomviper/walmart/command-center-foundation.md`
-  - `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`
+  - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
+  - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
+  - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+  - `tests/ecomviper_walmart_product_ai_visibility_score.test.ts`
+  - `tests/ecomviper_walmart_product_editor_score_alignment.test.tsx`
   - `planning/apps/ecomviper/walmart/score-contract.md`
+  - `planning/apps/ecomviper/walmart/ai-visibility-api-boundary.md`
   - `planning/apps/ecomviper/walmart/ai-visibility.md`
+  - `planning/apps/ecomviper/walmart/product-intent.md`
   - `planning/apps/ecomviper/walmart/overview.md`
   - `planning/questions.md`
   - `planning/risks.md`
   - `planning/state.md`
-- Validation plan:
-  - `git diff --check`
-  - `rg -n \"ai_visibility_score|WalmartAiVisibilityScore|overallAiRecommendationReadinessScore|aiConfidenceScore|prompt_match_coverage|semantic_gap_health|opportunity_priority|trust_signal_health|catalog_readiness_coverage\" app/apps/ecomviper/walmart app/api/ecomviper/walmart lib/ecomviper/walmart tests/ecomviper_walmart* planning/apps/ecomviper/walmart planning/state.md planning/questions.md planning/risks.md -S`
-  - `npm test -- --run tests/ecomviper_walmart_ai_visibility_score_fixture.test.ts tests/ecomviper_walmart_connect_auth.test.tsx tests/ecomviper_walmart_command_center_score_rollup.test.ts`
-  - `npm test -- --run tests/ecomviper_walmart_route_contract.test.tsx tests/ecomviper_walmart_agentic_optimization_coverage.test.ts`
-  - `bash scripts/check_route_signatures.sh`
 
 - Sprint: `SiteForge Sprint 002` - `In Progress`
 - Title: `SiteForge Shell Render Fix`

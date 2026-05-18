@@ -44,7 +44,7 @@ Primary goal: keep labels, data model names, and operator meaning aligned while 
 
 | Label / Signal | Location | Type / Example Values | Surface | Operator Meaning | Backing |
 | --- | --- | --- | --- | --- | --- |
-| `Agentic Visibility Score` | `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx` | 0-100 ring; labels: `Poor`, `Needs work`, `Good`, `Strong`, `Perfectly optimized` | Product Editor summary | Per-product visibility quality snapshot | Derived from listing-quality score (and optional projected suggestion score) |
+| `Agentic Visibility Score` | `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`, `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts` | 0-100 ring; labels: `Poor`, `Needs work`, `Good`, `Strong`, `Perfectly optimized` | Product Editor summary | Per-product visibility quality snapshot | Derived from listing-quality score through canonical adapter mapping (optional projected suggestion score preserved) |
 | Listing quality score | `lib/ecomviper/walmart/walmart-listing-quality.ts` | 1-100 (`score`) | Product Editor internals + proposal generation | Product quality baseline used by editor | Derived heuristics |
 | Listing quality factors | `lib/ecomviper/walmart/walmart-listing-quality.ts` | string list (for example missing image, title quality, price/inventory issues) | Product Editor diagnostics | Why score dropped | Derived heuristics |
 | Listing recommendations severity | `lib/ecomviper/walmart/walmart-listing-quality.ts` | enum `high` / `medium` / `low` | Product Editor diagnostics | Relative importance of suggested fixes | Derived from penalty weights |
@@ -167,6 +167,11 @@ Use explicit labels tied to this contract:
   - `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
   - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
   - `app/apps/ecomviper/walmart/page.tsx`
+- Product Editor `Agentic Visibility Score` now consumes a canonical product-level adapter boundary via:
+  - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
+  - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+  - `tests/ecomviper_walmart_product_ai_visibility_score.test.ts`
+  - `tests/ecomviper_walmart_product_editor_score_alignment.test.tsx`
 - Product Editor listing-quality score and readiness/publish-status diagnostics.
 - iBrains opportunity scoring, compliance risk, destination fit, and summary counts.
 - Products list/source-confidence and catalog match confidence plumbing.
