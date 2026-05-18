@@ -112,7 +112,7 @@ Last updated: 2026-05-18 (UTC)
 - Likelihood: Medium
 - Description: Walmart currently exposes multiple visibility/readiness score models across Command Center, Product Editor, and iBrains Intelligence without one canonical typed contract.
 - Impact: Operators and builders may interpret inconsistent scores as equivalent, causing triage and roadmap drift.
-- Mitigation: Define a canonical AI visibility score contract and map secondary scores explicitly as supporting diagnostics.
+- Mitigation: Canonical contract now documented in `planning/apps/ecomviper/walmart/score-contract.md`; enforce label alignment in future sprints with focused tests and API payload mapping before adding new score labels.
 
 ## R-015 Lane Semantics Drift (Label vs Route Responsibility)
 
@@ -121,3 +121,11 @@ Last updated: 2026-05-18 (UTC)
 - Description: Prompt Match/Semantic Gaps/Product Opportunities labels currently map to Activity/Inventory/Pricing routes rather than dedicated semantic workflows.
 - Impact: Workflow expectations can diverge from implementation reality and increase delivery ambiguity for future sprints.
 - Mitigation: Either formalize current mappings as intended behavior with clear copy or implement dedicated lane workflows and update nav semantics.
+
+## R-016 Fixture/Recommendation Score Values Mistaken As Production Contract
+
+- Severity: High
+- Likelihood: Medium
+- Description: Recommendation-only or fixture-derived readiness/opportunity values may be interpreted as stable production analytics contracts.
+- Impact: Builders can overfit implementation to placeholder values, causing score contract breakage and operator confusion.
+- Mitigation: Require score-label provenance tags (production-backed vs derived vs recommendation-only) in contract docs/tests and block new score labels unless `score-contract.md` is updated.
