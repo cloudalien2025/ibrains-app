@@ -15,7 +15,8 @@ This overview is intentionally high-level.
 
 For implementation-derived details, contracts, and gaps, use:
 - `planning/apps/ecomviper/ebay/product-intent.md`
+- `planning/apps/ecomviper/ebay/command-center-foundation.md`
 
 Expected next planning direction:
-- define the first eBay foundation sprint from the implementation-derived product intent,
+- evolve command-center shell and architecture boundaries from implementation evidence,
 - keep scope grounded in current eBay code/tests and avoid speculative requirements.
