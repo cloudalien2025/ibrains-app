@@ -29,6 +29,21 @@ Owner: Architecture
 Status: Open
 Notes: Need explicit minimum doc set for low-risk docs-only or bugfix sprints.
 
+### Which Walmart AI visibility score is canonical across Command Center, Product Editor, and iBrains Intelligence?
+Owner: Walmart Product + Architecture
+Status: Open
+Notes: Current implementation has multiple score/readiness models (`listing quality`, `coverage readiness`, and `iBrains opportunity scoring`) without one typed cross-surface contract.
+
+### Should Prompt Match, Semantic Gaps, and Product Opportunities remain mapped to Activity/Inventory/Pricing, or get dedicated workflows?
+Owner: Walmart Product + UX
+Status: Open
+Notes: Current nav labels and route responsibilities are intentionally mapped but not semantically one-to-one, which may affect operator expectations and sprint scoping.
+
+### Which AI visibility signals should be production-backed first?
+Owner: Walmart Product + Engineering
+Status: Open
+Notes: Candidate priorities from implementation evidence include prompt/query evidence, queue state transitions, and durable activity/feed visibility timelines.
+
 ## Closed Questions
 
 None recorded yet.
