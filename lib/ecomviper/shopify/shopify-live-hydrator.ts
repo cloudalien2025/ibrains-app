@@ -3,6 +3,16 @@ import "server-only";
 import { runShopifyGraphqlRequest } from "@/lib/ecomviper/shopify/shopify-client";
 import { resolveShopifyAccessTokenForUser } from "@/lib/ecomviper/shopify/shopify-connection";
 import { buildShopifyOnlineStoreProductUrl } from "@/lib/ecomviper/shopify/shopify-domain";
+import {
+  SHOPIFY_POLICY_FIELDS,
+  type ShopifyPolicyCapabilitySnapshot,
+  type ShopifyPolicyField,
+  type ShopifyUnsupportedExtractionSource,
+  buildShopPolicyQuery,
+  extractUnsupportedPolicyFieldsFromGraphqlErrorsWithMetadata,
+  getCachedShopifyPolicyCapability,
+  saveShopifyPolicyCapability,
+} from "@/lib/ecomviper/shopify/shopify-policy-capabilities";
 import type {
   ShopifyImageRecord,
   ShopifyMetafieldRecord,
@@ -24,6 +34,10 @@ interface ShopifyLiveCoreData {
 interface ShopifyLiveContentData {
   pages?: unknown;
   blogs?: unknown;
+}
+
+interface ShopifyLivePolicyData {
+  shop?: unknown;
 }
 
 interface ShopifyLivePolicyNode {
@@ -87,11 +101,32 @@ export interface ShopifyLiveHydrationResult {
   policies: ShopifyLivePolicyNode[];
   rawPayload: {
     core: unknown;
+    policy: unknown;
     content: unknown;
+    capabilityProbe: unknown;
   };
+  telemetry: ShopifyLiveHydrationTelemetry;
   warnings: string[];
   errors: string[];
   entitySourceProvenance: ShopifyEntitySourceProvenance[];
+}
+
+export interface ShopifyLiveHydrationTelemetry {
+  policyCapabilities: {
+    cacheHit: boolean;
+    detectionSource: "cache" | "probe_success" | "probe_error_parse" | "probe_failed" | "runtime_refresh";
+    supportedPolicyFields: ShopifyPolicyField[];
+    unsupportedPolicyFields: ShopifyPolicyField[];
+    probeUnsupportedFieldExtractionSource: ShopifyUnsupportedExtractionSource;
+    runtimeUnsupportedFieldExtractionSource: ShopifyUnsupportedExtractionSource;
+    probeAttempted: boolean;
+    probeStatus: "success" | "partial" | "failed" | "skipped";
+    policyHydrationAttempted: boolean;
+    policyHydrationStatus: "success" | "partial" | "failed" | "skipped";
+    fallbackUsed: boolean;
+    warningCodes: string[];
+    events: string[];
+  };
 }
 
 const CORE_QUERY = `#graphql
@@ -105,30 +140,6 @@ const CORE_QUERY = `#graphql
       primaryDomain {
         url
         host
-      }
-      privacyPolicy {
-        id
-        title
-        body
-        url
-      }
-      refundPolicy {
-        id
-        title
-        body
-        url
-      }
-      shippingPolicy {
-        id
-        title
-        body
-        url
-      }
-      termsOfService {
-        id
-        title
-        body
-        url
       }
     }
     products(first: $productsFirst, sortKey: UPDATED_AT) {
@@ -229,6 +240,16 @@ const CORE_QUERY = `#graphql
     }
   }
 `;
+
+const POLICY_CAPABILITY_PROBE_QUERY = buildShopPolicyQuery(
+  [...SHOPIFY_POLICY_FIELDS],
+  "ShopifyPolicyCapabilityProbe"
+);
+
+const POLICY_WARNING_CAPABILITY_UNSUPPORTED_FIELDS = "shopify_policy_capability_unsupported_fields_detected";
+const POLICY_WARNING_CAPABILITY_PROBE_FAILED = "shopify_policy_capability_probe_failed";
+const POLICY_WARNING_HYDRATION_SCHEMA_MISMATCH = "shopify_policy_hydration_schema_mismatch";
+const POLICY_WARNING_HYDRATION_FAILED = "shopify_policy_hydration_failed";
 
 const CONTENT_QUERY = `#graphql
   query ShopifyLiveWorkspaceContent($pagesFirst: Int!, $blogsFirst: Int!, $articlesFirst: Int!) {
@@ -559,10 +580,12 @@ function normalizeProductNode(node: Record<string, unknown>, storeDomain: string
   };
 }
 
-function normalizePolicies(shopRecord: Record<string, unknown> | null): ShopifyLivePolicyNode[] {
+function normalizePolicies(
+  shopRecord: Record<string, unknown> | null,
+  policyKeys: ShopifyPolicyField[]
+): ShopifyLivePolicyNode[] {
   if (!shopRecord) return [];
 
-  const policyKeys = ["privacyPolicy", "refundPolicy", "shippingPolicy", "termsOfService"] as const;
   const policies: ShopifyLivePolicyNode[] = [];
 
   for (const key of policyKeys) {
@@ -784,6 +807,70 @@ function buildEntityProvenance(input: {
   return entries;
 }
 
+function uniquePolicyFields(fields: ShopifyPolicyField[]): ShopifyPolicyField[] {
+  const seen = new Set<ShopifyPolicyField>();
+  const deduped: ShopifyPolicyField[] = [];
+
+  for (const field of fields) {
+    if (seen.has(field)) continue;
+    seen.add(field);
+    deduped.push(field);
+  }
+
+  return deduped;
+}
+
+function mergeUnsupportedPolicyFields(
+  left: ShopifyPolicyField[],
+  right: ShopifyPolicyField[]
+): ShopifyPolicyField[] {
+  return uniquePolicyFields([...left, ...right]);
+}
+
+function computeSupportedPolicyFields(unsupported: ShopifyPolicyField[]): ShopifyPolicyField[] {
+  const blocked = new Set(unsupported);
+  return SHOPIFY_POLICY_FIELDS.filter((field) => !blocked.has(field));
+}
+
+function buildPolicyCapabilitySnapshot(input: {
+  storeDomain: string;
+  apiVersion: string;
+  detectionSource: ShopifyPolicyCapabilitySnapshot["detectionSource"];
+  unsupportedPolicyFields: ShopifyPolicyField[];
+}): ShopifyPolicyCapabilitySnapshot {
+  const unsupportedPolicyFields = uniquePolicyFields(input.unsupportedPolicyFields);
+  return {
+    storeDomain: input.storeDomain,
+    apiVersion: input.apiVersion,
+    supportedPolicyFields: computeSupportedPolicyFields(unsupportedPolicyFields),
+    unsupportedPolicyFields,
+    detectedAt: new Date().toISOString(),
+    detectionSource: input.detectionSource,
+  };
+}
+
+function pushUniqueCode(target: string[], code: string): void {
+  if (!target.includes(code)) {
+    target.push(code);
+  }
+}
+
+function pushPolicyWarning(
+  params: {
+    warnings: string[];
+    warningCodes: string[];
+  },
+  warningCode: string,
+  warningMessage: string
+): void {
+  pushUniqueCode(params.warningCodes, warningCode);
+  params.warnings.push(warningMessage);
+}
+
+function extractionSourceEvent(prefix: "probe" | "runtime", source: ShopifyUnsupportedExtractionSource): string {
+  return `shopify_policy_capability_${prefix}_extract_${source}`;
+}
+
 export async function hydrateShopifyLiveWorkspaceForUser(input: {
   userId: string;
   productsFirst?: number;
@@ -796,19 +883,124 @@ export async function hydrateShopifyLiveWorkspaceForUser(input: {
   const fetchedAt = new Date().toISOString();
   const warnings: string[] = [];
   const errors: string[] = [];
+  const telemetry: ShopifyLiveHydrationTelemetry = {
+    policyCapabilities: {
+      cacheHit: false,
+      detectionSource: "probe_failed",
+      supportedPolicyFields: [],
+      unsupportedPolicyFields: [],
+      probeUnsupportedFieldExtractionSource: "none",
+      runtimeUnsupportedFieldExtractionSource: "none",
+      probeAttempted: false,
+      probeStatus: "skipped",
+      policyHydrationAttempted: false,
+      policyHydrationStatus: "skipped",
+      fallbackUsed: false,
+      warningCodes: [],
+      events: [],
+    },
+  };
+  const coreVariables = {
+    productsFirst: Math.max(1, Math.min(input.productsFirst ?? 80, 200)),
+    collectionsFirst: Math.max(1, Math.min(input.collectionsFirst ?? 80, 200)),
+  };
+  let capabilityProbeData: unknown = null;
+  let policyData: unknown = null;
+
+  let policyCapability = getCachedShopifyPolicyCapability(access.storeDomain, access.apiVersion);
+  if (policyCapability) {
+    telemetry.policyCapabilities.cacheHit = true;
+    telemetry.policyCapabilities.detectionSource = "cache";
+    telemetry.policyCapabilities.probeStatus = "skipped";
+    telemetry.policyCapabilities.supportedPolicyFields = [...policyCapability.supportedPolicyFields];
+    telemetry.policyCapabilities.unsupportedPolicyFields = [...policyCapability.unsupportedPolicyFields];
+    telemetry.policyCapabilities.events.push("shopify_policy_capability_cache_hit");
+  } else {
+    telemetry.policyCapabilities.probeAttempted = true;
+    telemetry.policyCapabilities.probeStatus = "failed";
+
+    const capabilityProbe = await runShopifyGraphqlRequest<ShopifyLivePolicyData>({
+      storeDomain: access.storeDomain,
+      accessToken: access.accessToken,
+      apiVersion: access.apiVersion,
+      query: POLICY_CAPABILITY_PROBE_QUERY,
+    });
+    capabilityProbeData = capabilityProbe.payload.data;
+
+    if (capabilityProbe.ok) {
+      policyCapability = buildPolicyCapabilitySnapshot({
+        storeDomain: access.storeDomain,
+        apiVersion: access.apiVersion,
+        detectionSource: "probe_success",
+        unsupportedPolicyFields: [],
+      });
+      saveShopifyPolicyCapability(policyCapability);
+
+      telemetry.policyCapabilities.detectionSource = "probe_success";
+      telemetry.policyCapabilities.probeStatus = "success";
+      telemetry.policyCapabilities.supportedPolicyFields = [...policyCapability.supportedPolicyFields];
+      telemetry.policyCapabilities.unsupportedPolicyFields = [...policyCapability.unsupportedPolicyFields];
+      telemetry.policyCapabilities.events.push("shopify_policy_capability_probe_success");
+    } else {
+      const probeExtraction = extractUnsupportedPolicyFieldsFromGraphqlErrorsWithMetadata(
+        capabilityProbe.payload.errors
+      );
+      const unsupportedFields = probeExtraction.unsupportedPolicyFields;
+      telemetry.policyCapabilities.probeUnsupportedFieldExtractionSource = probeExtraction.extractionSource;
+      telemetry.policyCapabilities.events.push(
+        extractionSourceEvent("probe", probeExtraction.extractionSource)
+      );
+
+      if (unsupportedFields.length > 0) {
+        policyCapability = buildPolicyCapabilitySnapshot({
+          storeDomain: access.storeDomain,
+          apiVersion: access.apiVersion,
+          detectionSource: "probe_error_parse",
+          unsupportedPolicyFields: unsupportedFields,
+        });
+        saveShopifyPolicyCapability(policyCapability);
+
+        telemetry.policyCapabilities.detectionSource = "probe_error_parse";
+        telemetry.policyCapabilities.probeStatus = "partial";
+        telemetry.policyCapabilities.supportedPolicyFields = [...policyCapability.supportedPolicyFields];
+        telemetry.policyCapabilities.unsupportedPolicyFields = [...policyCapability.unsupportedPolicyFields];
+        telemetry.policyCapabilities.events.push("shopify_policy_capability_probe_partial");
+
+        pushPolicyWarning(
+          {
+            warnings,
+            warningCodes: telemetry.policyCapabilities.warningCodes,
+          },
+          POLICY_WARNING_CAPABILITY_UNSUPPORTED_FIELDS,
+          `Shopify policy capability warning: unsupported Shop fields detected (${unsupportedFields.join(", ")}). Continuing with supported policy fields only.`
+        );
+      } else {
+        telemetry.policyCapabilities.detectionSource = "probe_failed";
+        telemetry.policyCapabilities.probeStatus = "failed";
+        telemetry.policyCapabilities.events.push("shopify_policy_capability_probe_failed");
+        pushPolicyWarning(
+          {
+            warnings,
+            warningCodes: telemetry.policyCapabilities.warningCodes,
+          },
+          POLICY_WARNING_CAPABILITY_PROBE_FAILED,
+          `Shopify policy capability warning: probe failed${
+            capabilityProbe.errorMessage ? ` (${capabilityProbe.errorMessage})` : ""
+          }. Policy hydration will be skipped.`
+        );
+      }
+    }
+  }
 
   const coreResponse = await runShopifyGraphqlRequest<ShopifyLiveCoreData>({
     storeDomain: access.storeDomain,
     accessToken: access.accessToken,
     apiVersion: access.apiVersion,
     query: CORE_QUERY,
-    variables: {
-      productsFirst: Math.max(1, Math.min(input.productsFirst ?? 80, 200)),
-      collectionsFirst: Math.max(1, Math.min(input.collectionsFirst ?? 80, 200)),
-    },
+    variables: coreVariables,
   });
-
   const coreData = coreResponse.payload.data;
+
   if (!coreResponse.ok && !coreData) {
     throw new Error(coreResponse.errorMessage ?? "Shopify live hydration failed while loading store/product data.");
   }
@@ -828,8 +1020,112 @@ export async function hydrateShopifyLiveWorkspaceForUser(input: {
     .filter((entry): entry is ShopifyProductRecord => entry !== null);
 
   const collections = normalizeCollections(coreData?.collections);
-  const policies = normalizePolicies(shopRecord);
   const shop = normalizeShopSummary(shopRecord, access.storeDomain);
+  let policies: ShopifyLivePolicyNode[] = [];
+
+  if (policyCapability?.supportedPolicyFields.length) {
+    telemetry.policyCapabilities.policyHydrationAttempted = true;
+
+    let activeCapability = policyCapability;
+    let policyResponse = await runShopifyGraphqlRequest<ShopifyLivePolicyData>({
+      storeDomain: access.storeDomain,
+      accessToken: access.accessToken,
+      apiVersion: access.apiVersion,
+      query: buildShopPolicyQuery(activeCapability.supportedPolicyFields),
+    });
+    policyData = policyResponse.payload.data;
+
+    const runtimeExtraction = extractUnsupportedPolicyFieldsFromGraphqlErrorsWithMetadata(
+      policyResponse.payload.errors
+    );
+    const runtimeUnsupportedFields = runtimeExtraction.unsupportedPolicyFields;
+    telemetry.policyCapabilities.runtimeUnsupportedFieldExtractionSource = runtimeExtraction.extractionSource;
+    telemetry.policyCapabilities.events.push(
+      extractionSourceEvent("runtime", runtimeExtraction.extractionSource)
+    );
+
+    if (!policyResponse.ok && runtimeUnsupportedFields.length > 0) {
+      telemetry.policyCapabilities.fallbackUsed = true;
+      telemetry.policyCapabilities.events.push("shopify_policy_capability_runtime_refresh");
+
+      const refreshedUnsupported = mergeUnsupportedPolicyFields(
+        activeCapability.unsupportedPolicyFields,
+        runtimeUnsupportedFields
+      );
+      activeCapability = buildPolicyCapabilitySnapshot({
+        storeDomain: access.storeDomain,
+        apiVersion: access.apiVersion,
+        detectionSource: "runtime_refresh",
+        unsupportedPolicyFields: refreshedUnsupported,
+      });
+      saveShopifyPolicyCapability(activeCapability);
+
+      telemetry.policyCapabilities.detectionSource = "runtime_refresh";
+      telemetry.policyCapabilities.supportedPolicyFields = [...activeCapability.supportedPolicyFields];
+      telemetry.policyCapabilities.unsupportedPolicyFields = [...activeCapability.unsupportedPolicyFields];
+
+      pushPolicyWarning(
+        {
+          warnings,
+          warningCodes: telemetry.policyCapabilities.warningCodes,
+        },
+        POLICY_WARNING_HYDRATION_SCHEMA_MISMATCH,
+        `Shopify policy hydration warning: schema mismatch detected (${runtimeUnsupportedFields.join(", ")}). Retrying with refreshed policy capabilities.`
+      );
+
+      if (activeCapability.supportedPolicyFields.length > 0) {
+        policyResponse = await runShopifyGraphqlRequest<ShopifyLivePolicyData>({
+          storeDomain: access.storeDomain,
+          accessToken: access.accessToken,
+          apiVersion: access.apiVersion,
+          query: buildShopPolicyQuery(activeCapability.supportedPolicyFields),
+        });
+        policyData = policyResponse.payload.data;
+      } else {
+        policyResponse = {
+          ok: false,
+          statusCode: null,
+          requestId: null,
+          payload: { data: null, errors: [] },
+          errorMessage: "No supported policy fields remain after capability refresh.",
+          lastApiError: null,
+        };
+        policyData = null;
+      }
+    }
+
+    if (policyResponse.ok || policyData) {
+      const policyShopRecord = asRecord((policyData as ShopifyLivePolicyData | null)?.shop);
+      policies = normalizePolicies(policyShopRecord, activeCapability.supportedPolicyFields);
+
+      telemetry.policyCapabilities.policyHydrationStatus = policyResponse.ok ? "success" : "partial";
+      if (!policyResponse.ok && policyResponse.errorMessage) {
+        pushPolicyWarning(
+          {
+            warnings,
+            warningCodes: telemetry.policyCapabilities.warningCodes,
+          },
+          POLICY_WARNING_HYDRATION_FAILED,
+          `Shopify policy hydration warning: ${policyResponse.errorMessage}`
+        );
+      }
+    } else {
+      telemetry.policyCapabilities.policyHydrationStatus = "failed";
+      pushPolicyWarning(
+        {
+          warnings,
+          warningCodes: telemetry.policyCapabilities.warningCodes,
+        },
+        POLICY_WARNING_HYDRATION_FAILED,
+        `Shopify policy hydration warning: ${
+          policyResponse.errorMessage || "Policy query failed and no policy payload was returned."
+        }`
+      );
+    }
+  } else {
+    telemetry.policyCapabilities.policyHydrationStatus = "skipped";
+    telemetry.policyCapabilities.events.push("shopify_policy_hydration_skipped");
+  }
 
   const contentResponse = await runShopifyGraphqlRequest<ShopifyLiveContentData>({
     storeDomain: access.storeDomain,
@@ -878,8 +1174,11 @@ export async function hydrateShopifyLiveWorkspaceForUser(input: {
     policies,
     rawPayload: {
       core: coreData,
+      policy: policyData,
       content: contentData,
+      capabilityProbe: capabilityProbeData,
     },
+    telemetry,
     warnings,
     errors,
     entitySourceProvenance,

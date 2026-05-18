@@ -5,10 +5,17 @@ import Link from "next/link";
 import {
   buildEditableShopifyDraft,
   buildOptimizedShopifyProposal,
-  summarizeDraftChanges,
   type ShopifyEditableDraftDocket,
   type ShopifyOptimizedProposalDocket,
 } from "@/lib/ecomviper/shopify/shopify-product-docket";
+import {
+  buildShopifyStep3AuditEvent,
+  buildShopifyStep3DiffPreview,
+  buildShopifyStep3PublishIntent,
+  evaluateShopifyStep3PublishDryRun,
+  type ShopifyStep3AuditEvent,
+  type ShopifyStep3PublishDryRunResult,
+} from "@/lib/ecomviper/shopify/shopify-product-editor-publish-workflow";
 import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
 
 type EditorTabKey = "current" | "optimize" | "review";
@@ -79,16 +86,26 @@ export default function ShopifyProductEditorClient({
   const [draft, setDraft] = useState<ShopifyEditableDraftDocket | null>(initialState.editableShopifyDraft);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [publishConfirmationAccepted, setPublishConfirmationAccepted] = useState(false);
+  const [publishOutcome, setPublishOutcome] = useState<ShopifyStep3PublishDryRunResult | null>(null);
+  const [auditEvents, setAuditEvents] = useState<ShopifyStep3AuditEvent[]>([]);
 
   const current = initialState.currentShopifyListing;
-  const draftChanges = useMemo(() => {
-    if (!current || !draft) return [];
-    return summarizeDraftChanges(current, draft);
+  const diffPreview = useMemo(() => {
+    if (!current || !draft) return null;
+    return buildShopifyStep3DiffPreview(current, draft);
   }, [current, draft]);
+  const draftChanges = diffPreview?.changes ?? [];
+
+  function appendAuditEvents(events: ShopifyStep3AuditEvent[]) {
+    if (!events.length) return;
+    setAuditEvents((prev) => [...events.slice().reverse(), ...prev].slice(0, 30));
+  }
 
   function applyProposalToDraft() {
     if (!current || !proposal) return;
     setDraft(buildEditableShopifyDraft(current, proposal));
+    setPublishOutcome(null);
     setFeedback("Applied optimized proposal to the editable draft.");
   }
 
@@ -97,12 +114,32 @@ export default function ShopifyProductEditorClient({
     const iso = new Date().toISOString();
     setSavedAt(iso);
     setFeedback(`Draft saved locally at ${iso}.`);
+    appendAuditEvents([
+      buildShopifyStep3AuditEvent("draft_saved_local", "Local draft save recorded.", { occurredAt: iso }),
+    ]);
   }
 
   function prepareUpdate() {
     setFeedback(
       "Draft prepared for update review. Nothing is published unless explicitly approved."
     );
+    appendAuditEvents([
+      buildShopifyStep3AuditEvent("update_prepared_local", "Draft marked as prepared for review."),
+    ]);
+  }
+
+  function requestPublishDryRun() {
+    if (!current || !draft || !diffPreview) return;
+
+    const intent = buildShopifyStep3PublishIntent({
+      current,
+      diffPreview,
+      confirmationAccepted: publishConfirmationAccepted,
+    });
+    const outcome = evaluateShopifyStep3PublishDryRun(intent);
+    setPublishOutcome(outcome);
+    setFeedback(outcome.message);
+    appendAuditEvents(outcome.auditEvents);
   }
 
   function generateOptimization() {
@@ -394,11 +431,47 @@ export default function ShopifyProductEditorClient({
                 Apply proposal to draft
               </button>
             ) : null}
+            <button
+              type="button"
+              onClick={requestPublishDryRun}
+              data-testid="ecomviper-shopify-request-publish-dry-run"
+              className="rounded-lg border border-[#7C3AED] bg-[#7C3AED] px-3 py-2 text-sm font-medium text-white"
+            >
+              Request publish (dry-run)
+            </button>
           </div>
+          <label className="mt-3 flex items-start gap-2 text-xs text-[#334155]">
+            <input
+              type="checkbox"
+              data-testid="ecomviper-shopify-publish-confirmation"
+              checked={publishConfirmationAccepted}
+              onChange={(event) => setPublishConfirmationAccepted(event.target.checked)}
+              className="mt-[2px] h-4 w-4 rounded border-[#CBD5E1]"
+            />
+            <span>I confirm this draft diff was reviewed and is ready for guarded publish review.</span>
+          </label>
           <p className="mt-2 text-xs text-[#64748B]">
             Last local draft save: {formatTimestamp(savedAt)}
           </p>
         </article>
+
+        {publishOutcome ? (
+          <article
+            data-testid="ecomviper-shopify-publish-dry-run-outcome"
+            className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+          >
+            <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-amber-900">Publish workflow status</h3>
+            <p className="mt-2">
+              <strong>Result code:</strong> {publishOutcome.code}
+            </p>
+            <p className="mt-1">{publishOutcome.message}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {publishOutcome.recoveryActions.map((action) => (
+                <li key={action}>{action}</li>
+              ))}
+            </ul>
+          </article>
+        ) : null}
 
         {draft ? (
           <div className="grid gap-3 lg:grid-cols-2">
@@ -512,6 +585,15 @@ export default function ShopifyProductEditorClient({
 
         <article className="rounded-xl border border-[#D9E4F0] bg-white p-4">
           <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#334155]">Staged changes</h3>
+          {diffPreview ? (
+            <p
+              data-testid="ecomviper-shopify-diff-preview-summary"
+              className="mt-2 text-xs text-[#64748B]"
+            >
+              Deterministic diff preview: {diffPreview.totalChanges} total changes · {diffPreview.apiPushableChanges} API-pushable
+              · {diffPreview.recommendationOnlyChanges} recommendation-only.
+            </p>
+          ) : null}
           <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-[#334155]">
             {draftChanges.map((change) => (
               <li key={`${change.field}:${change.before}`}>
@@ -522,8 +604,19 @@ export default function ShopifyProductEditorClient({
             {!draftChanges.length ? <li>No staged changes yet.</li> : null}
           </ul>
         </article>
+
+        <article className="rounded-xl border border-[#D9E4F0] bg-white p-4" data-testid="ecomviper-shopify-review-publish-audit">
+          <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#334155]">Review/Publish Timeline</h3>
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+            {auditEvents.map((event) => (
+              <li key={`${event.code}:${event.occurredAt}:${event.message}`}>
+                <strong>{event.code}</strong> ({event.level}) at {formatTimestamp(event.occurredAt)}: {event.message}
+              </li>
+            ))}
+            {!auditEvents.length ? <li>No review/publish events yet.</li> : null}
+          </ul>
+        </article>
       </section>
     </main>
   );
 }
-
