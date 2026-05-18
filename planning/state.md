@@ -12,6 +12,14 @@ Last updated: 2026-05-18 (UTC)
 - Sprint 005: Completed (Shopify guarded publish execution scaffold).
 - Walmart planning sprint: Completed (`walmart-product-intent` docs baseline).
 - Walmart Sprint 001: Completed (`walmart-command-center-foundation` docs baseline).
+- Studio product intent sprint: Completed (`studio-product-intent`, MR `!180`).
+- Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
+
+## Studio Naming Alignment Notes
+
+- MR `!180` established the implementation-derived Studio product intent baseline.
+- This sprint is scoped to docs/planning naming cleanup for Studio/CasaFlix.
+- No application behavior changes are included; only planning-language alignment and legacy-name clarifications.
 
 ## Planning App Map
 
