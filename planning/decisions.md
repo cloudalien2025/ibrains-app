@@ -68,3 +68,33 @@ Last updated: 2026-05-18 (UTC)
       - Tests/checks result
       - Next recommended sprint
 - Rationale: Standardizes delivery quality gates, keeps sprint scope controlled, and ensures planning state stays synchronized with GitLab outcomes.
+
+## D-008 Define End-to-End Sprint Completion Criteria (No Early Stop)
+
+- Status: Accepted
+- Decision: A sprint is not complete when code is pushed or when an MR URL is returned. Completion requires full end-to-end GitLab flow closure.
+- Mandatory completion checklist:
+  1. Merge Request is created.
+  2. GitLab pipeline/checks complete successfully.
+  3. Any failed checks are fixed on the same branch.
+  4. MR is merged into `main`.
+  5. Remote source branch is deleted.
+  6. Local sprint branch is deleted.
+  7. Local repository is reset:
+     - `git switch main`
+     - `git pull`
+     - `git status`
+  8. `git status` confirms clean `main`.
+  9. `planning/state.md` is updated with:
+     - sprint number/title
+     - MR number/link
+     - pipeline result
+     - merge commit SHA
+     - branch deletion status
+     - final local branch/status
+     - recommended next sprint
+- Warning:
+  - Do not stop after pushing the branch.
+  - Do not stop after returning the MR URL.
+  - Continue until merge and clean `main` unless blocked by permissions or a failing check requiring human input.
+- Rationale: Prevents partial handoffs and ensures each sprint is operationally closed, auditable, and ready for the next sprint.

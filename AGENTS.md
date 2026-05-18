@@ -38,3 +38,35 @@ Every sprint must follow this GitLab flow:
    - Next recommended sprint
 
 Important: Do not start the next sprint until the current sprint MR is merged and local `main` is clean.
+
+## Sprint Completion Definition (Mandatory)
+
+A sprint is **not complete** when the branch is pushed or when an MR URL is returned.
+
+A sprint is complete only when all steps below are finished:
+
+1. The Merge Request is created.
+2. GitLab pipeline/checks finish successfully.
+3. Any failed checks are fixed on the same branch.
+4. The MR is merged into `main`.
+5. The remote source branch is deleted.
+6. The local sprint branch is deleted.
+7. Local repo is reset to `main`:
+   - `git switch main`
+   - `git pull`
+   - `git status`
+8. `git status` confirms clean `main`.
+9. `planning/state.md` is updated with:
+   - sprint number/title
+   - MR number/link
+   - pipeline result
+   - merge commit SHA
+   - branch deletion status
+   - final local branch/status
+   - recommended next sprint
+
+Warning:
+
+- Do not stop after pushing the branch.
+- Do not stop after returning the MR URL.
+- Continue the GitLab flow until merge and clean `main` unless blocked by permissions or a failing check that requires human input.
