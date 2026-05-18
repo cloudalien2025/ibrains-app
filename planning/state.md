@@ -15,6 +15,7 @@ Last updated: 2026-05-18 (UTC)
 - Studio product intent sprint: Completed (`studio-product-intent`, MR `!180`).
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
+- eBay product-intent sprint: Completed (`ebay-product-intent` docs baseline from implementation analysis).
 
 ## Studio Naming Alignment Notes
 
@@ -201,4 +202,20 @@ Warning:
 - `planning/apps/ecomviper/walmart/command-center-foundation.md`
 - `planning/apps/ecomviper/walmart/overview.md`
 - `planning/apps/ecomviper/walmart/product-intent.md`
+- `planning/state.md`
+
+- Sprint: `eBay Product-Intent Sprint` - `Completed`
+- Title: `eBay Product Intent Baseline from Implementation`
+- MR: `!183 (https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/183)`
+- Commit SHA: `pending`
+- Pipeline/checks result: `pending`
+- Merge commit SHA: `pending`
+- Branch deletion status: `pending`
+- Final local branch/status: `pending`
+- Next recommended sprint: `eBay Sprint 001 - establish read-only API boundary + persistence baseline for listing intelligence before guarded execution scope`
+
+### eBay Product-Intent Sprint Files Changed
+
+- `planning/apps/ecomviper/ebay/product-intent.md`
+- `planning/apps/ecomviper/ebay/overview.md`
 - `planning/state.md`
