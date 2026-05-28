@@ -214,5 +214,5 @@ Last updated: 2026-05-28 (UTC)
 - Decision:
   - Clerk fallback redirect routes must default to `/brains` for sign-in and sign-up flows.
   - Env-provided Clerk fallback redirects targeting deprecated legacy routes (`/apps*`, `/studio*`, `/siteforge*`, `/uapforge*`) must be sanitized to `/brains`.
-  - `/`, `/sign-in`, and `/sign-up` must execute under Clerk middleware context so server-side auth-state helpers remain deterministic.
-- Rationale: Prevents legacy-route post-auth redirects, avoids auth-state ambiguity on frontdoor/auth pages, and keeps the standalone-brain route model enforced by contract.
+  - Public routes (`/`, `/sign-in`, `/sign-up`) must bypass Clerk frontend API proxy middleware to prevent signed-out localhost rewrite failures (`x-middleware-rewrite: https://localhost:3001/...`).
+- Rationale: Prevents legacy-route post-auth redirects, avoids Clerk proxy-induced public-route `500` regressions, and keeps the standalone-brain route model enforced by contract.

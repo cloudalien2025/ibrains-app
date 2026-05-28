@@ -53,7 +53,7 @@ describe("proxy app/auth protection", () => {
     delete process.env.E2E_MOCK_GRAPH;
   });
 
-  it("/sign-in and /sign-up stay public", async () => {
+  it("/sign-in and /sign-up stay public without Clerk proxy passthrough", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -62,7 +62,7 @@ describe("proxy app/auth protection", () => {
 
     expect(signInResponse.status).toBe(200);
     expect(signUpResponse.status).toBe(200);
-    expect(state.clerkProxyCalls).toBe(2);
+    expect(state.clerkProxyCalls).toBe(0);
   });
 
   it("redirects unauthenticated users from /optiwal/connect to sign-in with redirect_url", async () => {

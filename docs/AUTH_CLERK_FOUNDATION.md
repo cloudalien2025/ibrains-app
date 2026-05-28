@@ -44,7 +44,7 @@ Set a Clerk secret key for server-side auth and middleware protection:
 ## Runtime contract behavior
 
 - `app/layout.tsx` and `proxy.ts` both resolve Clerk env from one shared contract helper (`lib/auth/clerkEnvContract.ts`).
-- Root (`/`), `/sign-in`, and `/sign-up` now run through Clerk middleware context so server-side auth state helpers can resolve consistently.
+- Public frontdoor/auth routes (`/`, `/sign-in`, `/sign-up`) bypass Clerk frontend proxy middleware to avoid signed-out localhost rewrite failures.
 - Development/test may use a local placeholder publishable key to keep local rendering stable when Clerk env is intentionally absent.
 - Production must provide a real publishable key and `CLERK_SECRET_KEY`.
 - If production env is misconfigured, the app now fails explicitly with a diagnosable Clerk contract error (instead of silently behaving like a normal logout).

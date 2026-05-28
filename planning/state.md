@@ -126,6 +126,17 @@ Last updated: 2026-05-28 (UTC)
   - `git diff --check` passed.
   - `npm test` remains red on existing repository baseline failures outside this sprint scope; one affected expectation family now reflects legacy naming assumptions.
 
+## Active Sprint Log: Clerk Public Route Proxy 500 Hotfix
+
+- Sprint: `sprint-013-fix-clerk-public-route-proxy-500` (in progress).
+- Production post-merge finding:
+  - after Sprint 012 deploy, signed-out `/`, `/sign-in`, and `/sign-up` returned `500` with `x-middleware-rewrite: https://localhost:3001/...`.
+- Root cause:
+  - public routes were routed through Clerk middleware proxy path; signed-out behavior rewrote to localhost frontend API proxy target in production.
+- Hotfix scope:
+  - restore explicit public-route passthrough for `/`, `/sign-in`, and `/sign-up`.
+  - retain Clerk fallback redirect sanitization and standalone-brain route model.
+
 ## Current Operating Reminder
 
 - Do not begin a new sprint unless local repository is clean on `main`.
