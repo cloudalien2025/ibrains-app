@@ -154,6 +154,18 @@ Last updated: 2026-05-28 (UTC)
 - Production verification status:
   - post-merge deployment verification remains pending at the time of this update; `/api/meta/release` temporarily reports missing release metadata and production still showed pre-hotfix proxy-rewrite behavior during immediate post-merge checks.
 
+## Active Sprint Log: Shell Auth Fail-Closed Hardening
+
+- Sprint: `sprint-015-shell-auth-fail-closed` (in progress).
+- Incident context:
+  - signed-in users could still observe server errors on `/brains` when shell auth resolution threw during server render.
+- Root cause:
+  - protected shell layout called `auth()` without local error handling, allowing Clerk runtime/auth-context exceptions to bubble as `500`.
+- Implementation:
+  - shell layout now catches `auth()` failures and falls back to verified Clerk session token lookup before redirecting.
+  - when no recoverable user is available, layout redirects to `/sign-in` (fail-closed) instead of throwing.
+  - regression tests added for both recover and redirect paths.
+
 ## Current Operating Reminder
 
 - Do not begin a new sprint unless local repository is clean on `main`.

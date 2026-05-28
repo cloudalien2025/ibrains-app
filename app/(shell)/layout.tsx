@@ -4,6 +4,7 @@ import { UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import ConfiguredClerkProvider from "@/components/auth/configured-clerk-provider";
 import { buildClerkProductionConfigError, resolveClerkRuntimeContract } from "@/lib/auth/clerkEnvContract";
+import { resolveVerifiedClerkSessionUserId } from "@/lib/auth/clerkSessionToken";
 import { redirect } from "next/navigation";
 import SideNav from "./_components/SideNav";
 
@@ -17,7 +18,20 @@ export default async function ShellLayout({ children }: { children: ReactNode })
     throw new Error(buildClerkProductionConfigError(runtimeContract));
   }
 
-  const { userId } = e2eMockGraph ? { userId: "e2e-admin" } : await auth();
+  let userId: string | null = null;
+  if (e2eMockGraph) {
+    userId = "e2e-admin";
+  } else {
+    try {
+      ({ userId } = await auth());
+    } catch {
+      userId = null;
+    }
+
+    if (!userId) {
+      userId = await resolveVerifiedClerkSessionUserId();
+    }
+  }
   if (!userId) {
     redirect("/sign-in");
   }
