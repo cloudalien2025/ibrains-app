@@ -1,6 +1,6 @@
 # Planning Decisions
 
-Last updated: 2026-05-18 (UTC)
+Last updated: 2026-05-28 (UTC)
 
 ## D-001 Keep Shopify Workspace Shape Stable
 
@@ -207,3 +207,12 @@ Last updated: 2026-05-18 (UTC)
   - Signed-out protected `/api/brains/*` requests must return a clean non-500 auth response (for example `401`), not internal errors caused by middleware proxy loops.
   - Root frontdoor signed-in action composition must render a single primary `Open Brains` CTA.
 - Rationale: Prevents index regressions from auth/API middleware coupling, preserves secure route behavior, and keeps launcher UX deterministic.
+
+## D-019 Enforce Clerk Route-Contract Fallback Safety And Root/Auth Middleware Context
+
+- Status: Accepted
+- Decision:
+  - Clerk fallback redirect routes must default to `/brains` for sign-in and sign-up flows.
+  - Env-provided Clerk fallback redirects targeting deprecated legacy routes (`/apps*`, `/studio*`, `/siteforge*`, `/uapforge*`) must be sanitized to `/brains`.
+  - `/`, `/sign-in`, and `/sign-up` must execute under Clerk middleware context so server-side auth-state helpers remain deterministic.
+- Rationale: Prevents legacy-route post-auth redirects, avoids auth-state ambiguity on frontdoor/auth pages, and keeps the standalone-brain route model enforced by contract.

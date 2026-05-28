@@ -55,15 +55,10 @@ function resolveAppBaseUrlOrigin(): string {
 function isPublicClerkPassthroughRoute(req: NextRequest): boolean {
   const pathname = req.nextUrl.pathname;
   return (
-    pathname === "/" ||
     pathname === "/api/health" ||
     pathname === "/api/meta/release" ||
     pathname === "/api/_meta/release" ||
-    pathname.startsWith("/api/studio/domara/") ||
-    pathname === "/sign-in" ||
-    pathname.startsWith("/sign-in/") ||
-    pathname === "/sign-up" ||
-    pathname.startsWith("/sign-up/")
+    pathname.startsWith("/api/studio/domara/")
   );
 }
 

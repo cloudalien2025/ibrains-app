@@ -62,7 +62,7 @@ describe("proxy app/auth protection", () => {
 
     expect(signInResponse.status).toBe(200);
     expect(signUpResponse.status).toBe(200);
-    expect(state.clerkProxyCalls).toBe(0);
+    expect(state.clerkProxyCalls).toBe(2);
   });
 
   it("redirects unauthenticated users from /optiwal/connect to sign-in with redirect_url", async () => {
