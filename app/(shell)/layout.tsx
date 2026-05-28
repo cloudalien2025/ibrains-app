@@ -1,9 +1,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import ConfiguredClerkProvider from "@/components/auth/configured-clerk-provider";
-import { buildClerkProductionConfigError, resolveClerkRuntimeContract } from "@/lib/auth/clerkEnvContract";
+import { resolveClerkRuntimeContract } from "@/lib/auth/clerkEnvContract";
 import { resolveVerifiedClerkSessionUserId } from "@/lib/auth/clerkSessionToken";
 import { redirect } from "next/navigation";
 import SideNav from "./_components/SideNav";
@@ -15,7 +14,7 @@ export default async function ShellLayout({ children }: { children: ReactNode })
   const runtimeContract = resolveClerkRuntimeContract();
 
   if (!e2eMockGraph && runtimeContract.hasProductionConfigError) {
-    throw new Error(buildClerkProductionConfigError(runtimeContract));
+    redirect("/sign-in");
   }
 
   let userId: string | null = null;
@@ -82,13 +81,15 @@ export default async function ShellLayout({ children }: { children: ReactNode })
                 >
                   Home
                 </Link>
-                {e2eMockGraph ? (
-                  <div className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1 text-xs text-[#334155]">
-                    E2E Admin
-                  </div>
-                ) : (
-                  <UserButton />
-                )}
+                <div className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1 text-xs text-[#334155]">
+                  {e2eMockGraph ? "E2E Admin" : "Signed in"}
+                </div>
+                <Link
+                  href="/settings"
+                  className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
+                >
+                  Account
+                </Link>
               </div>
             </header>
 

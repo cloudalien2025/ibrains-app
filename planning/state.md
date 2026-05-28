@@ -166,6 +166,17 @@ Last updated: 2026-05-28 (UTC)
   - when no recoverable user is available, layout redirects to `/sign-in` (fail-closed) instead of throwing.
   - regression tests added for both recover and redirect paths.
 
+## Active Sprint Log: Signed-In /brains Stability Hardening
+
+- Sprint: `sprint-016-shell-stability-signed-in-brains` (in progress).
+- Incident context:
+  - users can still hit `/brains` internal server errors after successful sign-in redirect.
+- Mitigation scope:
+  - remove hard-throw path in protected shell layout for production Clerk config mismatch; fail-closed to sign-in instead.
+  - remove server-render dependency on Clerk `UserButton` in shell header to reduce signed-in SSR crash surface.
+  - add `app/(shell)/error.tsx` boundary so unexpected shell errors render recoverable UI rather than generic 500.
+  - add regression coverage for production config fail-closed behavior.
+
 ## Current Operating Reminder
 
 - Do not begin a new sprint unless local repository is clean on `main`.
