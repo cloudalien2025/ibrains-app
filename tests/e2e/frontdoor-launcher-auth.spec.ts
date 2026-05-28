@@ -7,7 +7,7 @@ test.describe("frontdoor launcher auth state", () => {
     await expect(page.getByTestId("frontdoor-authenticated-state")).toHaveText("Signed in");
     await expect(page.getByRole("link", { name: "Sign in", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Create account", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Open Console", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open Brain", exact: true })).toBeVisible();
 
     await page.reload({ waitUntil: "networkidle" });
 

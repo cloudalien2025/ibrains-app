@@ -32,7 +32,7 @@ export default async function FrontdoorHeaderActions({ currentPath }: FrontdoorH
       ) : null}
 
       <Link href="/brains" className={signedIn ? primaryLinkClass : secondaryLinkClass}>
-        Open Console
+        Open Brains
       </Link>
 
       {signedIn ? (

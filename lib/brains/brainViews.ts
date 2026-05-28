@@ -133,7 +133,7 @@ export function normalizeBrainRecord(brain: BrainRecord): BrainViewEntry {
     name,
     shortDescription: description,
     tags: genericTags,
-    primaryCtaText: "Open Console",
+    primaryCtaText: "Open Brain",
     upsellTitle: `Unlock ${name}`,
     upsellMessage: `Activate ${name} to run discovery, ingest, retrieval, and answering workflows.`,
     iconKey: "map",

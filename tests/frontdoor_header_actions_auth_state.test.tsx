@@ -42,7 +42,7 @@ describe("frontdoor header actions", () => {
     expect(html).not.toContain(">Sign in<");
     expect(html).not.toContain(">Create account<");
     expect(html).toContain("frontdoor-authenticated-state");
-    expect(html).toContain(">Open Console<");
+    expect(html).toContain(">Open Brains<");
   });
 
   it("re-resolves auth state on each render so refresh can switch the visible header state", async () => {
