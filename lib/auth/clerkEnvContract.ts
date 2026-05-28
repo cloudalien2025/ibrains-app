@@ -1,4 +1,5 @@
 export const DEV_PUBLISHABLE_KEY_FALLBACK = "pk_test_ibrains_missing_publishable_key";
+const deprecatedLegacyRouteRegex = /^\/(?:apps(?:\/.*)?|studio(?:\/.*)?|siteforge(?:\/.*)?|uapforge(?:\/.*)?)$/;
 
 type ClerkContractEnv = {
   CLERK_PUBLISHABLE_KEY?: string;
@@ -21,12 +22,26 @@ function ensureLeadingSlash(pathValue: string | undefined, fallback: string): st
   return pathValue.startsWith("/") ? pathValue : `/${pathValue}`;
 }
 
+function ensureSafeFallbackRedirect(pathValue: string | undefined, fallback: string): string {
+  const normalized = ensureLeadingSlash(pathValue, fallback);
+  if (deprecatedLegacyRouteRegex.test(normalized)) {
+    return fallback;
+  }
+  return normalized;
+}
+
 export function resolveClerkRouteContract(env: ClerkContractEnv = process.env) {
   return {
     signInUrl: ensureLeadingSlash(env.NEXT_PUBLIC_CLERK_SIGN_IN_URL, "/sign-in"),
     signUpUrl: ensureLeadingSlash(env.NEXT_PUBLIC_CLERK_SIGN_UP_URL, "/sign-up"),
-    signInFallbackRedirectUrl: ensureLeadingSlash(env.NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL, "/dashboard"),
-    signUpFallbackRedirectUrl: ensureLeadingSlash(env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL, "/dashboard"),
+    signInFallbackRedirectUrl: ensureSafeFallbackRedirect(
+      env.NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL,
+      "/brains"
+    ),
+    signUpFallbackRedirectUrl: ensureSafeFallbackRedirect(
+      env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL,
+      "/brains"
+    ),
   };
 }
 

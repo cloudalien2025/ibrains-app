@@ -108,6 +108,24 @@ Last updated: 2026-05-28 (UTC)
   - status: clean (`git status` with no changes)
 - Recommended next sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
 
+## Active Sprint Log: Auth Workspace End-Goal Stabilization
+
+- Sprint: `sprint-012-stabilize-auth-workspace-end-goal` (in progress).
+- Root-cause findings so far:
+  - Production sign-in payload still exposed Clerk `fallbackRedirectUrl` as `/apps` from env-derived route contract drift.
+  - Root/auth route middleware bypass (`/`, `/sign-in`, `/sign-up`) allowed inconsistent server auth-context resolution for frontdoor/auth surfaces.
+- Implementation in progress:
+  - Clerk route contract now sanitizes deprecated fallback redirects to `/brains`.
+  - Clerk provider wiring now consumes route-contract fallback values.
+  - Proxy now runs `/`, `/sign-in`, and `/sign-up` through Clerk middleware context.
+  - Added regression coverage for fallback sanitization and updated proxy auth-route expectations.
+- Validation so far:
+  - Focused auth/brains regression suite and targeted Playwright tests pass on branch.
+  - `npm run build` passed.
+  - `bash scripts/check_route_signatures.sh` passed.
+  - `git diff --check` passed.
+  - `npm test` remains red on existing repository baseline failures outside this sprint scope; one affected expectation family now reflects legacy naming assumptions.
+
 ## Current Operating Reminder
 
 - Do not begin a new sprint unless local repository is clean on `main`.
