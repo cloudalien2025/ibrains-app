@@ -43,27 +43,44 @@ Last updated: 2026-05-28 (UTC)
   - status: clean (`git status` with no changes)
 - Recommended next sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
 
-## Sprint Status: Brains API/Auth Regression Hardening
+## Sprint Completion Log: Brains API/Auth Regression Hardening
 
-- Sprint: `sprint-010-fix-brains-api-auth-500` (in progress).
+- Sprint: `sprint-010-fix-brains-api-auth-500` (completed).
+- MR: `!207` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/207`).
+- Pipeline:
+  - branch pipeline `2559793364` (status: `success`)
+  - MR pipeline `2559794578` (status: `success`, finished `2026-05-28T18:22:27Z` UTC)
 - Root-cause summary:
-  - `/brains` still executed protected `/api/brains/*` calls during server render for stats enrichment, so index stability remained coupled to protected API behavior.
-  - `/api/brains` and `/api/brains/[id]/stats` relied on middleware-only protection and were still passing through Clerk proxy handling, producing signed-out `500` responses instead of clean auth responses.
-  - Root frontdoor header rendered duplicate signed-in `Open Brains` CTAs from duplicate link composition.
-- Implementation summary (current branch):
-  - `/brains` SSR now renders canonical standalone brain inventory without protected API fetch dependency.
-  - Brain stats moved to optional client-side enrichment in `BrainsTable` with graceful failure fallback.
-  - `/api/brains` + `/api/brains/[id]` + `/api/brains/[id]/stats` + `/api/brains/[id]/runs` now enforce route-level `requireSignedInUser()` auth checks.
-  - `proxy.ts` now bypasses Clerk middleware for `/api/brains*` so route-level auth controls signed-out responses and avoids middleware proxy-loop `500`s.
-  - Frontdoor signed-in root action composition reduced to one `Open Brains` CTA.
-- Validation summary (current branch):
-  - focused tests include:
+  - `/brains` performed protected `/api/brains/*` stats fetches during server render.
+  - signed-out protected `/api/brains*` requests still flowed through Clerk proxy path and could surface as `500`.
+  - root frontdoor rendered duplicate signed-in `Open Brains` CTAs.
+- Implementation summary:
+  - `/brains` SSR now renders from canonical local standalone brain inventory only.
+  - brain stats moved to optional client-side hydration with graceful fallback.
+  - route-level `requireSignedInUser()` auth added to `GET /api/brains`, `GET /api/brains/[id]`, `GET /api/brains/[id]/stats`, and `GET /api/brains/[id]/runs`.
+  - `proxy.ts` bypasses Clerk middleware for `/api/brains*` so route auth controls signed-out responses cleanly.
+  - duplicate signed-in root `Open Brains` CTA removed.
+- Validation summary:
+  - `npm run build` passed.
+  - `bash scripts/check_route_signatures.sh` passed.
+  - `git diff --check` passed.
+  - focused regression suite passed:
     - `tests/brains_api_auth_contract.test.ts`
     - `tests/brains_table_hydration_resilience.test.tsx`
     - `tests/brains_index_contract.test.ts`
     - `tests/frontdoor_header_actions_auth_state.test.tsx`
     - `tests/proxy_trusted_ingest_bypass.test.ts`
-  - full validation + MR/pipeline/deploy evidence pending completion in this sprint.
+    - `tests/proxy_apps_auth_protection.test.ts`
+    - `tests/apps_layout_auth_contract.test.tsx`
+  - `npm test` remains red on existing repository baseline failures outside this sprint scope.
+- Merge commit SHA: `3e1eabcf10e41b5f3cf8ce8d10a6202bbbf3fd53`.
+- Source branch deletion:
+  - Remote: deleted.
+  - Local: deleted.
+- Final local repository state after merge:
+  - branch: `main`
+  - status: clean (`git status` with no changes)
+- Recommended next sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
 
 ## Current Operating Reminder
 
