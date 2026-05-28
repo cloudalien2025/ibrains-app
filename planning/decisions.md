@@ -216,3 +216,14 @@ Last updated: 2026-05-28 (UTC)
   - Env-provided Clerk fallback redirects targeting deprecated legacy routes (`/apps*`, `/studio*`, `/siteforge*`, `/uapforge*`) must be sanitized to `/brains`.
   - Public routes (`/`, `/sign-in`, `/sign-up`) must bypass Clerk frontend API proxy middleware to prevent signed-out localhost rewrite failures (`x-middleware-rewrite: https://localhost:3001/...`).
 - Rationale: Prevents legacy-route post-auth redirects, avoids Clerk proxy-induced public-route `500` regressions, and keeps the standalone-brain route model enforced by contract.
+
+## D-020 Disable Clerk Frontend API Proxying For app.ibrains.ai Allowed-Subdomain Auth
+
+- Status: Accepted
+- Decision:
+  - `app.ibrains.ai` uses Clerk as an allowed subdomain under the primary `ibrains.ai` production domain.
+  - The authenticated workspace should use direct Clerk frontend/auth requests for this topology.
+  - `proxy.ts` must not enable Clerk `frontendApiProxy` for the current production topology.
+  - `ConfiguredClerkProvider` must not pass `proxyUrl` from stale `NEXT_PUBLIC_CLERK_PROXY_URL` values.
+  - `/brains` remains protected by Clerk middleware and shell auth, but its page render stays local-inventory-first and non-blocking on protected `/api/brains/*`.
+- Rationale: A half-enabled frontend proxy makes Clerk derive `app.ibrains.ai/__clerk` as a proxy URL while the browser/provider can still load Clerk directly, producing inconsistent host attribution and `host_invalid`/signed-in refresh failures.

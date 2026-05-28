@@ -45,6 +45,15 @@ Set a Clerk secret key for server-side auth and middleware protection:
 
 - `app/layout.tsx` and `proxy.ts` both resolve Clerk env from one shared contract helper (`lib/auth/clerkEnvContract.ts`).
 - Public frontdoor/auth routes (`/`, `/sign-in`, `/sign-up`) bypass Clerk frontend proxy middleware to avoid signed-out localhost rewrite failures.
+- `app.ibrains.ai` uses the Clerk production instance as an allowed subdomain of the primary `ibrains.ai` domain. The app must use direct Clerk frontend/auth requests for that allowed-subdomain model.
+- Do not enable Clerk frontend API proxying (`frontendApiProxy`) or pass `ClerkProvider proxyUrl` for `app.ibrains.ai` unless a future architecture decision explicitly changes the auth topology. Half-proxying Clerk requests can cause host attribution failures such as `host_invalid` and can destabilize signed-in `/brains` refreshes.
 - Development/test may use a local placeholder publishable key to keep local rendering stable when Clerk env is intentionally absent.
 - Production must provide a real publishable key and `CLERK_SECRET_KEY`.
 - If production env is misconfigured, the app now fails explicitly with a diagnosable Clerk contract error (instead of silently behaving like a normal logout).
+
+## Protected workspace rendering rule
+
+- `/brains` is the canonical My Brains index and must render from local canonical brain inventory.
+- `/brains` server render must not call protected `/api/brains/*` endpoints.
+- Optional brain stats may hydrate client-side after the cards render and must fail safely.
+- Signed-out protected API routes such as `/api/brains` and `/api/brains/:id/stats` must return clean non-500 auth responses.
