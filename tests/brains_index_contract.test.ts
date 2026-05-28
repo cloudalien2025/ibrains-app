@@ -50,4 +50,12 @@ describe("brains index contract", () => {
     expect(source).not.toContain("UAPForge");
     expect(source).not.toContain("Studio");
   });
+
+  it("does not server-render fetch protected /api/brains endpoints", () => {
+    const brainsPagePath = path.join(process.cwd(), "app", "(shell)", "brains", "page.tsx");
+    const source = fs.readFileSync(brainsPagePath, "utf8");
+
+    expect(source).not.toContain('fetch("/api/brains');
+    expect(source).not.toContain("fetch(`/api/brains");
+  });
 });

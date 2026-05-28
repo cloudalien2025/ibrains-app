@@ -144,4 +144,15 @@ describe("proxy app/auth protection", () => {
     expect(location).toContain("redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fruns%2Frun_123");
     expect(state.clerkProxyCalls).toBe(1);
   });
+
+  it("keeps deprecated legacy routes hard-404", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+    const legacyPaths = ["/apps", "/apps/studio", "/studio", "/siteforge", "/uapforge"];
+
+    for (const path of legacyPaths) {
+      const response = await handler(new NextRequest(`https://app.ibrains.ai${path}`));
+      expect(response.status).toBe(404);
+    }
+  });
 });

@@ -69,4 +69,11 @@ describe("frontdoor header actions", () => {
     expect(html).not.toContain(">Create account<");
     expect((html.match(/frontdoor-authenticated-state/g) ?? []).length).toBe(1);
   });
+
+  it("renders exactly one Open Brains CTA on root when signed in", async () => {
+    resolveFrontdoorAuthStateMock.mockResolvedValue({ status: "signed-in", userId: "user_root" });
+
+    const html = renderToStaticMarkup(await FrontdoorHeaderActions({ currentPath: "/" }));
+    expect((html.match(/>Open Brains</g) ?? []).length).toBe(1);
+  });
 });

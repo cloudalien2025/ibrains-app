@@ -25,12 +25,6 @@ export default async function FrontdoorHeaderActions({ currentPath }: FrontdoorH
         </Link>
       ) : null}
 
-      {currentPath !== "/brains" ? (
-        <Link href="/brains" className={primaryLinkClass}>
-          Open Brains
-        </Link>
-      ) : null}
-
       <Link href="/brains" className={signedIn ? primaryLinkClass : secondaryLinkClass}>
         Open Brains
       </Link>

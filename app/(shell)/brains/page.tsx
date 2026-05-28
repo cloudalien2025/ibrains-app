@@ -3,60 +3,18 @@ import BrainsTable, { type BrainView } from "./_components/BrainsTable";
 import CreateBrainDialog from "../_components/CreateBrainDialog";
 import { brainCatalogById, brainIds } from "@/lib/brains/brainCatalog";
 
-type BrainStatsRecord = Record<string, unknown>;
-
-function toNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Number.parseFloat(value.replace(/[^\d.-]/g, ""));
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-async function loadBrains(): Promise<BrainView[]> {
-  const canonicalBrains: BrainView[] = brainIds.map((id) => ({
+function loadBrains(): BrainView[] {
+  return brainIds.map((id) => ({
     ...brainCatalogById[id],
     entitled: true,
     lastUpdated: null,
     readinessPct: null,
     totalItems: null,
   }));
-
-  const statEntries = await Promise.all(
-    canonicalBrains.map(async (brain) => {
-      try {
-        const statsRes = await fetch(`/api/brains/${brain.id}/stats`, {
-          cache: "no-store",
-          headers: { Accept: "application/json" },
-        });
-        if (!statsRes.ok) return [brain.id, null] as const;
-        const stats = (await statsRes.json().catch(() => null)) as BrainStatsRecord | null;
-        return [brain.id, stats] as const;
-      } catch {
-        return [brain.id, null] as const;
-      }
-    })
-  );
-
-  const statsByBrain = new Map(statEntries);
-  return canonicalBrains.map((brain) => {
-    const stats = statsByBrain.get(brain.id);
-    const readinessRaw = toNumber(stats?.fill_pct ?? stats?.readiness_pct ?? stats?.readiness);
-    const readinessPct = readinessRaw == null ? null : Math.max(0, Math.min(100, readinessRaw));
-    const totalItems = toNumber(
-      stats?.total_items ?? stats?.items_total ?? stats?.source_count ?? stats?.sources_total
-    );
-    return {
-      ...brain,
-      readinessPct,
-      totalItems,
-    };
-  });
 }
 
 export default async function BrainsPage() {
-  const brains = await loadBrains();
+  const brains = loadBrains();
 
   return (
     <div className="space-y-6">

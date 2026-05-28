@@ -122,6 +122,10 @@ function isEcomviperApiRoute(req: NextRequest): boolean {
   return req.nextUrl.pathname.startsWith("/api/ecomviper");
 }
 
+function isBrainsApiRoute(req: NextRequest): boolean {
+  return req.nextUrl.pathname.startsWith("/api/brains");
+}
+
 function isTrustedIngestServiceRequest(req: NextRequest): boolean {
   if (req.method !== "POST") return false;
   if (!trustedIngestPathRegex.test(req.nextUrl.pathname)) return false;
@@ -206,6 +210,7 @@ export default e2eMockGraph
         }
         return NextResponse.next();
       }
+      if (isBrainsApiRoute(req)) return NextResponse.next();
       if (isPublicClerkPassthroughRoute(req)) return NextResponse.next();
       if (isTrustedIngestServiceRequest(req)) return NextResponse.next();
       if (isTrustedRetrieveServiceRequest(req)) return NextResponse.next();

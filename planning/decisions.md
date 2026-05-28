@@ -197,3 +197,13 @@ Last updated: 2026-05-18 (UTC)
   - `/brains` must not depend on legacy `/apps` inventory semantics.
   - Legacy `/apps/*`, `/studio`, `/siteforge`, and `/uapforge` remain removed with no redirects and must return `404`.
 - Rationale: Keeps the main launcher stable, removes coupling to deprecated route models, and prevents regressions caused by legacy inventory assumptions.
+
+## D-018 Enforce Non-Blocking /brains SSR And Clean Protected API Auth Responses
+
+- Status: Accepted
+- Decision:
+  - `/brains` server render must use canonical local inventory only and never block on protected `/api/brains/*` calls.
+  - Brain stats are optional client-side enrichment and must fail gracefully without breaking index rendering.
+  - Signed-out protected `/api/brains/*` requests must return a clean non-500 auth response (for example `401`), not internal errors caused by middleware proxy loops.
+  - Root frontdoor signed-in action composition must render a single primary `Open Brains` CTA.
+- Rationale: Prevents index regressions from auth/API middleware coupling, preserves secure route behavior, and keeps launcher UX deterministic.
