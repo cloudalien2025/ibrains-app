@@ -24,5 +24,9 @@ describe("proxy clerk env guard contract", () => {
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("frontendApiProxy")).toBe(false);
+    // __clerk removed from matcher: Sprint 017 removed the proxy handler so /__clerk/**
+    // requests must bypass the middleware entirely (404) rather than fall through to
+    // Next.js routing which has no handler for that path (500).
+    expect(source.includes('"__clerk"')).toBe(false);
   });
 });
