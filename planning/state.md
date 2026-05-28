@@ -177,6 +177,33 @@ Last updated: 2026-05-28 (UTC)
   - add `app/(shell)/error.tsx` boundary so unexpected shell errors render recoverable UI rather than generic 500.
   - add regression coverage for production config fail-closed behavior.
 
+## Active Sprint Log: Clerk Host Attribution /brains 500 Fix
+
+- Sprint: `sprint-017-fix-clerk-host-brains-500` (in progress).
+- Incident context:
+  - A signed-in browser can still hit an Internal Server Error on `/brains` after redirect/refresh.
+  - Refresh can surface Clerk `host_invalid`, even though `app.ibrains.ai` is an allowed subdomain under the primary `ibrains.ai` Clerk domain.
+- Diagnosis:
+  - Production is deployed from `af1145cc0e9ea7c7803547af6ebccd5654f8fead`.
+  - Signed-out `/brains` redirects cleanly to `/sign-in`.
+  - Signed-out `/api/brains` and `/api/brains/ecomviper/stats` return clean `401` responses.
+  - Deprecated `/apps`, `/apps/*`, `/studio`, `/siteforge`, and `/uapforge` routes remain `404`.
+  - The remaining unstable path is signed-in Clerk host/session attribution: `proxy.ts` enabled Clerk `frontendApiProxy`, while `ConfiguredClerkProvider` did not consistently run a matching frontend proxy contract.
+- Implementation plan:
+  - Remove Clerk frontend API proxying from middleware/provider for the current allowed-subdomain topology.
+  - Preserve Clerk route protection, `/brains` local inventory rendering, clean protected API auth responses, and deprecated route hard-404 behavior.
+  - Add regression tests and update auth architecture docs.
+- Local validation:
+  - focused auth/proxy/brains suites passed.
+  - CI-targeted frontdoor/auth suite passed.
+  - `npm run build` passed.
+  - `bash scripts/check_route_signatures.sh` passed.
+  - `npm run guard:next-origin` passed.
+  - `git diff --check` passed.
+  - Playwright local production-style smoke passed for `/sign-in`, `/brains`, and `Open Brains` flow with E2E mock auth.
+  - `npm run lint` remains red on unrelated repository baseline lint failures outside this sprint scope.
+  - `npm test` remains red on unrelated repository baseline failures outside this sprint scope; auth/proxy/brains-targeted coverage passed.
+
 ## Current Operating Reminder
 
 - Do not begin a new sprint unless local repository is clean on `main`.

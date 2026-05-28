@@ -18,4 +18,11 @@ describe("proxy clerk env guard contract", () => {
     expect(source.includes("return buildSignInRedirect(req);")).toBe(true);
     expect(source.includes("return await clerkProxy(req, event);")).toBe(true);
   });
+
+  it("does not enable Clerk frontend API proxying for the app.ibrains.ai allowed-subdomain model", () => {
+    const sourcePath = path.join(process.cwd(), "proxy.ts");
+    const source = fs.readFileSync(sourcePath, "utf8");
+
+    expect(source.includes("frontendApiProxy")).toBe(false);
+  });
 });

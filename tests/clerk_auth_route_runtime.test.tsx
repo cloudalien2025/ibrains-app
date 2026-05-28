@@ -74,7 +74,7 @@ describe("clerk auth route runtime", () => {
     });
   });
 
-  it("omits proxyUrl when NEXT_PUBLIC_CLERK_PROXY_URL is blank", async () => {
+  it("does not configure Clerk frontend proxying from auth pages", async () => {
     process.env.NEXT_PUBLIC_CLERK_PROXY_URL = "";
 
     const { default: SignInPage } = await import("@/app/sign-in/[[...sign-in]]/page");
@@ -83,14 +83,12 @@ describe("clerk auth route runtime", () => {
     expect(mocks.clerkProviderProps).not.toHaveProperty("proxyUrl");
   });
 
-  it("passes proxyUrl when NEXT_PUBLIC_CLERK_PROXY_URL is non-empty", async () => {
+  it("ignores stale NEXT_PUBLIC_CLERK_PROXY_URL because this app uses direct allowed-subdomain Clerk auth", async () => {
     process.env.NEXT_PUBLIC_CLERK_PROXY_URL = "  https://app.ibrains.ai/__clerk/  ";
 
     const { default: SignInPage } = await import("@/app/sign-in/[[...sign-in]]/page");
     renderToStaticMarkup(<SignInPage />);
 
-    expect(mocks.clerkProviderProps).toMatchObject({
-      proxyUrl: "https://app.ibrains.ai/__clerk/",
-    });
+    expect(mocks.clerkProviderProps).not.toHaveProperty("proxyUrl");
   });
 });

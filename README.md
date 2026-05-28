@@ -39,6 +39,7 @@ The authenticated workspace now uses standalone top-level brain routes.
 - `/brains` is the canonical "My Brains" index for the authenticated workspace.
 - `/brains` SSR must render from canonical local brain inventory and must not block on protected runtime API calls.
 - brain stats/runtime telemetry are optional post-render enrichment and must fail gracefully.
+- Clerk auth for `app.ibrains.ai` uses the production instance's allowed-subdomain model under primary domain `ibrains.ai`; Clerk frontend API proxying is not part of the current route/auth contract.
 - `/apps` and `/apps/*` are deprecated and removed with no compatibility redirects.
 - Legacy `/studio`, `/siteforge`, and `/uapforge` routes are removed and remain `404`.
 
