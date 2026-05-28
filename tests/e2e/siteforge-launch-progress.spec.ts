@@ -172,7 +172,7 @@ test.describe("SiteForge launch progress", () => {
     });
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
+    await page.goto("/pagebolt", { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Launch" }).click();
 
     const buildButton = page.getByTestId("siteforge-build-website-action");

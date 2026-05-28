@@ -58,7 +58,7 @@ This is an internal operations workspace, not a shopper-facing product.
 
 Typical flow from implemented UI/routes:
 
-1. Open `/apps/ecomviper/walmart` and review command center health/queues.
+1. Open `/optiwal` and review command center health/queues.
 2. Go to `Network Connections` (`/connect`) and set Walmart credentials; optionally configure OpenAI, SerpApi, Shopify source catalog, and WordPress destinations/guardrails.
 3. Import Walmart products from `Products` lane (`/products`) and optionally run Shopify sync/reconciliation plus historical content backfill.
 4. Open a SKU at `/products/[sku]` for the single-docket editor:
@@ -73,7 +73,7 @@ Typical flow from implemented UI/routes:
 
 ## 4) What Each Section/Page Is Responsible For
 
-- `Command Center` (`/apps/ecomviper/walmart`): connection health, catalog metrics, activity timeline, capability map, optimization coverage, and next-best-action/missing-from-code panels.
+- `Command Center` (`/optiwal`): connection health, catalog metrics, activity timeline, capability map, optimization coverage, and next-best-action/missing-from-code panels.
 - `Products` (`/products`): product table, filtering/sorting, import progress diagnostics, Shopify sync trigger, historical content backfill trigger, remove-local-product action, and jump to SKU editor.
 - `Product Editor` (`/products/[sku]`): single-docket editing workflow (content/media/pricing/search-browse), live hydration fallback handling, AI optimization, generated media, catalog backfill preview, ITEM report request/poll/download/apply, and guarded publish preview lanes.
 - `iBrains Intelligence` (`/ibrains-intelligence`): product-level recommendation run that scores opportunities and generates destination-aware draft copy, including WordPress destination fit.
@@ -157,8 +157,8 @@ Based on code/tests, currently implemented:
 
 Primary references used:
 
-- `app/apps/ecomviper/walmart/*`
-- `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+- `app/optiwal/*`
+- `app/optiwal/products/[sku]/product-editor-client.tsx`
 - `app/api/ecomviper/walmart/*`
 - `lib/ecomviper/walmart/walmart-products.ts`
 - `lib/ecomviper/walmart/walmart-native-state.ts`

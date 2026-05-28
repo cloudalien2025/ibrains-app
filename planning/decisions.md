@@ -152,3 +152,29 @@ Last updated: 2026-05-18 (UTC)
   - `acceptance-criteria.md`
   - `handoff-prompt.md`
 - Rationale: Improves Architect-to-Builder handoff quality and reduces scope drift during implementation.
+
+## D-016 Adopt Standalone Top-Level Brain Routes And Remove Legacy /apps
+
+- Status: Accepted
+- Decision:
+  - Authenticated product workspaces are mounted as standalone top-level brain routes:
+    - `/ecomviper`
+    - `/optibay`
+    - `/optiwal`
+    - `/optizon`
+    - `/directoryiq`
+    - `/casaflix`
+    - `/pagebolt`
+    - `/reelify`
+    - `/ipetzo`
+  - Core authenticated workspace routes are:
+    - `/dashboard`
+    - `/brains`
+    - `/tasks`
+    - `/reports`
+    - `/add-brain`
+    - `/settings`
+    - `/billing`
+  - Legacy `/apps` and `/apps/*` routes are removed and are not redirected.
+  - OptiBay, OptiWal, and OptiZon are independent brain routes and are not nested under EcomViper.
+- Rationale: Eliminates route/naming drift, aligns product identity to brain workspaces, and reduces compatibility complexity.

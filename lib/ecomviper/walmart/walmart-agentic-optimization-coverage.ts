@@ -116,7 +116,7 @@ const SRC = {
   imageProviders: "lib/ecomviper/walmart/walmart-image-providers.ts",
   importEnrichment: "lib/ecomviper/walmart/walmart-import-enrichment.ts",
   reconciliation: "lib/ecomviper/shopify/walmart-shopify-reconciliation.ts",
-  dashboard: "app/apps/ecomviper/walmart/page.tsx",
+  dashboard: "app/optiwal/page.tsx",
 };
 
 const GROUP_DEFAULT_SOURCE: Record<WalmartOptimizationGroup, string[]> = {

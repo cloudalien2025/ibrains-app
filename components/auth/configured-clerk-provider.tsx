@@ -27,8 +27,8 @@ export default function ConfiguredClerkProvider({
       {...(resolvedProxyUrl ? { proxyUrl: resolvedProxyUrl } : {})}
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
-      signInFallbackRedirectUrl="/apps"
-      signUpFallbackRedirectUrl="/apps"
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/dashboard"
     >
       {children}
     </ClerkProvider>

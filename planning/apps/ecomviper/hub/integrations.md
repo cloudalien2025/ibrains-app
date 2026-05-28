@@ -6,7 +6,7 @@ Hub integrates marketplace execution apps with canonical intelligence orchestrat
 The preferred surface model is:
 
 - Public Hub: `ecomviper.com`
-- Private Hub control plane: `app.ibrains.ai/apps/ecomviper/hub`
+- Private Hub control plane: `app.ibrains.ai/ecomviper/hub`
 - iBrains marketing: `ibrains.ai` (WordPress)
 - Private app platform: `app.ibrains.ai`
 
@@ -21,7 +21,7 @@ Flow direction:
 
 - EcomViper/Walmart, EcomViper/Shopify, EcomViper/eBay, EcomViper/Amazon
 - optimized listing/feed outputs
-- sync into private Hub (`app.ibrains.ai/apps/ecomviper/hub`)
+- sync into private Hub (`app.ibrains.ai/ecomviper/hub`)
 - canonicalize, approve, and publish approved public-safe intelligence
 
 ## EcomViper / Walmart

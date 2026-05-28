@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import WalmartDraftsClient from "@/app/apps/ecomviper/walmart/drafts/drafts-client";
+import WalmartDraftsClient from "@/app/optiwal/drafts/drafts-client";
 import type { WalmartDraftRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 function createDraft(overrides?: Partial<WalmartDraftRecord>): WalmartDraftRecord {

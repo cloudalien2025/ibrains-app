@@ -52,8 +52,8 @@ describe("Walmart inventory/pricing pages use durable per-user product source", 
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
 
-    const InventoryPage = (await import("@/app/apps/ecomviper/walmart/inventory/page")).default;
-    const PricingPage = (await import("@/app/apps/ecomviper/walmart/pricing/page")).default;
+    const InventoryPage = (await import("@/app/optiwal/inventory/page")).default;
+    const PricingPage = (await import("@/app/optiwal/pricing/page")).default;
     const inventoryHtml = renderToStaticMarkup(await InventoryPage());
     const pricingHtml = renderToStaticMarkup(await PricingPage());
 
@@ -79,8 +79,8 @@ describe("Walmart inventory/pricing pages use durable per-user product source", 
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
 
-    const InventoryPage = (await import("@/app/apps/ecomviper/walmart/inventory/page")).default;
-    const PricingPage = (await import("@/app/apps/ecomviper/walmart/pricing/page")).default;
+    const InventoryPage = (await import("@/app/optiwal/inventory/page")).default;
+    const PricingPage = (await import("@/app/optiwal/pricing/page")).default;
     const inventoryHtml = renderToStaticMarkup(await InventoryPage());
     const pricingHtml = renderToStaticMarkup(await PricingPage());
 

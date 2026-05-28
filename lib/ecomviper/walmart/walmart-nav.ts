@@ -4,14 +4,14 @@ export interface WalmartNavItem {
 }
 
 export const walmartNavItems: WalmartNavItem[] = [
-  { label: "Command Center", href: "/apps/ecomviper/walmart" },
-  { label: "Products", href: "/apps/ecomviper/walmart/products" },
-  { label: "iBrains Intelligence", href: "/apps/ecomviper/walmart/ibrains-intelligence" },
-  { label: "Drafts", href: "/apps/ecomviper/walmart/drafts" },
-  { label: "Prompt Match", href: "/apps/ecomviper/walmart/activity" },
-  { label: "Trust Signals", href: "/apps/ecomviper/walmart/feeds" },
-  { label: "Semantic Gaps", href: "/apps/ecomviper/walmart/inventory" },
-  { label: "Product Opportunities", href: "/apps/ecomviper/walmart/pricing" },
-  { label: "Network Connections", href: "/apps/ecomviper/walmart/connect" },
-  { label: "Settings", href: "/apps/ecomviper/walmart/settings" },
+  { label: "Command Center", href: "/optiwal" },
+  { label: "Products", href: "/optiwal/products" },
+  { label: "iBrains Intelligence", href: "/optiwal/ibrains-intelligence" },
+  { label: "Drafts", href: "/optiwal/drafts" },
+  { label: "Prompt Match", href: "/optiwal/activity" },
+  { label: "Trust Signals", href: "/optiwal/feeds" },
+  { label: "Semantic Gaps", href: "/optiwal/inventory" },
+  { label: "Product Opportunities", href: "/optiwal/pricing" },
+  { label: "Network Connections", href: "/optiwal/connect" },
+  { label: "Settings", href: "/optiwal/settings" },
 ];

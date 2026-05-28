@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAgenticScorePresentation } from "@/app/apps/ecomviper/walmart/products/[sku]/product-editor-client";
+import { getAgenticScorePresentation } from "@/app/optiwal/products/[sku]/product-editor-client";
 
 describe("Walmart Agentic Visibility score ring thresholds", () => {
   it("marks 100 as perfectly optimized with full-green tone", () => {

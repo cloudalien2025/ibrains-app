@@ -78,7 +78,7 @@ Primary implementation areas:
 - `lib/ecomviper/walmart/walmart-image-intelligence.ts`
 - `lib/ecomviper/walmart/product-facts-agent.ts`
 - `lib/ecomviper/walmart/walmart-search-browse-mapper.ts`
-- `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+- `app/optiwal/products/[sku]/product-editor-client.tsx`
 
 ### FDA Disclaimer Normalization
 Supplement long descriptions are normalized to end with exactly one canonical FDA disclaimer:

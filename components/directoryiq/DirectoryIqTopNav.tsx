@@ -33,7 +33,7 @@ export default function DirectoryIqTopNav({
   onVerticalOverride,
 }: Props) {
   const [busy, setBusy] = useState(false);
-  const connectionHref = "/apps/directoryiq/signal-sources?connector=brilliant-directories";
+  const connectionHref = "/directoryiq/signal-sources?connector=brilliant-directories";
 
   async function handleRefresh() {
     if (!onRefresh) return;

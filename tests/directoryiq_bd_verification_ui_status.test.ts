@@ -3,7 +3,7 @@ import {
   buildBdTestUnresolvedMessage,
   formatRoleLabel,
   formatVerificationStatus,
-} from "@/app/apps/directoryiq/signal-sources/directoryiq-signal-sources-client";
+} from "@/app/directoryiq/signal-sources/directoryiq-signal-sources-client";
 
 describe("directoryiq bd verification ui status mapping", () => {
   it("formats verified and verified_empty statuses", () => {

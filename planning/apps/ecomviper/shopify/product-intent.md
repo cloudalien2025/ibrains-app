@@ -31,13 +31,13 @@ The current UX and data model are built for internal operators, not end shoppers
 
 Typical flow based on implemented routes/UI:
 
-1. Open `/apps/ecomviper/shopify`.
+1. Open `/ecomviper/shopify`.
 2. If disconnected, go to `Settings` lane.
 3. Enter Shopify credentials, test connection, and save.
 4. Run `Sync Now` to import/hydrate Shopify product data.
 5. Optionally connect OpenAI (for optimization proposals) and SerpAPI (for visibility scans).
 6. Review `Command Center` and lane diagnostics (Knowledge Base, Prompt Match, Trust Signals, Semantic Gaps, Marketplace Health).
-7. Open `Products` lane and click a product to enter `/apps/ecomviper/shopify/products/[productId-or-handle]`.
+7. Open `Products` lane and click a product to enter `/ecomviper/shopify/products/[productId-or-handle]`.
 8. Use 3-step product editor:
    - Step 1: review current listing snapshot,
    - Step 2: generate AI proposal (if OpenAI connected),
@@ -49,7 +49,7 @@ Important current behavior: Step 3 is draft-prep oriented; it does not auto-publ
 
 ### A. Main Workspace Page
 
-Route: `/apps/ecomviper/shopify`
+Route: `/ecomviper/shopify`
 
 - Loads signed-in user state + optional explicit demo mode (`?demo=1`/`true`/`demo`).
 - Renders sidebar lanes and status pills (environment, store, mode, connection states, sync timestamps).
@@ -93,7 +93,7 @@ Route: `/apps/ecomviper/shopify`
 
 ### C. Product Editor Page
 
-Route: `/apps/ecomviper/shopify/products/[productId-or-handle]`
+Route: `/ecomviper/shopify/products/[productId-or-handle]`
 
 - Loads product state from live, fallback snapshot, demo, or unavailable mode.
 - Step 1: read-only current listing docket.
@@ -202,10 +202,10 @@ Key gaps/uncertainties visible in current code:
 
 Primary implementation references:
 
-- `app/apps/ecomviper/shopify/page.tsx`
-- `app/apps/ecomviper/shopify/shopify-workspace-client.tsx`
-- `app/apps/ecomviper/shopify/_components/*`
-- `app/apps/ecomviper/shopify/products/[productId-or-handle]/*`
+- `app/ecomviper/shopify/page.tsx`
+- `app/ecomviper/shopify/shopify-workspace-client.tsx`
+- `app/ecomviper/shopify/_components/*`
+- `app/ecomviper/shopify/products/[productId-or-handle]/*`
 - `lib/ecomviper/shopify/shopify-workspace-state.ts`
 - `lib/ecomviper/shopify/shopify-live-hydrator.ts`
 - `lib/ecomviper/shopify/shopify-policy-capabilities.ts`

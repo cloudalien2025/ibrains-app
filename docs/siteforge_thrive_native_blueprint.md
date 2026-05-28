@@ -1,7 +1,7 @@
-# SiteForge Thrive-Native Blueprint (Approved Native Target + Validation v1)
+# PageBolt Thrive-Native Blueprint (Approved Native Target + Validation v1)
 
 ## 1) Current Truth
-SiteForge now operates in four explicit runtime states:
+PageBolt now operates in four explicit runtime states:
 - `wp_safe_mode`
 - `thrive_intel_mode`
 - `thrive_native_staging_mode`
@@ -10,10 +10,10 @@ SiteForge now operates in four explicit runtime states:
 Production remains constrained to safe WordPress write surfaces:
 - `/wp-json/wp/v2/pages`
 - `/wp-json/wp/v2/settings`
-- existing menu endpoints already used by SiteForge
+- existing menu endpoints already used by PageBolt
 
 ## 2) Native Contract Registry (v1)
-SiteForge now uses an explicit operation registry (`lib/siteforge/thriveNativeContracts.ts`) for every approved-target native write.
+PageBolt now uses an explicit operation registry (`lib/siteforge/thriveNativeContracts.ts`) for every approved-target native write.
 
 Each operation contract defines:
 - operation name
@@ -108,7 +108,7 @@ Rollback model (v1):
 - executes deterministic cleanup on explicit rollback call
 
 ## 6) Native Validation Runner (Dry-Run + Real-Run)
-SiteForge now includes a dedicated approved-target validation runner (`lib/siteforge/thriveNativeValidation.ts`).
+PageBolt now includes a dedicated approved-target validation runner (`lib/siteforge/thriveNativeValidation.ts`).
 
 Validation modes:
 - `dry_run`: compose + guard + precheck + homepage state checks, no native writes
@@ -131,7 +131,7 @@ Run-level validation captures:
 - promotion-candidate summary
 
 ## 7) Workspace / Session Truth
-SiteForge persists native staging metadata in run/snapshot truth:
+PageBolt persists native staging metadata in run/snapshot truth:
 - `thrive.nativeGuard`
 - `thrive.nativeComposition`
 - `thrive.nativeExecution`
@@ -142,7 +142,7 @@ SiteForge persists native staging metadata in run/snapshot truth:
 This gives deterministic replay/debug and a clear contract-capture history for each run.
 
 ## 8) UI / Product Surface
-SiteForge workspace now exposes a dedicated native target validation surface:
+PageBolt workspace now exposes a dedicated native target validation surface:
 - guard eligibility and block reason
 - allowlisted operation set
 - schema contract version

@@ -15,7 +15,22 @@ const brainIdAliases: Record<string, BrainId> = {
   directoryiq: "directoryiq",
   brilliant_directories: "directoryiq",
   ecomviper: "ecomviper",
-  studio: "studio",
+  ebay: "optibay",
+  ebay_optimizer: "optibay",
+  optibay: "optibay",
+  walmart: "optiwal",
+  walmart_optimizer: "optiwal",
+  optiwal: "optiwal",
+  amazon: "optizon",
+  amazon_optimizer: "optizon",
+  optizon: "optizon",
+  casaflix: "casaflix",
+  reelify: "reelify",
+  uapforge: "reelify",
+  pagebolt: "pagebolt",
+  siteforge: "pagebolt",
+  ipetzo: "ipetzo",
+  studio: "casaflix",
 };
 
 function toStringValue(value: unknown): string | null {

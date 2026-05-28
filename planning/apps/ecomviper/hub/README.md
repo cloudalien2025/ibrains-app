@@ -2,8 +2,8 @@
 
 ## Route
 
-- Private app route: `/apps/ecomviper/hub`
-- Private production URL: `https://app.ibrains.ai/apps/ecomviper/hub`
+- Private app route: `/ecomviper/hub`
+- Private production URL: `https://app.ibrains.ai/ecomviper/hub`
 - Preferred future public Hub surface: `https://ecomviper.com`
 
 ## What EcomViper Hub Is
@@ -19,7 +19,7 @@ Planning is the source of truth for architecture decisions, while implementation
 ## Surface Model
 
 - Public Hub (`ecomviper.com`): public product intelligence and discovery layer
-- Private Hub (`app.ibrains.ai/apps/ecomviper/hub`): merchant/operator control plane
+- Private Hub (`app.ibrains.ai/ecomviper/hub`): merchant/operator control plane
 - iBrains marketing (`ibrains.ai`): WordPress-served marketing surface
 - Private app platform (`app.ibrains.ai`): authenticated app platform
 
@@ -44,7 +44,7 @@ Planning is the source of truth for architecture decisions, while implementation
 - Document domain/infrastructure direction:
   - `ibrains.ai` WordPress marketing
   - `app.ibrains.ai` private app platform
-  - `app.ibrains.ai/apps/ecomviper/hub` private Hub control plane
+  - `app.ibrains.ai/ecomviper/hub` private Hub control plane
   - `ecomviper.com` preferred public Hub surface
 - Document publication boundary and operational guidance as planning-only architecture
 

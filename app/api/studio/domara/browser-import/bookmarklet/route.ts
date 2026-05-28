@@ -269,7 +269,7 @@ function buildBookmarkletScript(origin: string, encodedCampaignId?: string) {
   }
 
   function buildReceiverUrl() {
-    var receiver = new URL("/apps/studio/casaflix/import", APP_ORIGIN);
+    var receiver = new URL("/casaflix/import", APP_ORIGIN);
     if (CAMPAIGN_ID) receiver.searchParams.set("campaignId", CAMPAIGN_ID);
     receiver.searchParams.set("captureMethod", "bookmarklet");
     return receiver.toString();

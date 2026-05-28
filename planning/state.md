@@ -22,8 +22,8 @@ Last updated: 2026-05-18 (UTC)
 - Studio Sprint 001: Completed (`sprint-001-studio-planning-naming-alignment`, docs/planning naming drift cleanup from legacy Domara/CasaHUD references to CasaFlix-first planning language).
 - DirectoryIQ product-intent sprint: Completed (`directoryiq-product-intent`, MR `!179`, pipeline `2532737593` success, merged to `main`).
 - DirectoryIQ Sprint 001: In progress (`sprint-001-directoryiq-foundation`, architecture/builder planning foundation + workspace shell alignment).
-- SiteForge Sprint 001: In progress (`sprint-001-siteforge-command-center-foundation`, architecture/builder planning foundation + command-center shell alignment).
-- SiteForge Sprint 002: In progress (`sprint-002-siteforge-shell-render-fix`, shell render integration fix so `/apps/siteforge` visibly renders command-center sidebar + workspace).
+- PageBolt Sprint 001: In progress (`sprint-001-siteforge-command-center-foundation`, architecture/builder planning foundation + command-center shell alignment).
+- PageBolt Sprint 002: In progress (`sprint-002-siteforge-shell-render-fix`, shell render integration fix so `/pagebolt` visibly renders command-center sidebar + workspace).
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
@@ -36,6 +36,29 @@ Last updated: 2026-05-18 (UTC)
   - `git switch main`
   - `git pull`
   - `git status` must be clean
+
+## Authenticated Workspace Route Baseline
+
+- Core routes:
+  - `/dashboard`
+  - `/brains`
+  - `/tasks`
+  - `/reports`
+  - `/add-brain`
+  - `/settings`
+  - `/billing`
+- Standalone brain routes:
+  - `/ecomviper`
+  - `/optibay`
+  - `/optiwal`
+  - `/optizon`
+  - `/directoryiq`
+  - `/casaflix`
+  - `/pagebolt`
+  - `/reelify`
+  - `/ipetzo`
+- Legacy `/apps` and `/apps/*` are removed with no redirect compatibility layer.
+- Commerce relationship rule: OptiBay, OptiWal, and OptiZon are independent top-level brain routes and are not nested under EcomViper.
 
 ## Studio Naming Alignment Notes
 
@@ -55,22 +78,22 @@ Last updated: 2026-05-18 (UTC)
   - observed implementation evidence under app/API/lib/tests.
 - Do not invent requirements outside source-of-truth implementation and planning files.
 
-## SiteForge Planning Continuity
+## PageBolt Planning Continuity
 
-- SiteForge now has a command-center foundation sprint active: `sprint-001-siteforge-command-center-foundation`.
+- PageBolt now has a command-center foundation sprint active: `sprint-001-siteforge-command-center-foundation`.
 - Follow-up render-fix sprint active: `sprint-002-siteforge-shell-render-fix`.
 - Sprint scope is constrained to:
   - architecture/builder planning files under `planning/apps/siteforge/*`
-  - lightweight shell alignment under `app/apps/siteforge/*` (sidebar + workspace frame)
+  - lightweight shell alignment under `app/pagebolt/*` (sidebar + workspace frame)
   - focused shell contract tests
 - Scope guard:
-  - preserve existing SiteForge functionality and API semantics
+  - preserve existing PageBolt functionality and API semantics
   - no workflow rewrites, no data model changes, no dependency additions
 - Render-fix diagnosis target:
   - shell files existed but route presentation still appeared standalone
   - verify and enforce layout ownership of shell framing so page content renders inside workspace region
 - Source-of-truth evidence areas:
-  - `app/apps/siteforge/*`
+  - `app/pagebolt/*`
   - `app/api/siteforge/*`
   - `lib/siteforge/*`
   - `tests/siteforge*`
@@ -222,16 +245,16 @@ Warning:
   - `planning/risks.md`
   - `planning/state.md`
 
-- Sprint: `SiteForge Sprint 002` - `In Progress`
-- Title: `SiteForge Shell Render Fix`
+- Sprint: `PageBolt Sprint 002` - `In Progress`
+- Title: `PageBolt Shell Render Fix`
 - Branch: `sprint-002-siteforge-shell-render-fix`
-- Goal: `ensure /apps/siteforge visibly renders left sidebar + right workspace shell around existing workflow`
+- Goal: `ensure /pagebolt visibly renders left sidebar + right workspace shell around existing workflow`
 - Root-cause hypothesis under validation: `page-level standalone shell frame still dominated presentation; tests previously proved component existence but not route-shell ownership semantics`
 
-- Sprint: `SiteForge Sprint 001` - `In Progress`
-- Title: `SiteForge Command Center Foundation`
+- Sprint: `PageBolt Sprint 001` - `In Progress`
+- Title: `PageBolt Command Center Foundation`
 - Branch: `sprint-001-siteforge-command-center-foundation`
-- Scope: `planning architecture/builder docs + lightweight SiteForge command-center shell`
+- Scope: `planning architecture/builder docs + lightweight PageBolt command-center shell`
 - Files changed (planned in this sprint):
   - `planning/apps/siteforge/overview.md`
   - `planning/apps/siteforge/product-intent.md`
@@ -239,8 +262,8 @@ Warning:
   - `planning/apps/siteforge/architecture.md`
   - `planning/apps/siteforge/builder-workflow.md`
   - `planning/apps/siteforge/roadmap.md`
-  - `app/apps/siteforge/layout.tsx`
-  - `app/apps/siteforge/_components/siteforge-sidebar.tsx`
+  - `app/pagebolt/layout.tsx`
+  - `app/pagebolt/_components/siteforge-sidebar.tsx`
   - `lib/siteforge/siteforge-nav.ts`
   - `tests/siteforge_command_center_shell.test.tsx`
   - `planning/state.md`
@@ -248,7 +271,7 @@ Warning:
   - `bash scripts/check_route_signatures.sh`
   - `npm test -- --run tests/siteforge*.test.ts tests/siteforge*.test.tsx`
   - `git diff --check`
-- Functionality preservation statement: `SiteForge workflow/API behavior preserved; shell is presentation/layout-only.`
+- Functionality preservation statement: `PageBolt workflow/API behavior preserved; shell is presentation/layout-only.`
 
 - Sprint: `Sprint 005` - `Completed`
 - MR: `n/a`

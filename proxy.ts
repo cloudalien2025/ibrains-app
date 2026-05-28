@@ -11,12 +11,25 @@ const DIRECTORYIQ_CORS_ORIGIN = "https://app.ibrains.ai";
 const APP_BASE_URL_FALLBACK = "https://app.ibrains.ai";
 
 const isProtectedRoute = createRouteMatcher([
-  "/apps(.*)",
+  "/dashboard(.*)",
+  "/tasks(.*)",
+  "/reports(.*)",
+  "/add-brain(.*)",
+  "/settings(.*)",
+  "/billing(.*)",
+  "/ecomviper(.*)",
+  "/optibay(.*)",
+  "/optiwal(.*)",
+  "/optizon(.*)",
+  "/directoryiq(.*)",
+  "/casaflix(.*)",
+  "/pagebolt(.*)",
+  "/reelify(.*)",
+  "/ipetzo(.*)",
   "/api/ecomviper(.*)",
   "/brains(.*)",
   "/runs(.*)",
   "/mission-control(.*)",
-  "/studio(.*)",
 ]);
 
 const e2eMockGraph = process.env.E2E_MOCK_GRAPH === "1";
@@ -173,12 +186,6 @@ export default e2eMockGraph
       const directoryIqCorsResponse = maybeHandleDirectoryIqCors(req);
       if (directoryIqCorsResponse) return directoryIqCorsResponse;
       if (isSiteforgeApiRoute(req)) return NextResponse.next();
-      if (req.nextUrl.pathname.startsWith("/apps")) {
-        if (!hasClerkSessionCookie(req)) {
-          return buildSignInRedirect(req);
-        }
-        return NextResponse.next();
-      }
       if (isEcomviperApiRoute(req)) {
         if (!hasClerkSessionCookie(req)) {
           return buildSignInRedirect(req);

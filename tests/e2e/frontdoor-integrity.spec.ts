@@ -50,18 +50,18 @@ test.describe("frontdoor integrity", () => {
     await page.goto("/", { waitUntil: "networkidle" });
 
     await expect(page.getByText("Platform Intelligence Engine", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open Apps", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open Brains", exact: true })).toBeVisible();
     await expect(page.locator("body")).not.toContainText("Application error: a client-side exception has occurred");
     await watcher.expectHealthy();
   });
 
-  test("app launcher loads without broken next assets or client exceptions", async ({ page }) => {
+  test("brains workspace loads without broken next assets or client exceptions", async ({ page }) => {
     const watcher = await watchFrontdoorLoad(page);
 
-    await page.goto("/apps", { waitUntil: "networkidle" });
+    await page.goto("/brains", { waitUntil: "networkidle" });
 
-    await expect(page.getByRole("heading", { name: "App Launcher", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open Studio", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Manage Brains", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open Console", exact: true })).toBeVisible();
     await expect(page.locator("body")).not.toContainText("Application error: a client-side exception has occurred");
     await watcher.expectHealthy();
   });

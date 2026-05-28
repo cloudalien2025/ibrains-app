@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import WalmartIBrainsIntelligenceClient from "@/app/apps/ecomviper/walmart/ibrains-intelligence/walmart-ibrains-intelligence-client";
+import WalmartIBrainsIntelligenceClient from "@/app/optiwal/ibrains-intelligence/walmart-ibrains-intelligence-client";
 import type { WalmartNetworkConnection } from "@/lib/ecomviper/walmart/walmart-network-connections";
 import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
 

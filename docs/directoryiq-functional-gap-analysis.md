@@ -3,13 +3,13 @@
 ## Reproduced failures before fix
 Local repro against monorepo (`next dev`, 2026-04-23 UTC):
 
-1. Page: `/apps/directoryiq`
+1. Page: `/directoryiq`
 - Failing API: `GET /api/directoryiq/dashboard`
 - Status/payload: `502` with `{"ok":false,"error":"fetch failed"}`
 - Client-visible error text: `fetch failed`
 - Contract mismatch: dashboard client expects dashboard JSON contract, got transport failure payload.
 
-2. Page: `/apps/directoryiq/listings`
+2. Page: `/directoryiq/listings`
 - Failing API: `GET /api/directoryiq/listings`
 - Status/payload: `502` with `{"ok":false,"error":"fetch failed"}`
 - Client-visible error text: `fetch failed`
@@ -34,5 +34,5 @@ Root infrastructure symptom captured:
 2. `route exists but backend dependency missing`: local handlers touched optional legacy table without defensive fallback.
 
 ## Why standalone could appear to work while monorepo app failed
-- Standalone and monorepo shared similar handler code, but monorepo app runtime characteristics (host/base routing and upstream reachability) made the proxy branch unreliable for `/apps/directoryiq`.
+- Standalone and monorepo shared similar handler code, but monorepo app runtime characteristics (host/base routing and upstream reachability) made the proxy branch unreliable for `/directoryiq`.
 - Monorepo parity target requires local-first handler execution for app routes, not dependency on external host availability.

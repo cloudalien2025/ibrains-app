@@ -8,14 +8,14 @@ Map DirectoryIQ planning concepts to concrete code locations.
 
 ## App Routes
 
-- Root and shell: `app/apps/directoryiq/layout.tsx`, `app/apps/directoryiq/page.tsx`
-- Dashboard client: `app/apps/directoryiq/directoryiq-dashboard-client.tsx`
-- Listings: `app/apps/directoryiq/listings/*`
-- Listing optimization: `app/apps/directoryiq/listings/[listingId]/listing-optimization-client.tsx`
-- Authority: `app/apps/directoryiq/authority/*`
-- Graph integrity: `app/apps/directoryiq/graph-integrity/*`
-- Signal sources: `app/apps/directoryiq/signal-sources/*`
-- Settings/versions: `app/apps/directoryiq/settings/*`, `app/apps/directoryiq/versions/*`
+- Root and shell: `app/directoryiq/layout.tsx`, `app/directoryiq/page.tsx`
+- Dashboard client: `app/directoryiq/directoryiq-dashboard-client.tsx`
+- Listings: `app/directoryiq/listings/*`
+- Listing optimization: `app/directoryiq/listings/[listingId]/listing-optimization-client.tsx`
+- Authority: `app/directoryiq/authority/*`
+- Graph integrity: `app/directoryiq/graph-integrity/*`
+- Signal sources: `app/directoryiq/signal-sources/*`
+- Settings/versions: `app/directoryiq/settings/*`, `app/directoryiq/versions/*`
 
 ## Shared UI Components Used by DirectoryIQ
 
@@ -26,7 +26,7 @@ Map DirectoryIQ planning concepts to concrete code locations.
 ## Navigation Contracts
 
 - DirectoryIQ nav model: `lib/directoryiq/navItems.ts`
-- App launcher surface: `app/apps/page.tsx`
+- Brain dashboard surface: `app/(shell)/dashboard/page.tsx`
 
 ## API Route Families
 

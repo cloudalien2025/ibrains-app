@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import EcomViperShopifyPage from "@/app/apps/ecomviper/shopify/page";
+import EcomViperShopifyPage from "@/app/ecomviper/shopify/page";
 
 describe("Shopify Agentic Commerce workspace route", () => {
-  it("renders /apps/ecomviper/shopify with live/demo status badges and without mock-first default wording", async () => {
+  it("renders /ecomviper/shopify with live/demo status badges and without mock-first default wording", async () => {
     const element = await EcomViperShopifyPage({
       searchParams: Promise.resolve({}),
     });

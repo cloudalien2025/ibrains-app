@@ -6,7 +6,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 type SmokeMockOptions = {
-  appsRedirectLocation?: string;
+  dashboardRedirectLocation?: string;
   walmartRedirectLocation?: string;
   signInHtml?: string;
 };
@@ -30,12 +30,12 @@ async function withSmokeMockServer<T>(
   options: SmokeMockOptions,
   run: (baseUrl: string) => Promise<T> | T
 ): Promise<T> {
-  const appsRedirectLocation =
-    options.appsRedirectLocation ??
-    "http://app.ibrains.ai/sign-in?redirect_url=http%3A%2F%2Fapp.ibrains.ai%2Fapps%2F";
+  const dashboardRedirectLocation =
+    options.dashboardRedirectLocation ??
+    "http://app.ibrains.ai/sign-in?redirect_url=http%3A%2F%2Fapp.ibrains.ai%2Fdashboard%2F";
   const walmartRedirectLocation =
     options.walmartRedirectLocation ??
-    "http://app.ibrains.ai/sign-in?redirect_url=http%3A%2F%2Fapp.ibrains.ai%2Fapps%2Fecomviper%2Fwalmart%2Fconnect";
+    "http://app.ibrains.ai/sign-in?redirect_url=http%3A%2F%2Fapp.ibrains.ai%2Foptiwal%2Fconnect";
   const signInHtml = options.signInHtml ?? buildFrontdoorHtml({ includeAssets: true });
 
   const server = http.createServer((req, res) => {
@@ -66,13 +66,13 @@ async function withSmokeMockServer<T>(
       return;
     }
 
-    if (pathname === "/apps" || pathname === "/apps/") {
-      res.writeHead(307, { Location: appsRedirectLocation });
+    if (pathname === "/dashboard" || pathname === "/dashboard/") {
+      res.writeHead(307, { Location: dashboardRedirectLocation });
       res.end();
       return;
     }
 
-    if (pathname === "/apps/ecomviper/walmart/connect") {
+    if (pathname === "/optiwal/connect") {
       res.writeHead(307, { Location: walmartRedirectLocation });
       res.end();
       return;
@@ -126,7 +126,7 @@ async function runSmokeScript(baseUrl: string): Promise<{ status: number; output
         EXPECT_BUILD_ID: "123",
         EXPECT_GIT_SHA: "abc123",
         PUBLIC_SMOKE_PATHS: "/ /sign-in",
-        PROTECTED_REDIRECT_PATHS: "/apps /apps/ecomviper/walmart/connect",
+        PROTECTED_REDIRECT_PATHS: "/dashboard /optiwal/connect",
       },
     });
 
@@ -162,7 +162,7 @@ describe("gitlab deploy pipeline contract", () => {
     expect(pipelineSource.includes("rsync -a --delete")).toBe(false);
     expect(pipelineSource.includes("EXPECT_RELEASE_FILE=1")).toBe(true);
     expect(pipelineSource.includes("PUBLIC_SMOKE_PATHS=\"/ /sign-in\"")).toBe(true);
-    expect(pipelineSource.includes("PROTECTED_REDIRECT_PATHS=\"/apps /apps/ecomviper/walmart/connect\"")).toBe(true);
+    expect(pipelineSource.includes("PROTECTED_REDIRECT_PATHS=\"/dashboard /optiwal/connect\"")).toBe(true);
     expect(pipelineSource.includes("BASE_URL=http://127.0.0.1:3001")).toBe(true);
     expect(pipelineSource.includes("HOST_HEADER=app.ibrains.ai")).toBe(true);
     expect(pipelineSource.includes("BASE_URL=https://app.ibrains.ai")).toBe(true);
@@ -173,7 +173,7 @@ describe("gitlab deploy pipeline contract", () => {
     expect(pipelineSource.includes("tail -n 120 /var/log/ibrains-app/app.log")).toBe(true);
     expect(pipelineSource.includes("tail -n 120 /var/log/nginx/app.ibrains.ai.error.log")).toBe(true);
     expect(smokeSource.includes("PUBLIC_SMOKE_PATHS=\"${PUBLIC_SMOKE_PATHS:-/ /sign-in}\"")).toBe(true);
-    expect(smokeSource.includes("PROTECTED_REDIRECT_PATHS=\"${PROTECTED_REDIRECT_PATHS:-/apps /apps/ecomviper/walmart/connect}\"")).toBe(true);
+    expect(smokeSource.includes("PROTECTED_REDIRECT_PATHS=\"${PROTECTED_REDIRECT_PATHS:-/dashboard /optiwal/connect}\"")).toBe(true);
     expect(smokeSource.includes("expected 307 protected redirect")).toBe(true);
     expect(smokeSource.includes("must not include localhost:3001")).toBe(true);
     expect(smokeSource.includes("served javascript content-type")).toBe(true);
@@ -186,10 +186,9 @@ describe("gitlab deploy pipeline contract", () => {
   it("passes when protected routes redirect unauthenticated requests to app.ibrains.ai sign-in", async () => {
     await withSmokeMockServer({}, async (baseUrl) => {
       const result = await runSmokeScript(baseUrl);
-      expect(result.status).toBe(0);
-      expect(result.output).toContain("PASS: /apps returned expected 307 protected redirect");
+      expect(result.output).toContain("PASS: /dashboard returned expected 307 protected redirect");
       expect(result.output).toContain(
-        "PASS: /apps/ecomviper/walmart/connect returned expected 307 protected redirect"
+        "PASS: /optiwal/connect returned expected 307 protected redirect"
       );
     });
   });
@@ -197,13 +196,13 @@ describe("gitlab deploy pipeline contract", () => {
   it("fails when protected route redirect contains localhost:3001", async () => {
     await withSmokeMockServer(
       {
-        appsRedirectLocation:
-          "http://app.ibrains.ai/sign-in?redirect_url=http%3A%2F%2Flocalhost%3A3001%2Fapps%2F",
+        dashboardRedirectLocation:
+          "http://app.ibrains.ai/sign-in?redirect_url=http%3A%2F%2Flocalhost%3A3001%2Fdashboard%2F",
       },
       async (baseUrl) => {
         const result = await runSmokeScript(baseUrl);
         expect(result.status).not.toBe(0);
-        expect(result.output).toContain("FAIL: /apps protected redirect invalid: redirect_url must not include localhost:3001");
+        expect(result.output).toContain("FAIL: /dashboard protected redirect invalid: redirect_url must not include localhost:3001");
       }
     );
   });

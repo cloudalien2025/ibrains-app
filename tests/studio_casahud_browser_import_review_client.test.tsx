@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import BrowserImportReviewClient from "@/app/apps/studio/casahud/import/review-client";
+import BrowserImportReviewClient from "@/app/reelify/import/review-client";
 
 vi.mock("next/link", async () => {
   const React = await import("react");

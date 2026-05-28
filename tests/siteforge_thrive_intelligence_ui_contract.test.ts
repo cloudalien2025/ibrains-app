@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 describe("siteforge plan summary contract", () => {
   it("shows compact plan summary inside Describe", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("Plan summary")).toBe(true);

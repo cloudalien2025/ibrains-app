@@ -215,7 +215,7 @@ deploy_production:
       EXPECT_BUILD_ID="${CI_PIPELINE_ID}" \
       EXPECT_GIT_SHA="${CI_COMMIT_SHA}" \
       PUBLIC_SMOKE_PATHS="/ /sign-in" \
-      PROTECTED_REDIRECT_PATHS="/apps /apps/ecomviper/walmart/connect" \
+      PROTECTED_REDIRECT_PATHS="/dashboard /optiwal/connect" \
       BASE_URL=http://127.0.0.1:3001 \
       HOST_HEADER=app.ibrains.ai \
       PROTO=http \
@@ -226,7 +226,7 @@ deploy_production:
       EXPECT_BUILD_ID="${CI_PIPELINE_ID}" \
       EXPECT_GIT_SHA="${CI_COMMIT_SHA}" \
       PUBLIC_SMOKE_PATHS="/ /sign-in" \
-      PROTECTED_REDIRECT_PATHS="/apps /apps/ecomviper/walmart/connect" \
+      PROTECTED_REDIRECT_PATHS="/dashboard /optiwal/connect" \
       BASE_URL=https://app.ibrains.ai \
       PROTO=https \
       DOMAIN=app.ibrains.ai \

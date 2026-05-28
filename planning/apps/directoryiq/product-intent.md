@@ -39,11 +39,11 @@ Partially implemented or split across runtimes:
 
 Observed main operator path:
 
-1. Open `/apps/directoryiq` dashboard.
-2. Go to `/apps/directoryiq/signal-sources` and configure connections.
+1. Open `/directoryiq` dashboard.
+2. Go to `/directoryiq/signal-sources` and configure connections.
 3. Configure one or more BD sites under the same screen and run site tests.
 4. Run ingestion (`/api/ingest/directoryiq/run`) and review recent ingest runs.
-5. Use dashboard/listings to select a listing and open `/apps/directoryiq/listings/[listingId]`.
+5. Use dashboard/listings to select a listing and open `/directoryiq/listings/[listingId]`.
 6. In listing optimization:
 - Step 1 (`find-support`): review current support links/mentions, gaps, and flywheel recommendations; build mission plan selections.
 - Step 2 (`create-support`): run research, generate draft/image per slot, preview, approve, publish each support asset with explicit guards.
@@ -221,17 +221,17 @@ Planning inputs:
 
 UI/app surfaces:
 
-- `app/apps/directoryiq/layout.tsx`
-- `app/apps/directoryiq/page.tsx`
-- `app/apps/directoryiq/directoryiq-dashboard-client.tsx`
-- `app/apps/directoryiq/listings/directoryiq-listings-client.tsx`
-- `app/apps/directoryiq/listings/[listingId]/listing-optimization-client.tsx`
-- `app/apps/directoryiq/authority/*`
-- `app/apps/directoryiq/graph-integrity/*`
-- `app/apps/directoryiq/signal-sources/*`
-- `app/apps/directoryiq/settings/*`
-- `app/apps/directoryiq/versions/*`
-- `app/apps/page.tsx`
+- `app/directoryiq/layout.tsx`
+- `app/directoryiq/page.tsx`
+- `app/directoryiq/directoryiq-dashboard-client.tsx`
+- `app/directoryiq/listings/directoryiq-listings-client.tsx`
+- `app/directoryiq/listings/[listingId]/listing-optimization-client.tsx`
+- `app/directoryiq/authority/*`
+- `app/directoryiq/graph-integrity/*`
+- `app/directoryiq/signal-sources/*`
+- `app/directoryiq/settings/*`
+- `app/directoryiq/versions/*`
+- `app/(shell)/dashboard/page.tsx`
 
 API surfaces:
 

@@ -2,13 +2,13 @@
 
 ## Private Shell Foundation Status
 
-Sprint 005 seeds static/demo Feed Control Center content in private Hub (`/apps/ecomviper/hub`) to represent intake posture from Walmart/eBay/Amazon/Shopify.
+Sprint 005 seeds static/demo Feed Control Center content in private Hub (`/ecomviper/hub`) to represent intake posture from Walmart/eBay/Amazon/Shopify.
 No live sync or API-driven workflow execution is implemented in this sprint.
 
 ## Optimized Feed Sync From Marketplace Apps Into Private Hub
 
 1. Merchant optimizes listings/feeds in Walmart, Shopify, eBay, Amazon, or future channel apps
-2. Optimized feed package syncs into private Hub (`app.ibrains.ai/apps/ecomviper/hub`)
+2. Optimized feed package syncs into private Hub (`app.ibrains.ai/ecomviper/hub`)
 3. Intake validates payload shape and source metadata
 4. Submission is accepted, rejected, or queued for manual review
 

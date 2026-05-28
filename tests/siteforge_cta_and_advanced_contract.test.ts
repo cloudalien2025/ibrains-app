@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 describe("siteforge 2050 CTA and advanced contract", () => {
   it("keeps one clear primary action per visible step", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("Connect Website")).toBe(true);
@@ -15,7 +15,7 @@ describe("siteforge 2050 CTA and advanced contract", () => {
   });
 
   it("removes diagnostics and internals from default UI", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes('<summary className="cursor-pointer font-medium text-white">Advanced</summary>')).toBe(false);

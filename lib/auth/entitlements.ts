@@ -188,9 +188,15 @@ export function resolveUserFromHeaders(headers: HeaderReader): Record<string, un
 export function entitledBrainMap(user?: EntitlementUser): Record<BrainId, boolean> {
   const entitled = resolveEntitledBrains(user);
   return {
-    directoryiq: entitled.has("directoryiq"),
     ecomviper: entitled.has("ecomviper"),
-    studio: entitled.has("studio"),
+    optibay: entitled.has("optibay"),
+    optiwal: entitled.has("optiwal"),
+    optizon: entitled.has("optizon"),
+    directoryiq: entitled.has("directoryiq"),
+    casaflix: entitled.has("casaflix"),
+    pagebolt: entitled.has("pagebolt"),
+    reelify: entitled.has("reelify"),
+    ipetzo: entitled.has("ipetzo"),
   };
 }
 

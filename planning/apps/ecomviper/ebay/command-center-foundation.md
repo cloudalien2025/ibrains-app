@@ -13,7 +13,7 @@ Goal: establish the eBay command-center architecture/builder foundation and alig
 
 Current eBay implementation is Phase 1, read-only, and mock-first:
 
-- route: `/apps/ecomviper/ebay`
+- route: `/optibay`
 - client workspace with deterministic mock import, scoring, and recommendations
 - connection/readiness checklist and explicit no-write boundary
 - live provider seams exist but remain gated/placeholder for this phase
@@ -127,10 +127,10 @@ Planning:
 
 App UI:
 
-- `app/apps/ecomviper/ebay/layout.tsx`
-- `app/apps/ecomviper/ebay/_components/ebay-sidebar.tsx`
-- `app/apps/ecomviper/ebay/page.tsx`
-- `app/apps/ecomviper/ebay/ebay-dashboard-client.tsx`
+- `app/optibay/layout.tsx`
+- `app/optibay/_components/ebay-sidebar.tsx`
+- `app/optibay/page.tsx`
+- `app/optibay/ebay-dashboard-client.tsx`
 
 Libraries:
 

@@ -24,7 +24,7 @@ It does not implement public routes, WordPress changes, DNS, SSL, droplets, or h
 
 ### Goals
 
-- Establish private Hub shell at `/apps/ecomviper/hub`
+- Establish private Hub shell at `/ecomviper/hub`
 - Make Hub discoverable inside EcomViper app navigation
 
 ### Likely Deliverables

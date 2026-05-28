@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 describe("siteforge 2050 first-time flow contract", () => {
   it("renders Connect/Describe/Launch as primary journey", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes('label: "Connect"')).toBe(true);
@@ -16,7 +16,7 @@ describe("siteforge 2050 first-time flow contract", () => {
   });
 
   it("keeps describe screen intent-first", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("Describe the homepage and additional pages you want created.")).toBe(true);

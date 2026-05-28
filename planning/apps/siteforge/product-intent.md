@@ -1,16 +1,16 @@
-# SiteForge Product Intent
+# PageBolt Product Intent
 
 Last updated: 2026-05-18 (UTC)
 
-This product intent is implementation-derived from current SiteForge routes, APIs, and tests.
+This product intent is implementation-derived from current PageBolt routes, APIs, and tests.
 
 ## Product Purpose
 
-SiteForge is an operator workspace for creating and refining website drafts from intent using guarded AI and WordPress connection workflows.
+PageBolt is an operator workspace for creating and refining website drafts from intent using guarded AI and WordPress connection workflows.
 
 ## Current Operator Workflow
 
-1. Open `/apps/siteforge`.
+1. Open `/pagebolt`.
 2. Connect WordPress credentials and validate write capability.
 3. Provide intent/brief inputs to generate planning direction.
 4. Launch build pipeline and monitor progress.
@@ -47,7 +47,7 @@ Not established as dedicated app routes yet:
 
 ## Source-of-Truth Evidence
 
-- `app/apps/siteforge/page.tsx`
+- `app/pagebolt/page.tsx`
 - `app/api/siteforge/*`
 - `lib/siteforge/*`
 - `tests/siteforge*`

@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import ShopifyProductEditorClient from "@/app/apps/ecomviper/shopify/products/[productId-or-handle]/shopify-product-editor-client";
+import ShopifyProductEditorClient from "@/app/ecomviper/shopify/products/[productId-or-handle]/shopify-product-editor-client";
 import {
   buildCurrentShopifyListingDocket,
   buildEditableShopifyDraft,

@@ -57,8 +57,8 @@ describe("clerk auth route runtime", () => {
     expect(mocks.clerkProviderProps).toMatchObject({
       signInUrl: "/sign-in",
       signUpUrl: "/sign-up",
-      signInFallbackRedirectUrl: "/apps",
-      signUpFallbackRedirectUrl: "/apps",
+      signInFallbackRedirectUrl: "/brains",
+      signUpFallbackRedirectUrl: "/brains",
     });
   });
 

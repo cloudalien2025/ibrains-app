@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import ProductEditorClient from "@/app/apps/ecomviper/walmart/products/[sku]/product-editor-client";
+import ProductEditorClient from "@/app/optiwal/products/[sku]/product-editor-client";
 import type { WalmartDraftRecord, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 vi.mock("next/link", async () => {
@@ -117,7 +117,7 @@ describe("Walmart product optimizer client", () => {
       "Optimize this Walmart docket for Agentic Visibility and Selection, then review and publish when ready."
     );
     expect(html).not.toContain("Open AI Optimizer");
-    expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
+    expect(html).not.toContain("/optiwal/ai-optimizer");
     expect(html).not.toContain("Preview + Validate");
     expect(html).not.toContain("Before / Original payload snapshot");
     expect(html).not.toContain("After / Normalized draft preview");
@@ -192,7 +192,7 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("Normalized bullet one");
     expect(html).toContain('value="Payload Brand"');
     expect(html).toContain("Optimize with AI");
-    expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
+    expect(html).not.toContain("/optiwal/ai-optimizer");
     expect(html).not.toContain(">Unknown<");
   });
 

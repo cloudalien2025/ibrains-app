@@ -4,10 +4,10 @@ export interface EbayNavItem {
 }
 
 export const ebayNavItems: EbayNavItem[] = [
-  { label: "Command Center", href: "/apps/ecomviper/ebay" },
-  { label: "Listing Intelligence", href: "/apps/ecomviper/ebay#listing-intelligence" },
-  { label: "AI Visibility", href: "/apps/ecomviper/ebay#ai-visibility" },
-  { label: "Trust & Reputation", href: "/apps/ecomviper/ebay#trust-and-reputation" },
-  { label: "Sync & Reconciliation", href: "/apps/ecomviper/ebay#sync-and-reconciliation" },
-  { label: "Operator Actions", href: "/apps/ecomviper/ebay#operator-actions" },
+  { label: "Command Center", href: "/optibay" },
+  { label: "Listing Intelligence", href: "/optibay#listing-intelligence" },
+  { label: "AI Visibility", href: "/optibay#ai-visibility" },
+  { label: "Trust & Reputation", href: "/optibay#trust-and-reputation" },
+  { label: "Sync & Reconciliation", href: "/optibay#sync-and-reconciliation" },
+  { label: "Operator Actions", href: "/optibay#operator-actions" },
 ];

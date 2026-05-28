@@ -24,4 +24,4 @@ Do not rebuild it.
 The app is available at:
 
 ```text
-/apps/ecomviper/shopify/
+/ecomviper/shopify/

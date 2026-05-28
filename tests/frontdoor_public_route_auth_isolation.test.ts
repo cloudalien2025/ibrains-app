@@ -14,17 +14,16 @@ describe("frontdoor public route auth isolation", () => {
     expect(source.includes("pk_test_ibrains_missing_publishable_key")).toBe(false);
   });
 
-  it("keeps the app launcher free of clerk client hooks so it can prerender safely", () => {
-    const source = fs.readFileSync(path.join(process.cwd(), "app/apps/page.tsx"), "utf8");
+  it("keeps the homepage brain links free of clerk client hooks so it can prerender safely", () => {
+    const source = fs.readFileSync(path.join(process.cwd(), "app/page.tsx"), "utf8");
 
     expect(source.includes("\"use client\"")).toBe(false);
     expect(source.includes("FrontdoorHeaderActions")).toBe(true);
     expect(source.includes("useAuth(")).toBe(false);
     expect(source.includes("UserButton")).toBe(false);
     expect(source.includes("ClerkProvider")).toBe(false);
-    expect(source.includes("apps-launcher-shell")).toBe(true);
     expect(source.includes("ibrains-shell min-h-screen")).toBe(true);
-    expect(source.includes("fontFamily")).toBe(true);
+    expect(source.includes("Open DirectoryIQ")).toBe(true);
   });
 
   it("forces the protected shell to render at runtime so production builds do not require clerk secrets", () => {

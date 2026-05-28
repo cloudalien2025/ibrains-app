@@ -9,7 +9,7 @@ Operators should be able to understand current state and failure reasons without
 
 Operational controls must enforce strict data boundaries between:
 
-- private control-plane data at `app.ibrains.ai/apps/ecomviper/hub`
+- private control-plane data at `app.ibrains.ai/ecomviper/hub`
 - public-safe published data at `ecomviper.com`
 
 Private merchant/operator fields must never be exposed on public Hub.

@@ -64,7 +64,7 @@ PROTO=http /root/ibrains-app/scripts/prod_smoke.sh app.ibrains.ai
 BASE_URL=http://127.0.0.1 HOST_HEADER=app.ibrains.ai /root/ibrains-app/scripts/prod_smoke.sh app.ibrains.ai
 ```
 
-`prod_smoke.sh` now validates `/_next/static/*` assets referenced by `/`, `/apps`, and `/sign-in`. It fails on non-`200` responses and on wrong JS/CSS content types so HTML/chunk mismatch deploys cannot pass smoke.
+`prod_smoke.sh` now validates `/_next/static/*` assets referenced by `/`, `/dashboard`, and `/sign-in`. It fails on non-`200` responses and on wrong JS/CSS content types so HTML/chunk mismatch deploys cannot pass smoke.
 
 ## TLS (Let’s Encrypt)
 Only run after DNS A record for app.ibrains.ai points to 104.236.44.185.

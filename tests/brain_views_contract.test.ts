@@ -50,7 +50,7 @@ describe("brain view normalization", () => {
     expect(isProductionVisibleBrain({ id: "directoryiq", name: "DirectoryIQ" })).toBe(true);
     expect(isProductionVisibleBrain({ brain_id: "brilliant_directories" })).toBe(true);
     expect(isProductionVisibleBrain({ id: "ecomviper", name: "EcomViper" })).toBe(true);
-    expect(isProductionVisibleBrain({ id: "studio", name: "Studio" })).toBe(true);
+    expect(isProductionVisibleBrain({ id: "reelify", name: "Reelify" })).toBe(true);
     expect(
       isProductionVisibleBrain({
         brain_id: "ipetzo",

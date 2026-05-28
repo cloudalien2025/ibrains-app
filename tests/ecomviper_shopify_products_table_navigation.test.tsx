@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import ShopifyWorkspaceClient from "@/app/apps/ecomviper/shopify/shopify-workspace-client";
+import ShopifyWorkspaceClient from "@/app/ecomviper/shopify/shopify-workspace-client";
 import { buildShopifyAgenticDemoWorkspaceState } from "@/lib/ecomviper/shopify/shopify-agentic-demo-data";
 import type { ShopifyAgenticWorkspaceState } from "@/lib/ecomviper/shopify/shopify-agentic-types";
 
@@ -65,7 +65,7 @@ describe("Shopify workspace products table navigation", () => {
     expect(container.querySelector('[data-testid="ecomviper-shopify-products-table"]')).not.toBeNull();
     const firstLink = container.querySelector('[data-testid="ecomviper-shopify-product-link"]') as HTMLAnchorElement;
     expect(firstLink).not.toBeNull();
-    expect(firstLink.getAttribute("href")).toContain("/apps/ecomviper/shopify/products/");
+    expect(firstLink.getAttribute("href")).toContain("/ecomviper/shopify/products/");
     expect(container.textContent).not.toContain("Demo data");
   });
 

@@ -27,7 +27,7 @@ describe("frontdoor header actions", () => {
   it("shows Sign in and Create account when the launcher is signed out", async () => {
     resolveFrontdoorAuthStateMock.mockResolvedValue({ status: "signed-out" });
 
-    const html = renderToStaticMarkup(await FrontdoorHeaderActions({ currentPath: "/apps" }));
+    const html = renderToStaticMarkup(await FrontdoorHeaderActions({ currentPath: "/brains" }));
 
     expect(html).toContain(">Sign in<");
     expect(html).toContain(">Create account<");
@@ -37,7 +37,7 @@ describe("frontdoor header actions", () => {
   it("hides Sign in and Create account when the launcher is signed in", async () => {
     resolveFrontdoorAuthStateMock.mockResolvedValue({ status: "signed-in", userId: "user_123" });
 
-    const html = renderToStaticMarkup(await FrontdoorHeaderActions({ currentPath: "/apps" }));
+    const html = renderToStaticMarkup(await FrontdoorHeaderActions({ currentPath: "/brains" }));
 
     expect(html).not.toContain(">Sign in<");
     expect(html).not.toContain(">Create account<");
@@ -50,8 +50,8 @@ describe("frontdoor header actions", () => {
       .mockResolvedValueOnce({ status: "signed-out" })
       .mockResolvedValueOnce({ status: "signed-in", userId: "user_456" });
 
-    const firstRender = renderToStaticMarkup(await FrontdoorHeaderActions({ currentPath: "/apps" }));
-    const secondRender = renderToStaticMarkup(await FrontdoorHeaderActions({ currentPath: "/apps" }));
+    const firstRender = renderToStaticMarkup(await FrontdoorHeaderActions({ currentPath: "/brains" }));
+    const secondRender = renderToStaticMarkup(await FrontdoorHeaderActions({ currentPath: "/brains" }));
 
     expect(firstRender).toContain(">Sign in<");
     expect(secondRender).not.toContain(">Sign in<");
@@ -62,7 +62,7 @@ describe("frontdoor header actions", () => {
   it("keeps a single auth state in the mobile header layout", async () => {
     resolveFrontdoorAuthStateMock.mockResolvedValue({ status: "signed-in", userId: "user_mobile" });
 
-    const html = renderToStaticMarkup(await FrontdoorHeaderActions({ currentPath: "/apps" }));
+    const html = renderToStaticMarkup(await FrontdoorHeaderActions({ currentPath: "/brains" }));
 
     expect(html).toContain("flex-wrap");
     expect(html).not.toContain(">Sign in<");

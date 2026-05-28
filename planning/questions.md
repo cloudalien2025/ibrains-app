@@ -22,7 +22,7 @@ Notes: Legacy naming drift remains in some implementations; policy should define
 ### Which app surfaces still require implementation-derived product-intent sprints?
 Owner: Planning
 Status: Open
-Notes: SiteForge and Amazon remain likely candidates for deeper implementation-derived intent baselines.
+Notes: PageBolt and Amazon remain likely candidates for deeper implementation-derived intent baselines.
 
 ### Which planning docs are mandatory versus optional for small sprints?
 Owner: Architecture
@@ -69,9 +69,9 @@ Resolution: First canonical API payload boundary is documented in `planning/apps
 ### Has Walmart Command Center adopted canonical `ai_visibility_score` semantics as its rollup source?
 Owner: Walmart Product + Architecture
 Status: Closed (resolved in implementation)
-Resolution: Sprint 007 aligned Command Center readiness/confidence rollups to canonical `WalmartAiVisibilityScore` semantics via `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts` consumed by `app/apps/ecomviper/walmart/page.tsx`, with focused test coverage in `tests/ecomviper_walmart_command_center_score_rollup.test.ts`.
+Resolution: Sprint 007 aligned Command Center readiness/confidence rollups to canonical `WalmartAiVisibilityScore` semantics via `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts` consumed by `app/optiwal/page.tsx`, with focused test coverage in `tests/ecomviper_walmart_command_center_score_rollup.test.ts`.
 
 ### Is Product Editor score ownership aligned so `Agentic Visibility Score` does not become a second top-level score contract?
 Owner: Walmart Product + Architecture
 Status: Closed (resolved in implementation)
-Resolution: Sprint 008 aligned Product Editor score diagnostics to canonical semantics through `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`, consumed by `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx` with focused adapter and consumer tests.
+Resolution: Sprint 008 aligned Product Editor score diagnostics to canonical semantics through `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`, consumed by `app/optiwal/products/[sku]/product-editor-client.tsx` with focused adapter and consumer tests.

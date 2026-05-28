@@ -14,7 +14,7 @@ Hub operates as one product with two coordinated surfaces:
    - publishes approved canonical product intelligence
    - serves public canonical product pages, semantic discovery, trust signals, and marketplace routing outcomes
    - becomes the public AI-readable product intelligence graph for EcomViper
-2. Private Hub (`app.ibrains.ai/apps/ecomviper/hub`)
+2. Private Hub (`app.ibrains.ai/ecomviper/hub`)
    - private merchant/operator control plane
    - receives optimized feeds from Walmart, Shopify, eBay, Amazon, and future channels
    - manages intake, canonicalization, visibility/routing controls, trust/compliance review, and operational analytics
@@ -22,13 +22,13 @@ Hub operates as one product with two coordinated surfaces:
 Clear long-term surface decision:
 
 - Preferred public Hub surface: `ecomviper.com`
-- Private merchant/operator Hub control plane: `app.ibrains.ai/apps/ecomviper/hub`
+- Private merchant/operator Hub control plane: `app.ibrains.ai/ecomviper/hub`
 
 ## Brand And Domain Distinction
 
 - `ibrains.ai`: iBrains marketing site, expected to remain WordPress-served
 - `app.ibrains.ai`: private authenticated iBrains app platform
-- `app.ibrains.ai/apps/ecomviper/hub`: private Hub control plane route
+- `app.ibrains.ai/ecomviper/hub`: private Hub control plane route
 - `ecomviper.com`: preferred long-term public Hub product intelligence/discovery surface
 
 Hub should not depend on WordPress as the long-term host for public Hub product intelligence pages.
@@ -64,7 +64,7 @@ It is not designed to become a raw listing warehouse.
 
 ## Private Hub Control Plane Responsibilities
 
-Private Hub at `app.ibrains.ai/apps/ecomviper/hub` is responsible for:
+Private Hub at `app.ibrains.ai/ecomviper/hub` is responsible for:
 
 - optimized feed sync intake from marketplace apps
 - canonical matching, deduplication, and merge review

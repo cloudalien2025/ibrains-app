@@ -3,8 +3,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import WalmartInventoryClient from "@/app/apps/ecomviper/walmart/inventory/inventory-client";
-import WalmartPricingClient from "@/app/apps/ecomviper/walmart/pricing/pricing-client";
+import WalmartInventoryClient from "@/app/optiwal/inventory/inventory-client";
+import WalmartPricingClient from "@/app/optiwal/pricing/pricing-client";
 import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
 
 function createProduct(

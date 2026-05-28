@@ -17,7 +17,7 @@ Provide a phased, implementation-grounded roadmap from current DirectoryIQ produ
 ### Likely Deliverables
 
 - Planning foundation docs (`architecture`, `builder`, `implementation-map`, `testing`, `roadmap`).
-- Layout shell alignment under `app/apps/directoryiq`.
+- Layout shell alignment under `app/directoryiq`.
 
 ### Non-Goals
 
