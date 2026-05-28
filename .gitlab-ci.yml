@@ -216,6 +216,7 @@ deploy_production:
       EXPECT_GIT_SHA="${CI_COMMIT_SHA}" \
       PUBLIC_SMOKE_PATHS="/ /sign-in" \
       PROTECTED_REDIRECT_PATHS="/dashboard /optiwal/connect" \
+      LEGACY_NOT_FOUND_PATHS="/apps /apps/studio /studio /siteforge /uapforge" \
       BASE_URL=http://127.0.0.1:3001 \
       HOST_HEADER=app.ibrains.ai \
       PROTO=http \
@@ -227,6 +228,7 @@ deploy_production:
       EXPECT_GIT_SHA="${CI_COMMIT_SHA}" \
       PUBLIC_SMOKE_PATHS="/ /sign-in" \
       PROTECTED_REDIRECT_PATHS="/dashboard /optiwal/connect" \
+      LEGACY_NOT_FOUND_PATHS="/apps /apps/studio /studio /siteforge /uapforge" \
       BASE_URL=https://app.ibrains.ai \
       PROTO=https \
       DOMAIN=app.ibrains.ai \
