@@ -51,4 +51,20 @@ describe("requireSignedInUser auth unavailable handling", () => {
     expect(result.userId).toBe("user_from_verified_token");
     expect(result.unauthorizedResponse).toBeNull();
   });
+
+  it("returns 401 when Clerk reports missing middleware context", async () => {
+    authMock.mockRejectedValue(
+      new Error(
+        "Clerk: auth() was called but Clerk can't detect usage of clerkMiddleware(). See https://clerk.com/err/auth-middleware"
+      )
+    );
+    const { requireSignedInUser } = await import("@/lib/auth/requireSignedInUser");
+
+    const result = await requireSignedInUser();
+    expect(result.userId).toBeNull();
+    expect(result.unauthorizedResponse).not.toBeNull();
+    expect(result.unauthorizedResponse?.status).toBe(401);
+    const body = await result.unauthorizedResponse?.json();
+    expect(body?.error?.code).toBe("UNAUTHORIZED");
+  });
 });
