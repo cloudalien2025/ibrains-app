@@ -27,7 +27,7 @@ describe("brain view normalization", () => {
     expect(normalized[1]?.id).toBe("ecomviper");
     expect(normalized[2]?.id).toBe("custom-sales");
     expect(normalized[2]?.name).toBe("Custom Sales Brain");
-    expect(normalized[2]?.primaryCtaText).toBe("Open Console");
+    expect(normalized[2]?.primaryCtaText).toBe("Open Brain");
   });
 
   it("resolves id using canonical fallbacks", () => {

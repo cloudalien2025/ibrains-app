@@ -139,7 +139,7 @@ export default function BrainDockCard({
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <Link href={href} className={brainTheme.glowButton}>
-          {entitled ? "Open Console" : "Unlock"}
+          {entitled ? brain.primaryCtaText : "Unlock"}
         </Link>
       </div>
     </article>

@@ -36,7 +36,7 @@ export const brainCatalog: BrainCatalogEntry[] = [
     shortDescription:
       "Product intelligence brain focused on ingestion quality, evidence density, and retrieval confidence.",
     tags: ["Product Entities", "Evidence Density", "Retrieval Confidence"],
-    primaryCtaText: "Open Console",
+    primaryCtaText: "Open Brain",
     upsellTitle: "Unlock EcomViper",
     upsellMessage:
       "Get Shopify ingestion controls and reasoning hubs to improve product-topic authority.",
@@ -48,7 +48,7 @@ export const brainCatalog: BrainCatalogEntry[] = [
     shortDescription:
       "Standalone eBay optimization brain for listing quality, ranking confidence, and conversion performance.",
     tags: ["eBay", "Listing Optimization", "Marketplace Performance"],
-    primaryCtaText: "Open Console",
+    primaryCtaText: "Open Brain",
     upsellTitle: "Unlock OptiBay",
     upsellMessage:
       "Activate OptiBay to optimize eBay listings with AI-assisted content and workflow controls.",
@@ -60,7 +60,7 @@ export const brainCatalog: BrainCatalogEntry[] = [
     shortDescription:
       "Standalone Walmart optimization brain for catalog readiness, feed reliability, and AI-assisted optimization.",
     tags: ["Walmart", "Catalog Readiness", "AI Optimization"],
-    primaryCtaText: "Open Console",
+    primaryCtaText: "Open Brain",
     upsellTitle: "Unlock OptiWal",
     upsellMessage:
       "Activate OptiWal to improve Walmart listing quality and operational execution.",
@@ -72,7 +72,7 @@ export const brainCatalog: BrainCatalogEntry[] = [
     shortDescription:
       "Standalone Amazon optimization brain for listing clarity, content quality, and marketplace growth readiness.",
     tags: ["Amazon", "Content Quality", "Marketplace Readiness"],
-    primaryCtaText: "Open Console",
+    primaryCtaText: "Open Brain",
     upsellTitle: "Unlock OptiZon",
     upsellMessage:
       "Activate OptiZon to optimize Amazon listing operations with dedicated brain workflows.",
@@ -84,7 +84,7 @@ export const brainCatalog: BrainCatalogEntry[] = [
     shortDescription:
       "Brilliant Directories intelligence brain for listing readiness, authority coverage, and operational discovery cycles.",
     tags: ["Directory Intelligence", "Knowledge Readiness", "Authority Blueprint"],
-    primaryCtaText: "Open Console",
+    primaryCtaText: "Open Brain",
     upsellTitle: "Unlock DirectoryIQ",
     upsellMessage:
       "Activate DirectoryIQ to map listing health, discover category gaps, and improve local ranking signals.",
@@ -96,7 +96,7 @@ export const brainCatalog: BrainCatalogEntry[] = [
     shortDescription:
       "Standalone media brain for campaign planning, script generation, and production-ready video workflows.",
     tags: ["Campaigns", "Video Workflow", "Narrative Operations"],
-    primaryCtaText: "Open Console",
+    primaryCtaText: "Open Brain",
     upsellTitle: "Unlock CasaFlix",
     upsellMessage:
       "Activate CasaFlix to run end-to-end campaign intelligence and content production workflows.",
@@ -108,7 +108,7 @@ export const brainCatalog: BrainCatalogEntry[] = [
     shortDescription:
       "Standalone website intelligence brain for briefs, strategy, and build-ready page generation.",
     tags: ["Website Strategy", "Build Workflows", "Publishing Automation"],
-    primaryCtaText: "Open Console",
+    primaryCtaText: "Open Brain",
     upsellTitle: "Unlock PageBolt",
     upsellMessage:
       "Activate PageBolt to plan and generate high-performing web experiences from one brain workspace.",
@@ -120,7 +120,7 @@ export const brainCatalog: BrainCatalogEntry[] = [
     shortDescription:
       "Standalone video execution brain for AI-assisted script, media plan, and publishing workflows.",
     tags: ["Narrative", "Media", "Answer Quality"],
-    primaryCtaText: "Open Console",
+    primaryCtaText: "Open Brain",
     upsellTitle: "Unlock Reelify",
     upsellMessage:
       "Activate Reelify to orchestrate listing-driven video pipelines and publishing operations.",
@@ -132,7 +132,7 @@ export const brainCatalog: BrainCatalogEntry[] = [
     shortDescription:
       "Standalone pet-industry intelligence brain for niche workflows, automation, and operational support.",
     tags: ["Vertical Intelligence", "Automation", "Pet Ecosystem"],
-    primaryCtaText: "Open Console",
+    primaryCtaText: "Open Brain",
     upsellTitle: "Unlock iPetzo",
     upsellMessage:
       "Activate iPetzo to launch pet-focused intelligence workflows in an independent brain workspace.",
@@ -158,6 +158,43 @@ export function isBrainId(value: string): value is BrainId {
   return (brainIds as readonly string[]).includes(value);
 }
 
-export function brainRoute(id: string): `/brains/${string}` {
+const canonicalBrainRoutes: Record<BrainId, `/${string}`> = {
+  ecomviper: "/ecomviper",
+  optibay: "/optibay",
+  optiwal: "/optiwal",
+  optizon: "/optizon",
+  directoryiq: "/directoryiq",
+  casaflix: "/casaflix",
+  pagebolt: "/pagebolt",
+  reelify: "/reelify",
+  ipetzo: "/ipetzo",
+};
+
+const brainRouteAliases: Record<string, BrainId> = {
+  brilliant_directories: "directoryiq",
+  ebay: "optibay",
+  ebay_optimizer: "optibay",
+  walmart: "optiwal",
+  walmart_optimizer: "optiwal",
+  amazon: "optizon",
+  amazon_optimizer: "optizon",
+  siteforge: "pagebolt",
+  uapforge: "reelify",
+  studio: "casaflix",
+};
+
+function normalizeRouteId(id: string): string {
+  return id.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+export function brainRoute(id: string): `/${string}` {
+  const normalized = normalizeRouteId(id);
+  const canonicalId = isBrainId(normalized)
+    ? normalized
+    : (brainRouteAliases[normalized] ?? null);
+  if (canonicalId) {
+    return canonicalBrainRoutes[canonicalId];
+  }
+
   return `/brains/${encodeURIComponent(id)}`;
 }

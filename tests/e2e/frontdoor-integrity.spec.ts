@@ -60,8 +60,8 @@ test.describe("frontdoor integrity", () => {
 
     await page.goto("/brains", { waitUntil: "networkidle" });
 
-    await expect(page.getByRole("heading", { name: "Manage Brains", exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open Console", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My Brains", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open Brain", exact: true })).toBeVisible();
     await expect(page.locator("body")).not.toContainText("Application error: a client-side exception has occurred");
     await watcher.expectHealthy();
   });

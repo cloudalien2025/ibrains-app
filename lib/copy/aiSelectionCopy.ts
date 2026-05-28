@@ -1,9 +1,9 @@
 export const aiSelectionCopy = {
   brainsDock: {
-    eyebrow: "Intelligence Platform",
-    title: "Brain Operations",
+    eyebrow: "Brains",
+    title: "My Brains",
     subtitle:
-      "Operate each specialized brain from an internal console. Run discovery and ingest cycles, then validate retrieval and answer quality without leaving iBrains.",
+      "Open each standalone brain workspace from one index and move directly into operations.",
   },
   directoryiq: {
     shellSubtitle: "Brilliant Directories intelligence brain for directory readiness and authority coverage.",

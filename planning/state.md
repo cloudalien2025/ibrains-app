@@ -43,6 +43,28 @@ Last updated: 2026-05-28 (UTC)
   - status: clean (`git status` with no changes)
 - Recommended next sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
 
+## Sprint Status: Brains Index Hardening
+
+- Sprint: `fix-brains-index` (in progress).
+- Root-cause summary:
+  - `/brains` depended on runtime registry calls that could fail (`/api/brains` error path), creating a brittle index surface.
+  - The page was not documented as a strict canonical standalone-brain inventory and still used non-canonical copy ("Manage Brains", "Open Console").
+- Implementation summary (current branch):
+  - `/brains` now renders from canonical standalone brain inventory (no legacy `/apps` dependency).
+  - Canonical inventory links map directly to top-level routes:
+    - `/ecomviper`, `/optibay`, `/optiwal`, `/optizon`, `/directoryiq`, `/casaflix`, `/pagebolt`, `/reelify`, `/ipetzo`
+  - Brains copy updated to "My Brains" and "Open Brain".
+  - Legacy documentation references were updated to keep `/apps/*`, `/studio`, `/siteforge`, `/uapforge` as removed 404 routes.
+- Validation summary (current branch):
+  - focused tests passed:
+    - `tests/brains_index_contract.test.ts`
+    - `tests/brain_views_contract.test.ts`
+    - `tests/frontdoor_header_actions_auth_state.test.tsx`
+    - `tests/proxy_trusted_ingest_bypass.test.ts`
+  - `bash scripts/check_route_signatures.sh` passed.
+  - `npm run build` passed.
+  - `npm run lint` currently fails due existing repository-wide baseline lint violations outside this sprint scope.
+
 ## Current Operating Reminder
 
 - Do not begin a new sprint unless local repository is clean on `main`.

@@ -178,3 +178,22 @@ Last updated: 2026-05-18 (UTC)
   - Legacy `/apps` and `/apps/*` routes are removed and are not redirected.
   - OptiBay, OptiWal, and OptiZon are independent brain routes and are not nested under EcomViper.
 - Rationale: Eliminates route/naming drift, aligns product identity to brain workspaces, and reduces compatibility complexity.
+
+## D-017 Make /brains The Canonical My Brains Index
+
+- Status: Accepted
+- Decision:
+  - `/brains` is the canonical authenticated "My Brains" index.
+  - The index must list the standalone brain inventory and link each brain to its top-level workspace route:
+    - `/ecomviper`
+    - `/optibay`
+    - `/optiwal`
+    - `/optizon`
+    - `/directoryiq`
+    - `/casaflix`
+    - `/pagebolt`
+    - `/reelify`
+    - `/ipetzo`
+  - `/brains` must not depend on legacy `/apps` inventory semantics.
+  - Legacy `/apps/*`, `/studio`, `/siteforge`, and `/uapforge` remain removed with no redirects and must return `404`.
+- Rationale: Keeps the main launcher stable, removes coupling to deprecated route models, and prevents regressions caused by legacy inventory assumptions.
