@@ -195,7 +195,7 @@ describe("proxy trusted service bypass", () => {
     expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
-  it("keeps non-bypassed API routes on the Clerk proxy path", async () => {
+  it("bypasses Clerk middleware on /api/brains routes so route-level auth controls responses", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -205,7 +205,7 @@ describe("proxy trusted service bypass", () => {
 
     const res = await handler(req);
     expect(res.status).toBe(200);
-    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
   it("bypasses Clerk middleware on release metadata health checks", async () => {

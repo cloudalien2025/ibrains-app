@@ -37,6 +37,8 @@ The authenticated workspace now uses standalone top-level brain routes.
 - Core workspace routes: `/`, `/dashboard`, `/brains`, `/tasks`, `/reports`, `/add-brain`, `/settings`, `/billing`
 - Brain workspace routes: `/ecomviper`, `/optibay`, `/optiwal`, `/optizon`, `/directoryiq`, `/casaflix`, `/pagebolt`, `/reelify`, `/ipetzo`
 - `/brains` is the canonical "My Brains" index for the authenticated workspace.
+- `/brains` SSR must render from canonical local brain inventory and must not block on protected runtime API calls.
+- brain stats/runtime telemetry are optional post-render enrichment and must fail gracefully.
 - `/apps` and `/apps/*` are deprecated and removed with no compatibility redirects.
 - Legacy `/studio`, `/siteforge`, and `/uapforge` routes are removed and remain `404`.
 

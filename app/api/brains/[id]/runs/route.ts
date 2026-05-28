@@ -16,6 +16,9 @@ export async function GET(
   req: NextRequest
 ) {
   try {
+    const { unauthorizedResponse } = await requireSignedInUser();
+    if (unauthorizedResponse) return unauthorizedResponse;
+
     // Legacy compatibility shim. Canonical contract should use /api/runs*.
     return proxyToBrains(req, "/v1/runs", { requireAuth: true });
   } catch {

@@ -43,27 +43,27 @@ Last updated: 2026-05-28 (UTC)
   - status: clean (`git status` with no changes)
 - Recommended next sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
 
-## Sprint Status: Brains Index Hardening
+## Sprint Status: Brains API/Auth Regression Hardening
 
-- Sprint: `fix-brains-index` (in progress).
+- Sprint: `sprint-010-fix-brains-api-auth-500` (in progress).
 - Root-cause summary:
-  - `/brains` depended on runtime registry calls that could fail (`/api/brains` error path), creating a brittle index surface.
-  - The page was not documented as a strict canonical standalone-brain inventory and still used non-canonical copy ("Manage Brains", "Open Console").
+  - `/brains` still executed protected `/api/brains/*` calls during server render for stats enrichment, so index stability remained coupled to protected API behavior.
+  - `/api/brains` and `/api/brains/[id]/stats` relied on middleware-only protection and were still passing through Clerk proxy handling, producing signed-out `500` responses instead of clean auth responses.
+  - Root frontdoor header rendered duplicate signed-in `Open Brains` CTAs from duplicate link composition.
 - Implementation summary (current branch):
-  - `/brains` now renders from canonical standalone brain inventory (no legacy `/apps` dependency).
-  - Canonical inventory links map directly to top-level routes:
-    - `/ecomviper`, `/optibay`, `/optiwal`, `/optizon`, `/directoryiq`, `/casaflix`, `/pagebolt`, `/reelify`, `/ipetzo`
-  - Brains copy updated to "My Brains" and "Open Brain".
-  - Legacy documentation references were updated to keep `/apps/*`, `/studio`, `/siteforge`, `/uapforge` as removed 404 routes.
+  - `/brains` SSR now renders canonical standalone brain inventory without protected API fetch dependency.
+  - Brain stats moved to optional client-side enrichment in `BrainsTable` with graceful failure fallback.
+  - `/api/brains` + `/api/brains/[id]` + `/api/brains/[id]/stats` + `/api/brains/[id]/runs` now enforce route-level `requireSignedInUser()` auth checks.
+  - `proxy.ts` now bypasses Clerk middleware for `/api/brains*` so route-level auth controls signed-out responses and avoids middleware proxy-loop `500`s.
+  - Frontdoor signed-in root action composition reduced to one `Open Brains` CTA.
 - Validation summary (current branch):
-  - focused tests passed:
+  - focused tests include:
+    - `tests/brains_api_auth_contract.test.ts`
+    - `tests/brains_table_hydration_resilience.test.tsx`
     - `tests/brains_index_contract.test.ts`
-    - `tests/brain_views_contract.test.ts`
     - `tests/frontdoor_header_actions_auth_state.test.tsx`
     - `tests/proxy_trusted_ingest_bypass.test.ts`
-  - `bash scripts/check_route_signatures.sh` passed.
-  - `npm run build` passed.
-  - `npm run lint` currently fails due existing repository-wide baseline lint violations outside this sprint scope.
+  - full validation + MR/pipeline/deploy evidence pending completion in this sprint.
 
 ## Current Operating Reminder
 

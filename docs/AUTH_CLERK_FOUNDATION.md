@@ -6,6 +6,7 @@ iBrains now uses Clerk as the browser user authentication layer.
 - Protected app surfaces (`/brains`, `/dashboard`, `/tasks`, `/reports`, `/settings`, `/billing`) require sign-in.
 - Core brain operation routes now require a signed-in Clerk user for write/operation actions.
 - Internal service credentials (`BRAINS_WORKER_API_KEY`, `BRAINS_MASTER_KEY`/`BRAINS_X_API_KEY`) remain server-side only and are not browser auth.
+- Protected API auth contract: signed-out protected requests should return clean auth responses (for example `401`) and must not fail with `500` due middleware/proxy loops.
 
 Legacy route note:
 
