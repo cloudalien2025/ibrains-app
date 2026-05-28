@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-05-18 (UTC)
+Last updated: 2026-05-28 (UTC)
 
 ## Program Status
 
@@ -28,6 +28,20 @@ Last updated: 2026-05-18 (UTC)
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
 - Current recommended sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (active).
+
+## Sprint Completion Log: Standalone Brain Routes
+
+- Sprint: `route-cleanup-standalone-brains` (legacy `/apps` removal and standalone top-level brain route migration).
+- MR: `!203` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/203`).
+- Pipeline: `2559611297` (status: `success`, finished `2026-05-28T16:51:12Z` UTC).
+- Merge commit SHA: `13c71e8d42685512208f82b58a7a68dae63dd31e`.
+- Source branch deletion:
+  - Remote: deleted (`route-cleanup-standalone-brains` no longer present on origin).
+  - Local: deleted.
+- Final local repository state after merge:
+  - branch: `main`
+  - status: clean (`git status` with no changes)
+- Recommended next sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
 
 ## Current Operating Reminder
 
