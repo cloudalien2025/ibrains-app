@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getBuildDraftState, getSelectedPageApprovalState, normalizePageApprovalName } from "@/app/apps/siteforge/page";
+import { getBuildDraftState, getSelectedPageApprovalState, normalizePageApprovalName } from "@/app/pagebolt/page";
 
 describe("siteforge action guardrails", () => {
   it("blocks build draft with explicit blockers when prerequisites are missing", () => {

@@ -6,7 +6,7 @@ describe("directoryiq authority map layout contract", () => {
   it("keeps listing identity outside the flywheel oval and renders featured image/fallback inside the oval", () => {
     const filePath = path.join(
       process.cwd(),
-      "app/apps/directoryiq/listings/[listingId]/listing-optimization-client.tsx"
+      "app/directoryiq/listings/[listingId]/listing-optimization-client.tsx"
     );
     const source = fs.readFileSync(filePath, "utf8");
 
@@ -31,7 +31,7 @@ describe("directoryiq authority map layout contract", () => {
   it("normalizes hero image candidates with deterministic precedence", () => {
     const filePath = path.join(
       process.cwd(),
-      "app/apps/directoryiq/listings/[listingId]/listing-optimization-client.tsx"
+      "app/directoryiq/listings/[listingId]/listing-optimization-client.tsx"
     );
     const source = fs.readFileSync(filePath, "utf8");
 

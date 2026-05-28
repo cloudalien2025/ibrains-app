@@ -29,7 +29,7 @@ Do not invent requirements.
 Ground all work in:
 
 - `planning/apps/directoryiq/product-intent.md`
-- implementation under `app/apps/directoryiq`, `app/api/directoryiq`, `lib/directoryiq`, `src/directoryiq`, and `tests/directoryiq_*`.
+- implementation under `app/directoryiq`, `app/api/directoryiq`, `lib/directoryiq`, `src/directoryiq`, and `tests/directoryiq_*`.
 
 ## Do Not
 

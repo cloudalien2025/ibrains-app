@@ -23,16 +23,16 @@ Primary objective: prevent score drift and label drift before broader production
 
 | File | Purpose | Score/signal names exposed | Current shape | Consumer surface | Backing | Boundary role |
 | --- | --- | --- | --- | --- | --- | --- |
-| `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | Command-center readiness + optimization coverage derivation | `overallAiRecommendationReadinessScore`, `aiConfidenceScore`, `recommendationProbability`, `subscores`, `missingFieldRecommendations`, `nextBestActions` | `WalmartOptimizationCoverageAudit` object with nested `readiness` | Command Center (`/apps/ecomviper/walmart`) | Derived/scaffold mix | Primary producer (v0 source for canonical boundary) |
-| `app/apps/ecomviper/walmart/page.tsx` | Command-center UI render | "AI Recommendation Readiness", "Confidence" labels and next actions | Coverage audit + command-center score rollup adapter | Command Center | Derived in server component | Consumer aligned to canonical score adapter |
+| `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | Command-center readiness + optimization coverage derivation | `overallAiRecommendationReadinessScore`, `aiConfidenceScore`, `recommendationProbability`, `subscores`, `missingFieldRecommendations`, `nextBestActions` | `WalmartOptimizationCoverageAudit` object with nested `readiness` | Command Center (`/optiwal`) | Derived/scaffold mix | Primary producer (v0 source for canonical boundary) |
+| `app/optiwal/page.tsx` | Command-center UI render | "AI Recommendation Readiness", "Confidence" labels and next actions | Coverage audit + command-center score rollup adapter | Command Center | Derived in server component | Consumer aligned to canonical score adapter |
 | `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts` | Command-center rollup adapter | canonical `WalmartAiVisibilityScore` mapping into readiness/confidence display values | `{ aiVisibilityScore, readinessScore, confidenceScore, confidenceLevel }` | Command Center | Derived | Consumer boundary adapter |
 | `app/api/ecomviper/walmart/health/route.ts` | Authenticated Walmart health payload | `cards` (productsImported, draftChanges, feedErrors, listingsNeedingAttention), `connectionHealth` | `{ ok, mode, connectionHealth, cards }` | Connect page polling and potential command-center API consumers | Production-backed cards + derived counts | First canonical API boundary host (recommended) |
-| `app/apps/ecomviper/walmart/connect/connect-client.tsx` | Connection workspace polling for health | `connectionHealth` payload fields | `WalmartHealthResponse` expects `{ ok, connectionHealth? }` and ignores extra fields | Connect workspace | API-backed | Existing consumer (should tolerate additive `ai_visibility_score`) |
+| `app/optiwal/connect/connect-client.tsx` | Connection workspace polling for health | `connectionHealth` payload fields | `WalmartHealthResponse` expects `{ ok, connectionHealth? }` and ignores extra fields | Connect workspace | API-backed | Existing consumer (should tolerate additive `ai_visibility_score`) |
 | `lib/ecomviper/walmart/walmart-products.ts` | Dashboard snapshot counts and recent activity/products | `productsImported`, `draftChanges`, `feedErrors`, `listingsNeedingAttention` | `WalmartDashboardSnapshot` | Command Center + health route cards | Mixed persisted/runtime | Producer input to canonical boundary dimensions |
 | `lib/ecomviper/walmart/walmart-listing-quality.ts` | Per-product listing quality diagnostics | `score`, `factors`, recommendation severities | `WalmartListingQualityAssessment` | Product Editor score ring/readiness helpers | Derived | Secondary producer (product diagnostic adapter) |
-| `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx` | Product editor score/readiness UI | "Agentic Visibility Score", readiness labels, publish status | In-process canonical adapter consumption via `buildWalmartProductAiVisibilityDiagnostics` | Product Editor | Derived | Consumer (component-level diagnostic aligned to canonical score boundary) |
+| `app/optiwal/products/[sku]/product-editor-client.tsx` | Product editor score/readiness UI | "Agentic Visibility Score", readiness labels, publish status | In-process canonical adapter consumption via `buildWalmartProductAiVisibilityDiagnostics` | Product Editor | Derived | Consumer (component-level diagnostic aligned to canonical score boundary) |
 | `lib/ecomviper/walmart/walmart-ibrains-intelligence.ts` | iBrains opportunity scoring | `agenticVisibilityScore` (summary + per opportunity), destination fit, risk/status | `IBrainsIntelligenceRun` summary/opportunities object | iBrains Intelligence | Derived/recommendation engine | Secondary producer (opportunity diagnostics; not top-level canonical rollup) |
-| `app/apps/ecomviper/walmart/ibrains-intelligence/walmart-ibrains-intelligence-client.tsx` | iBrains score presentation | "Agentic Visibility Score", opportunity/risk cards | Client-side run result object | iBrains UI | Derived | Consumer |
+| `app/optiwal/ibrains-intelligence/walmart-ibrains-intelligence-client.tsx` | iBrains score presentation | "Agentic Visibility Score", opportunity/risk cards | Client-side run result object | iBrains UI | Derived | Consumer |
 | `lib/ecomviper/walmart/walmart-nav.ts` | Lane labels/routes | Prompt Match / Semantic Gaps / Product Opportunities / Trust Signals mappings | Nav label -> route map | Sidebar/lane routing | Static | Naming/ownership adapter evidence |
 | `tests/ecomviper_walmart_agentic_optimization_coverage.test.ts` | Readiness/coverage contract assertions | asserts readiness score + confidence + recommendations exist | Coverage/readiness expectations | CI contract for derived score inputs | Test fixture/derived | Contract guard for producer inputs |
 | `tests/ecomviper_walmart_connect_auth.test.tsx` | Health route contract assertions | asserts `connectionHealth` and `cards` fields | health route payload expectations | CI contract for API host route | Test fixture/live-style route tests | Contract guard for API host route |
@@ -134,7 +134,7 @@ Ownership gaps today:
 - Command Center rollup display now consumes canonical values through `walmart-command-center-score-rollup.ts`.
 - Product Editor score diagnostics now consume a canonical product-level adapter boundary through:
   - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
-  - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+  - `app/optiwal/products/[sku]/product-editor-client.tsx`
 - Focused contract coverage now explicitly asserts adapter-input alignment and projected-score guardrails in:
   - `tests/ecomviper_walmart_product_ai_visibility_score.test.ts`
   - `tests/ecomviper_walmart_product_editor_score_alignment.test.tsx`
@@ -158,15 +158,15 @@ Ownership gaps today:
 
 ## 7) Source-of-Truth Files Inspected
 
-- `app/apps/ecomviper/walmart/page.tsx`
+- `app/optiwal/page.tsx`
 - `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
 - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
 - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
-- `app/apps/ecomviper/walmart/products/[sku]/page.tsx`
-- `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
-- `app/apps/ecomviper/walmart/ibrains-intelligence/page.tsx`
-- `app/apps/ecomviper/walmart/ibrains-intelligence/walmart-ibrains-intelligence-client.tsx`
-- `app/apps/ecomviper/walmart/connect/connect-client.tsx`
+- `app/optiwal/products/[sku]/page.tsx`
+- `app/optiwal/products/[sku]/product-editor-client.tsx`
+- `app/optiwal/ibrains-intelligence/page.tsx`
+- `app/optiwal/ibrains-intelligence/walmart-ibrains-intelligence-client.tsx`
+- `app/optiwal/connect/connect-client.tsx`
 - `app/api/ecomviper/walmart/health/route.ts`
 - `app/api/ecomviper/walmart/products/route.ts`
 - `app/api/ecomviper/walmart/products/[sku]/route.ts`

@@ -1,6 +1,16 @@
 import { aiSelectionCopy } from "@/lib/copy/aiSelectionCopy";
 
-export const brainIds = ["directoryiq", "ecomviper", "studio"] as const;
+export const brainIds = [
+  "ecomviper",
+  "optibay",
+  "optiwal",
+  "optizon",
+  "directoryiq",
+  "casaflix",
+  "pagebolt",
+  "reelify",
+  "ipetzo",
+] as const;
 
 export type BrainId = (typeof brainIds)[number];
 
@@ -21,18 +31,6 @@ export type BrainViewEntry = Omit<BrainCatalogEntry, "id"> & {
 
 export const brainCatalog: BrainCatalogEntry[] = [
   {
-    id: "directoryiq",
-    name: "DirectoryIQ",
-    shortDescription:
-      "Brilliant Directories intelligence brain for listing readiness, authority coverage, and operational discovery cycles.",
-    tags: ["Directory Intelligence", "Knowledge Readiness", "Authority Blueprint"],
-    primaryCtaText: "Open Console",
-    upsellTitle: "Unlock DirectoryIQ",
-    upsellMessage:
-      "Activate DirectoryIQ to map listing health, discover category gaps, and improve local ranking signals.",
-    iconKey: "map",
-  },
-  {
     id: "ecomviper",
     name: "EcomViper",
     shortDescription:
@@ -45,15 +43,99 @@ export const brainCatalog: BrainCatalogEntry[] = [
     iconKey: "zap",
   },
   {
-    id: "studio",
-    name: "Studio",
+    id: "optibay",
+    name: "OptiBay",
     shortDescription:
-      "Narrative intelligence brain for legibility, consistency, and answer quality across channels.",
-    tags: ["Narrative", "Media", "Answer Quality"],
-    primaryCtaText: "Unlock",
-    upsellTitle: "Unlock Studio",
+      "Standalone eBay optimization brain for listing quality, ranking confidence, and conversion performance.",
+    tags: ["eBay", "Listing Optimization", "Marketplace Performance"],
+    primaryCtaText: "Open Console",
+    upsellTitle: "Unlock OptiBay",
     upsellMessage:
-      "Narrative Authority layer for DirectoryIQ and EcomViper teams. Convert entity insights into high-confidence narrative assets.",
+      "Activate OptiBay to optimize eBay listings with AI-assisted content and workflow controls.",
+    iconKey: "zap",
+  },
+  {
+    id: "optiwal",
+    name: "OptiWal",
+    shortDescription:
+      "Standalone Walmart optimization brain for catalog readiness, feed reliability, and AI-assisted optimization.",
+    tags: ["Walmart", "Catalog Readiness", "AI Optimization"],
+    primaryCtaText: "Open Console",
+    upsellTitle: "Unlock OptiWal",
+    upsellMessage:
+      "Activate OptiWal to improve Walmart listing quality and operational execution.",
+    iconKey: "zap",
+  },
+  {
+    id: "optizon",
+    name: "OptiZon",
+    shortDescription:
+      "Standalone Amazon optimization brain for listing clarity, content quality, and marketplace growth readiness.",
+    tags: ["Amazon", "Content Quality", "Marketplace Readiness"],
+    primaryCtaText: "Open Console",
+    upsellTitle: "Unlock OptiZon",
+    upsellMessage:
+      "Activate OptiZon to optimize Amazon listing operations with dedicated brain workflows.",
+    iconKey: "zap",
+  },
+  {
+    id: "directoryiq",
+    name: "DirectoryIQ",
+    shortDescription:
+      "Brilliant Directories intelligence brain for listing readiness, authority coverage, and operational discovery cycles.",
+    tags: ["Directory Intelligence", "Knowledge Readiness", "Authority Blueprint"],
+    primaryCtaText: "Open Console",
+    upsellTitle: "Unlock DirectoryIQ",
+    upsellMessage:
+      "Activate DirectoryIQ to map listing health, discover category gaps, and improve local ranking signals.",
+    iconKey: "map",
+  },
+  {
+    id: "casaflix",
+    name: "CasaFlix",
+    shortDescription:
+      "Standalone media brain for campaign planning, script generation, and production-ready video workflows.",
+    tags: ["Campaigns", "Video Workflow", "Narrative Operations"],
+    primaryCtaText: "Open Console",
+    upsellTitle: "Unlock CasaFlix",
+    upsellMessage:
+      "Activate CasaFlix to run end-to-end campaign intelligence and content production workflows.",
+    iconKey: "clapperboard",
+  },
+  {
+    id: "pagebolt",
+    name: "PageBolt",
+    shortDescription:
+      "Standalone website intelligence brain for briefs, strategy, and build-ready page generation.",
+    tags: ["Website Strategy", "Build Workflows", "Publishing Automation"],
+    primaryCtaText: "Open Console",
+    upsellTitle: "Unlock PageBolt",
+    upsellMessage:
+      "Activate PageBolt to plan and generate high-performing web experiences from one brain workspace.",
+    iconKey: "map",
+  },
+  {
+    id: "reelify",
+    name: "Reelify",
+    shortDescription:
+      "Standalone video execution brain for AI-assisted script, media plan, and publishing workflows.",
+    tags: ["Narrative", "Media", "Answer Quality"],
+    primaryCtaText: "Open Console",
+    upsellTitle: "Unlock Reelify",
+    upsellMessage:
+      "Activate Reelify to orchestrate listing-driven video pipelines and publishing operations.",
+    iconKey: "clapperboard",
+  },
+  {
+    id: "ipetzo",
+    name: "iPetzo",
+    shortDescription:
+      "Standalone pet-industry intelligence brain for niche workflows, automation, and operational support.",
+    tags: ["Vertical Intelligence", "Automation", "Pet Ecosystem"],
+    primaryCtaText: "Open Console",
+    upsellTitle: "Unlock iPetzo",
+    upsellMessage:
+      "Activate iPetzo to launch pet-focused intelligence workflows in an independent brain workspace.",
     iconKey: "clapperboard",
   },
 ];
@@ -61,9 +143,15 @@ export const brainCatalog: BrainCatalogEntry[] = [
 export const brainsDockCopy = aiSelectionCopy.brainsDock;
 
 export const brainCatalogById: Record<BrainId, BrainCatalogEntry> = {
-  directoryiq: brainCatalog[0],
-  ecomviper: brainCatalog[1],
-  studio: brainCatalog[2],
+  ecomviper: brainCatalog[0],
+  optibay: brainCatalog[1],
+  optiwal: brainCatalog[2],
+  optizon: brainCatalog[3],
+  directoryiq: brainCatalog[4],
+  casaflix: brainCatalog[5],
+  pagebolt: brainCatalog[6],
+  reelify: brainCatalog[7],
+  ipetzo: brainCatalog[8],
 };
 
 export function isBrainId(value: string): value is BrainId {

@@ -5,7 +5,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import StudioDomaraClient from "@/app/apps/studio/studio-domara-client";
+import StudioDomaraClient from "@/app/casaflix/studio-domara-client";
 import {
   applyCasaHudMediaPlan,
   applyCasaHudYouTubePackage,
@@ -1053,7 +1053,7 @@ describe("CasaFlix command center UI", () => {
     expect(bookmarkletCodeField?.value).toContain("campaignId=campaign-phase-3");
     expect(bookmarkletCodeField?.value).not.toContain("localhost");
     const reviewLink = container.querySelector('[data-testid="casahud-browser-import-review-link"]') as HTMLAnchorElement | null;
-    expect(reviewLink?.getAttribute("href")).toBe("https://app.ibrains.ai/apps/studio/casaflix/import?campaignId=campaign-phase-3");
+    expect(reviewLink?.getAttribute("href")).toBe("https://app.ibrains.ai/casaflix/import?campaignId=campaign-phase-3");
     expect(reviewLink?.getAttribute("href")).not.toContain("localhost");
 
     const propertyText = container.querySelector('[data-testid="casahud-properties"]')?.textContent || "";

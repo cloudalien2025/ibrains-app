@@ -6,7 +6,7 @@ eBay is an active EcomViper child app with a Phase 1, read-only, mock-first list
 
 Current implementation provides:
 
-- eBay route under `/apps/ecomviper/ebay`,
+- eBay route under `/optibay`,
 - connection/readiness checklist for future BYO credentials,
 - deterministic listing import/scoring/recommendation workflow,
 - explicit non-write boundary (no live listing mutation in this phase).

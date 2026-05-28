@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import StudioDomaraClient from "@/app/apps/studio/studio-domara-client";
+import StudioDomaraClient from "@/app/casaflix/studio-domara-client";
 
 vi.mock("next/link", async () => {
   const React = await import("react");

@@ -206,20 +206,20 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-200/75">
-                {brainId === "siteforge" ? "SiteForge Admin Traceability" : "DirectoryIQ App Traceability"}
+                {brainId === "siteforge" ? "PageBolt Admin Traceability" : "DirectoryIQ Brain Traceability"}
               </div>
-              <h2 className="mt-1 text-lg font-semibold text-white">User App Operational Snapshot</h2>
+              <h2 className="mt-1 text-lg font-semibold text-white">User Brain Operational Snapshot</h2>
               <p className="mt-1 text-xs text-slate-300">
                 {brainId === "siteforge"
-                  ? "Control-plane visibility into SiteForge app projects, sessions, and run outcomes."
-                  : "Control-plane visibility into DirectoryIQ user app routing and dedicated-brain workflows."}
+                  ? "Control-plane visibility into PageBolt projects, sessions, and run outcomes."
+                  : "Control-plane visibility into DirectoryIQ user routing and dedicated-brain workflows."}
               </p>
             </div>
             <Link
-              href={brainId === "siteforge" ? "/apps/siteforge" : "/apps/directoryiq"}
+              href={brainId === "siteforge" ? "/pagebolt" : "/directoryiq"}
               className="rounded-full border border-cyan-300/40 bg-cyan-300/15 px-3 py-1 text-xs text-cyan-100 transition hover:bg-cyan-300/25"
             >
-              Open User App
+              Open Brain
             </Link>
           </div>
           {brainId === "siteforge" && siteForgeAdminSummary ? (
@@ -267,11 +267,11 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
             </div>
           ) : brainId === "siteforge" ? (
             <p className="mt-3 text-xs text-slate-400">
-              SiteForge telemetry source is unavailable. App route still operates independently.
+              PageBolt telemetry source is unavailable. Brain route still operates independently.
             </p>
           ) : (
             <p className="mt-3 text-xs text-slate-400">
-              DirectoryIQ app route is linked to <span className="font-mono">/apps/directoryiq</span> while mission control remains under
+              DirectoryIQ brain route is linked to <span className="font-mono">/directoryiq</span> while mission control remains under
               <span className="font-mono"> /brains/directoryiq</span>.
             </p>
           )}

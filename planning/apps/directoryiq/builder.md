@@ -22,7 +22,7 @@ Define how builders execute DirectoryIQ sprint work without requirement drift.
 
 - Do not invent requirements.
 - Derive decisions from DirectoryIQ implementation evidence:
-  - `app/apps/directoryiq/*`
+  - `app/directoryiq/*`
   - `app/api/directoryiq/*`
   - `lib/directoryiq/*`
   - `src/directoryiq/*`

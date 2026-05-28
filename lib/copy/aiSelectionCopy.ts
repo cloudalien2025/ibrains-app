@@ -33,8 +33,8 @@ export const aiSelectionCopy = {
       "Store provider credentials server-side. Keys stay masked in UI and are never returned in plaintext.",
   },
   studio: {
-    title: "Studio Brain",
+    title: "Reelify Brain",
     subtitle:
-      "Drive mention probability through legibility, evidence density, and cross-channel consistency.",
+      "Drive mention probability through legibility, evidence density, and cross-channel consistency in standalone video workflows.",
   },
 } as const;

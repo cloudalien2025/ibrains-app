@@ -120,7 +120,7 @@ describe("Walmart product editor page live hydration", () => {
       rawLivePayload: null,
     });
 
-    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+    const WalmartProductEditorPage = (await import("@/app/optiwal/products/[sku]/page")).default;
     const result = await WalmartProductEditorPage({
       params: Promise.resolve({ sku: "ROC948" }),
     });
@@ -146,7 +146,7 @@ describe("Walmart product editor page live hydration", () => {
     mocks.hydrateLiveWalmartItemStateForUser.mockRejectedValue(new Error("live hydration failed"));
     mocks.hydrateCurrentWalmartState.mockReturnValue(snapshotState);
 
-    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+    const WalmartProductEditorPage = (await import("@/app/optiwal/products/[sku]/page")).default;
     const result = await WalmartProductEditorPage({
       params: Promise.resolve({ sku: "ROC948" }),
     });
@@ -181,7 +181,7 @@ describe("Walmart product editor page live hydration", () => {
     );
     mocks.hydrateCurrentWalmartState.mockReturnValue(snapshotState);
 
-    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+    const WalmartProductEditorPage = (await import("@/app/optiwal/products/[sku]/page")).default;
     const result = await WalmartProductEditorPage({
       params: Promise.resolve({ sku: "ROC948" }),
     });

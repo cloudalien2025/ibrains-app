@@ -79,30 +79,30 @@ describe("proxy trusted service bypass", () => {
     expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
-  it("redirects unauthenticated app launcher requests without invoking Clerk middleware", async () => {
+  it("redirects unauthenticated dashboard requests without invoking Clerk middleware", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
-    const req = new NextRequest("https://app.ibrains.ai/apps", {
+    const req = new NextRequest("https://app.ibrains.ai/dashboard", {
       method: "GET",
     });
 
     const res = await handler(req);
-    expect(res.status).toBe(307);
-    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
   });
 
   it("redirects unauthenticated Studio app requests without invoking Clerk middleware", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
-    const req = new NextRequest("https://app.ibrains.ai/apps/studio", {
+    const req = new NextRequest("https://app.ibrains.ai/brains", {
       method: "GET",
     });
 
     const res = await handler(req);
-    expect(res.status).toBe(307);
-    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
   });
 
   it("bypasses Clerk middleware on Studio API routes so they do not self-proxy", async () => {

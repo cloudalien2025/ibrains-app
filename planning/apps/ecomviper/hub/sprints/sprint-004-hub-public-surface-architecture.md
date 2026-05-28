@@ -9,7 +9,7 @@ Document the preferred public/private surface model and domain/infrastructure di
 EcomViper Hub operates as one product with two faces:
 
 - Preferred public surface: `ecomviper.com`
-- Private operator surface: `app.ibrains.ai/apps/ecomviper/hub`
+- Private operator surface: `app.ibrains.ai/ecomviper/hub`
 
 Marketplace apps optimize listings.
 Private Hub receives optimized feeds and manages canonical commerce intelligence.
@@ -19,7 +19,7 @@ Public Hub exposes approved canonical intelligence for user and AI discovery.
 
 - `ibrains.ai`: iBrains marketing surface, expected WordPress-served
 - `app.ibrains.ai`: private authenticated iBrains app platform
-- `app.ibrains.ai/apps/ecomviper/hub`: private Hub control plane
+- `app.ibrains.ai/ecomviper/hub`: private Hub control plane
 - `ecomviper.com`: preferred public Hub product intelligence/discovery layer
 
 Architecture guidance:
@@ -69,7 +69,7 @@ Public Hub (`ecomviper.com`) should provide:
 - marketplace routing outcomes
 - AI-readable structured product intelligence
 
-Private Hub (`app.ibrains.ai/apps/ecomviper/hub`) should provide:
+Private Hub (`app.ibrains.ai/ecomviper/hub`) should provide:
 
 - feed sync intake from marketplace apps
 - canonical match/merge governance
@@ -80,7 +80,7 @@ Private Hub (`app.ibrains.ai/apps/ecomviper/hub`) should provide:
 ## Preferred Domain Model
 
 - `ecomviper.com` is the preferred long-term public Hub surface
-- `app.ibrains.ai/apps/ecomviper/hub` is the private Hub control plane
+- `app.ibrains.ai/ecomviper/hub` is the private Hub control plane
 - `ibrains.ai` remains WordPress marketing
 - `app.ibrains.ai` remains private authenticated app platform
 - `hub.ecomviper.com` is not the preferred long-term public surface
@@ -98,7 +98,7 @@ Private Hub (`app.ibrains.ai/apps/ecomviper/hub`) should provide:
 
 - Hub planning docs explicitly document:
   - preferred public surface `ecomviper.com`
-  - private surface `app.ibrains.ai/apps/ecomviper/hub`
+  - private surface `app.ibrains.ai/ecomviper/hub`
   - `ibrains.ai` WordPress marketing role
   - `app.ibrains.ai` private app platform role
 - docs define public/private data boundary and publication lifecycle

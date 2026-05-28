@@ -4,7 +4,7 @@ import path from "node:path";
 
 describe("siteforge project controls contract", () => {
   it("removes deterministic project controls from default user shell", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("Advanced")).toBe(false);
@@ -16,7 +16,7 @@ describe("siteforge project controls contract", () => {
   });
 
   it("does not include create-to-untitled fallback semantics in page code", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("Untitled SiteForge Project")).toBe(false);

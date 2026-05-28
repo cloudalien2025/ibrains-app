@@ -2,8 +2,8 @@
 
 ## Surfaces And Routes
 
-- Private Hub control plane route: `/apps/ecomviper/hub`
-- Private production surface: `https://app.ibrains.ai/apps/ecomviper/hub`
+- Private Hub control plane route: `/ecomviper/hub`
+- Private production surface: `https://app.ibrains.ai/ecomviper/hub`
 - Preferred public Hub surface: `https://ecomviper.com` (future public discovery/product-intelligence surface)
 
 ## Two-Surface Architecture
@@ -13,7 +13,7 @@ Hub architecture uses one canonical intelligence core with two delivery surfaces
 1. Public surface (`ecomviper.com`)
    - public product intelligence and discovery
    - public canonical product pages and semantic/public trust surfaces
-2. Private surface (`app.ibrains.ai/apps/ecomviper/hub`)
+2. Private surface (`app.ibrains.ai/ecomviper/hub`)
    - authenticated merchant/operator control plane
    - feed intake, canonicalization, visibility/routing controls, trust/compliance operations
 
@@ -24,7 +24,7 @@ It may be treated only as a transitional alternative if ever needed.
 
 - `ibrains.ai`: iBrains marketing site, expected WordPress-served
 - `app.ibrains.ai`: private authenticated iBrains app platform
-- `app.ibrains.ai/apps/ecomviper/hub`: private Hub control plane
+- `app.ibrains.ai/ecomviper/hub`: private Hub control plane
 - `ecomviper.com`: preferred public Hub product intelligence/discovery layer
 
 Infrastructure direction:

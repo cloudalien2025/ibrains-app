@@ -24,7 +24,7 @@ vi.mock("@/components/auth/configured-clerk-provider", () => ({
   },
 }));
 
-describe("apps layout auth contract", () => {
+describe("workspace layout auth contract", () => {
   beforeEach(() => {
     vi.resetModules();
     mocks.auth.mockReset();
@@ -34,13 +34,13 @@ describe("apps layout auth contract", () => {
   });
 
   it("renders children without server-side auth() dependency", async () => {
-    const { default: AppsLayout } = await import("@/app/apps/layout");
-    const tree = AppsLayout({ children: createElement("span", null, "launcher-ready") });
+    const { default: WorkspaceLayout } = await import("@/app/ecomviper/layout");
+    const tree = WorkspaceLayout({ children: createElement("span", null, "launcher-ready") });
     const html = renderToString(tree);
 
-    expect(html).toContain("apps-shell-layout");
+    expect(html).toContain("ibrains-shell");
     expect(html).toContain("launcher-ready");
-    expect(mocks.providerProps.at(0)?.publishableKey).toBe("pk_test_apps_layout");
+    expect(mocks.providerProps.length).toBe(0);
     expect(mocks.auth).not.toHaveBeenCalled();
     expect(mocks.redirect).not.toHaveBeenCalled();
   });

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import EcomViperHubPage from "@/app/apps/ecomviper/hub/page";
+import EcomViperHubPage from "@/app/ecomviper/hub/page";
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -21,10 +21,10 @@ describe("EcomViper Hub Feed Control Center foundation", () => {
     expect(html).toContain("EcomViper/eBay");
     expect(html).toContain("EcomViper/Amazon");
     expect(html).toContain("EcomViper/Shopify");
-    expect(html).toContain("/apps/ecomviper/walmart");
-    expect(html).toContain("/apps/ecomviper/ebay");
-    expect(html).toContain("/apps/ecomviper/amazon");
-    expect(html).toContain("/apps/ecomviper/shopify");
+    expect(html).toContain("/optiwal");
+    expect(html).toContain("/optibay");
+    expect(html).toContain("/optizon");
+    expect(html).toContain("/ecomviper/shopify");
   });
 
   it("communicates intake, canonicalization, and publication-readiness as static foundation only", () => {

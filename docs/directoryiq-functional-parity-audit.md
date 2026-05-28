@@ -3,8 +3,8 @@
 Source of truth audited: `/tmp/DirectoryIQ` at commit `3c905188104ad924f7b8000f1a4e82eb4e9ba285`.
 
 ## Broken surfaces audited
-- `/apps/directoryiq` dashboard client
-- `/apps/directoryiq/listings` listings client
+- `/directoryiq` dashboard client
+- `/directoryiq/listings` listings client
 
 ## 1) Standalone page/component entrypoints
 - Dashboard: `app/(brains)/directoryiq/page.tsx` -> `app/(brains)/directoryiq/directoryiq-dashboard-client.tsx`

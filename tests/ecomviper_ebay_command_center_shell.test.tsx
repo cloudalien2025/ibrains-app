@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import EbayLayout from "@/app/apps/ecomviper/ebay/layout";
-import EcomViperEbayDashboardPage from "@/app/apps/ecomviper/ebay/page";
+import EbayLayout from "@/app/optibay/layout";
+import EcomViperEbayDashboardPage from "@/app/optibay/page";
 
 vi.mock("next/link", async () => {
   const React = await import("react");

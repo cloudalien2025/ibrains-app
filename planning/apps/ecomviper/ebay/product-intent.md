@@ -14,7 +14,7 @@ eBay is currently implemented as a Phase 1, read-only, mock-first listing optimi
 
 From code and UI, the eBay workspace is designed to:
 
-- provide a marketplace-specific dashboard at `/apps/ecomviper/ebay`,
+- provide a marketplace-specific dashboard at `/optibay`,
 - expose a BYO credential readiness checklist for future integration,
 - import deterministic mock listings for Phase 1 analysis,
 - score listing quality against category aspects and listing-quality heuristics,
@@ -36,8 +36,8 @@ Observed operator needs from implementation:
 
 Observed flow in the current implementation:
 
-1. Open EcomViper launcher (`/apps/ecomviper`) and choose eBay.
-2. Land on eBay Phase 1 dashboard (`/apps/ecomviper/ebay`).
+1. Open EcomViper launcher (`/ecomviper`) and choose eBay.
+2. Land on eBay Phase 1 dashboard (`/optibay`).
 3. Review connection panel status:
 - mode (`mock` or `live-ready`),
 - environment label,
@@ -178,9 +178,9 @@ Planning inputs:
 
 UI/app surfaces:
 
-- `app/apps/ecomviper/page.tsx`
-- `app/apps/ecomviper/ebay/page.tsx`
-- `app/apps/ecomviper/ebay/ebay-dashboard-client.tsx`
+- `app/ecomviper/page.tsx`
+- `app/optibay/page.tsx`
+- `app/optibay/ebay-dashboard-client.tsx`
 
 API surfaces:
 

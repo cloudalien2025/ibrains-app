@@ -12,7 +12,7 @@ Hub has two coordinated product faces:
 1. Public Hub (`ecomviper.com`)
    - public product intelligence and discovery layer
    - approved canonical product pages and public discovery surfaces
-2. Private Hub (`app.ibrains.ai/apps/ecomviper/hub`)
+2. Private Hub (`app.ibrains.ai/ecomviper/hub`)
    - authenticated merchant/operator control plane
    - feed intake, canonicalization, publication governance, and routing operations
 
@@ -20,7 +20,7 @@ Hub has two coordinated product faces:
 
 - `ibrains.ai`: iBrains marketing site, expected WordPress-served
 - `app.ibrains.ai`: private authenticated iBrains app platform
-- `app.ibrains.ai/apps/ecomviper/hub`: private Hub control-plane route
+- `app.ibrains.ai/ecomviper/hub`: private Hub control-plane route
 - `ecomviper.com`: preferred long-term public Hub product intelligence/discovery surface
 
 `hub.ecomviper.com` is not the preferred long-term public surface.

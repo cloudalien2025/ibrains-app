@@ -17,12 +17,12 @@ Implementation update: Command Center rollup/readiness display now consumes cano
 
 - `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
 - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
-- `app/apps/ecomviper/walmart/page.tsx`
+- `app/optiwal/page.tsx`
 
 Implementation update: Product Editor `Agentic Visibility Score` now consumes a canonical product-level adapter boundary through:
 
 - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
-- `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+- `app/optiwal/products/[sku]/product-editor-client.tsx`
 - `tests/ecomviper_walmart_product_ai_visibility_score.test.ts`
 - `tests/ecomviper_walmart_product_editor_score_alignment.test.tsx`
 
@@ -46,7 +46,7 @@ It is not yet a single canonical production analytics metric.
 
 - Surface: Command Center cards + queues + readiness panel
 - Route/component location:
-  - `app/apps/ecomviper/walmart/page.tsx`
+  - `app/optiwal/page.tsx`
   - `lib/ecomviper/walmart/walmart-products.ts` (`getWalmartDashboardSnapshotForUser`)
   - `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts`
 - What operator sees:
@@ -70,8 +70,8 @@ It is not yet a single canonical production analytics metric.
 
 - Surface: `Prompt Match` nav lane
 - Route/component location:
-  - `lib/ecomviper/walmart/walmart-nav.ts` maps `Prompt Match` -> `/apps/ecomviper/walmart/activity`
-  - `app/apps/ecomviper/walmart/activity/page.tsx`
+  - `lib/ecomviper/walmart/walmart-nav.ts` maps `Prompt Match` -> `/optiwal/activity`
+  - `app/optiwal/activity/page.tsx`
   - `lib/ecomviper/core/activity-log.ts`
 - What operator sees:
   - activity table (time, actor, action, SKU, result, message).
@@ -87,9 +87,9 @@ It is not yet a single canonical production analytics metric.
 
 - Surface: `Semantic Gaps` nav lane
 - Route/component location:
-  - `lib/ecomviper/walmart/walmart-nav.ts` maps `Semantic Gaps` -> `/apps/ecomviper/walmart/inventory`
-  - `app/apps/ecomviper/walmart/inventory/page.tsx`
-  - `app/apps/ecomviper/walmart/inventory/inventory-client.tsx`
+  - `lib/ecomviper/walmart/walmart-nav.ts` maps `Semantic Gaps` -> `/optiwal/inventory`
+  - `app/optiwal/inventory/page.tsx`
+  - `app/optiwal/inventory/inventory-client.tsx`
   - `lib/ecomviper/walmart/walmart-inventory.ts`
 - What operator sees:
   - inventory update workspace + low-stock/out-of-stock tables + recent inventory changes.
@@ -107,9 +107,9 @@ It is not yet a single canonical production analytics metric.
 
 - Surface: `Product Opportunities` nav lane
 - Route/component location:
-  - `lib/ecomviper/walmart/walmart-nav.ts` maps `Product Opportunities` -> `/apps/ecomviper/walmart/pricing`
-  - `app/apps/ecomviper/walmart/pricing/page.tsx`
-  - `app/apps/ecomviper/walmart/pricing/pricing-client.tsx`
+  - `lib/ecomviper/walmart/walmart-nav.ts` maps `Product Opportunities` -> `/optiwal/pricing`
+  - `app/optiwal/pricing/page.tsx`
+  - `app/optiwal/pricing/pricing-client.tsx`
   - `lib/ecomviper/walmart/walmart-pricing.ts`
 - What operator sees:
   - pricing update workspace + validation warnings + recent price changes.
@@ -127,8 +127,8 @@ It is not yet a single canonical production analytics metric.
 
 - Surface: `Trust Signals` nav lane
 - Route/component location:
-  - `lib/ecomviper/walmart/walmart-nav.ts` maps `Trust Signals` -> `/apps/ecomviper/walmart/feeds`
-  - `app/apps/ecomviper/walmart/feeds/feeds-client.tsx`
+  - `lib/ecomviper/walmart/walmart-nav.ts` maps `Trust Signals` -> `/optiwal/feeds`
+  - `app/optiwal/feeds/feeds-client.tsx`
   - `app/api/ecomviper/walmart/feeds/submit/route.ts`
   - `lib/ecomviper/walmart/walmart-feeds.ts`
 - What operator sees:
@@ -148,8 +148,8 @@ It is not yet a single canonical production analytics metric.
 
 - Surface: `iBrains Intelligence`
 - Route/component location:
-  - `app/apps/ecomviper/walmart/ibrains-intelligence/page.tsx`
-  - `app/apps/ecomviper/walmart/ibrains-intelligence/walmart-ibrains-intelligence-client.tsx`
+  - `app/optiwal/ibrains-intelligence/page.tsx`
+  - `app/optiwal/ibrains-intelligence/walmart-ibrains-intelligence-client.tsx`
   - `lib/ecomviper/walmart/walmart-ibrains-intelligence.ts`
 - What operator sees:
   - product selector + run button,
@@ -170,7 +170,7 @@ It is not yet a single canonical production analytics metric.
 
 - Surface: SKU editor visibility/readiness controls
 - Route/component location:
-  - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+  - `app/optiwal/products/[sku]/product-editor-client.tsx`
   - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
   - `lib/ecomviper/walmart/walmart-listing-quality.ts`
   - `lib/ecomviper/walmart/walmart-publish-lanes.ts`
@@ -313,16 +313,16 @@ Canonical contract and first consumer alignment now exist (`walmart-ai-visibilit
 
 ## 6) Source-of-Truth Files Inspected
 
-- `app/apps/ecomviper/walmart/page.tsx`: command center cards, AI visibility queue, readiness panel, next-best actions.
-- `app/apps/ecomviper/walmart/_components/walmart-sidebar.tsx`: AI discovery/readiness lane copy and nav intent text.
+- `app/optiwal/page.tsx`: command center cards, AI visibility queue, readiness panel, next-best actions.
+- `app/optiwal/_components/walmart-sidebar.tsx`: AI discovery/readiness lane copy and nav intent text.
 - `lib/ecomviper/walmart/walmart-nav.ts`: lane label to route mapping (Prompt Match/Semantic Gaps/Product Opportunities/Trust Signals).
-- `app/apps/ecomviper/walmart/activity/page.tsx`: Prompt Match-mapped activity surface.
-- `app/apps/ecomviper/walmart/inventory/page.tsx` + `inventory-client.tsx`: Semantic Gaps-mapped inventory surface.
-- `app/apps/ecomviper/walmart/pricing/page.tsx` + `pricing-client.tsx`: Product Opportunities-mapped pricing surface.
-- `app/apps/ecomviper/walmart/feeds/page.tsx` + `feeds-client.tsx`: Trust Signals-mapped feed surface and staged messaging.
-- `app/apps/ecomviper/walmart/ibrains-intelligence/*`: iBrains run UI and destination-aware opportunity output.
-- `app/apps/ecomviper/walmart/products/page.tsx` + `products-client.tsx`: product list triage, source confidence context, import diagnostics.
-- `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`: per-SKU visibility/readiness score, publish preview, source confidence panel.
+- `app/optiwal/activity/page.tsx`: Prompt Match-mapped activity surface.
+- `app/optiwal/inventory/page.tsx` + `inventory-client.tsx`: Semantic Gaps-mapped inventory surface.
+- `app/optiwal/pricing/page.tsx` + `pricing-client.tsx`: Product Opportunities-mapped pricing surface.
+- `app/optiwal/feeds/page.tsx` + `feeds-client.tsx`: Trust Signals-mapped feed surface and staged messaging.
+- `app/optiwal/ibrains-intelligence/*`: iBrains run UI and destination-aware opportunity output.
+- `app/optiwal/products/page.tsx` + `products-client.tsx`: product list triage, source confidence context, import diagnostics.
+- `app/optiwal/products/[sku]/product-editor-client.tsx`: per-SKU visibility/readiness score, publish preview, source confidence panel.
 - `app/api/ecomviper/walmart/health/route.ts`: connection + card payload contract.
 - `app/api/ecomviper/walmart/ai/generate/route.ts`: AI optimization route and flow metadata.
 - `app/api/ecomviper/walmart/inventory/update/route.ts`: inventory update API behavior.

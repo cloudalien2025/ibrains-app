@@ -1,10 +1,10 @@
-# SiteForge Builder Workflow
+# PageBolt Builder Workflow
 
 Last updated: 2026-05-18 (UTC)
 
 ## Purpose
 
-Define how builders execute SiteForge sprints with implementation-grounded scope and GitLab closure discipline.
+Define how builders execute PageBolt sprints with implementation-grounded scope and GitLab closure discipline.
 
 ## Required Read Order
 
@@ -16,17 +16,17 @@ Define how builders execute SiteForge sprints with implementation-grounded scope
 6. `planning/questions.md`
 7. `planning/apps/siteforge/overview.md`
 8. `planning/apps/siteforge/product-intent.md`
-9. active SiteForge sprint docs (when present)
+9. active PageBolt sprint docs (when present)
 
 ## Source-of-Truth Rule
 
 - Do not invent requirements.
-- Derive scope from observed SiteForge implementation and tests.
+- Derive scope from observed PageBolt implementation and tests.
 - If behavior is unclear, mark uncertainty in planning docs and keep changes reversible.
 
 Evidence roots:
 
-- `app/apps/siteforge/*`
+- `app/pagebolt/*`
 - `app/api/siteforge/*`
 - `lib/siteforge/*`
 - `tests/siteforge*`
@@ -47,7 +47,7 @@ Evidence roots:
 
 ## Scope Guardrails
 
-- preserve existing SiteForge route behavior
+- preserve existing PageBolt route behavior
 - preserve API semantics unless sprint explicitly targets API contracts
 - avoid broad refactors while adding shell/layout improvements
 - avoid fake production capabilities in UI copy
@@ -62,8 +62,8 @@ Evidence roots:
 
 ## Planning Update Expectations
 
-Each SiteForge sprint should update:
+Each PageBolt sprint should update:
 
 - `planning/state.md`
-- relevant SiteForge planning docs touched by the sprint
+- relevant PageBolt planning docs touched by the sprint
 - source-of-truth file pointers for changed behavior

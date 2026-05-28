@@ -15,7 +15,7 @@ Specifically, `product-intent.md` states that Step 3 in the product editor is cu
 
 ## Problem Statement
 
-The current product editor (`/apps/ecomviper/shopify/products/[productId-or-handle]`) supports:
+The current product editor (`/ecomviper/shopify/products/[productId-or-handle]`) supports:
 
 - review current listing,
 - generate optimization proposal,

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { resolveFrontdoorAuthState } from "@/lib/auth/frontdoorAuthState";
 
 type FrontdoorHeaderActionsProps = {
-  currentPath: "/" | "/apps";
+  currentPath: "/" | "/brains";
 };
 
 const secondaryLinkClass =
@@ -25,9 +25,9 @@ export default async function FrontdoorHeaderActions({ currentPath }: FrontdoorH
         </Link>
       ) : null}
 
-      {currentPath !== "/apps" ? (
-        <Link href="/apps" className={primaryLinkClass}>
-          Open Apps
+      {currentPath !== "/brains" ? (
+        <Link href="/brains" className={primaryLinkClass}>
+          Open Brains
         </Link>
       ) : null}
 

@@ -7,17 +7,17 @@ Last reviewed: 2026-05-18 (UTC)
 Studio is implemented as an iBrains app family and launcher for media-focused operator workflows.
 
 Current implementation shows:
-- Studio launcher at `/apps/studio`.
+- Standalone brain routes are `/casaflix` and `/reelify`; workspace dashboard route is `/dashboard`.
 - One active Studio child app: CasaFlix.
 - CasaFlix is a real-estate video command center that turns a campaign concept into a reviewed video package.
-- UAP Forge is present in launcher/planning as "Coming Soon" and is not implemented in app/API paths yet.
+- Reelify is present in launcher/planning as "Coming Soon" and is not implemented in app/API paths yet.
 - "Future Studio Apps" is a placeholder planning surface.
 
 ## Current Implementation Summary
 
 Studio currently has two runtime surfaces:
 - Brain shell surface (`/studio`): entitlement-gated Studio summary and signal-source UI.
-- App surface (`/apps/studio`): Studio launcher and CasaFlix operator workspace.
+- Top-level brain surfaces (`/casaflix` and `/reelify`) host the CasaFlix and Reelify workspaces.
 
 CasaFlix runtime is a phase-driven command center with sections:
 - Campaigns
@@ -68,14 +68,14 @@ State transitions are guarded. Routes return explicit 409/400/503 errors if prer
 ## Studio and Child-App Relationship
 
 ### Studio -> CasaFlix
-- `/apps/studio` is a launcher.
-- `/apps/studio/casaflix` is the active CasaFlix workspace.
-- `/apps/studio/casahud` is a backward-compatible legacy alias to the same CasaFlix workspace.
-- `/apps/studio/casaflix/import` and `/apps/studio/casahud/import` share the browser import review client.
+- `/brains` is a launcher.
+- `/casaflix` is the active CasaFlix workspace.
+- `/reelify` is a backward-compatible legacy alias to the same CasaFlix workspace.
+- `/casaflix/import` and `/reelify/import` share the browser import review client.
 
-### Studio -> UAP Forge
+### Studio -> Reelify
 - Launcher card exists but is disabled (`Coming Soon`).
-- No `app/apps/studio/uap-forge` implementation path currently exists.
+- `app/reelify` is implemented as an independent top-level route shell.
 - No `app/api/studio/uap-forge` or `lib/studio/uap-forge` runtime implementation found.
 
 ### Studio -> Future Studio Apps
@@ -155,7 +155,7 @@ Studio/CasaFlix has broad unit/route/UI coverage, including:
 - media/render/narration/map/location provider tests
 - AI-channel orchestrator and DB migration contract tests
 
-No UAP Forge runtime tests were found.
+No Reelify runtime tests were found.
 
 ## Existing Implementation Status
 
@@ -173,12 +173,12 @@ Partially implemented / constrained:
 - Dual orchestration models exist (campaign command center and AI-channel run engine), with unclear canonical ownership.
 
 Not implemented:
-- UAP Forge runtime app/API/lib paths.
+- Reelify runtime app/API/lib paths.
 - Future Studio app runtime paths.
 
 ## Current Gaps
 
-1. Studio app family is only partially realized at runtime (CasaFlix implemented, UAP Forge/Future apps not implemented).
+1. Studio app family is only partially realized at runtime (CasaFlix implemented, Reelify/Future apps not implemented).
 2. Live YouTube upload/scheduling is not enabled, even when YouTube is configured.
 3. Two Studio orchestration models coexist (campaign command-center flow and AI-channel run engine) without a clearly documented canonical integration boundary.
 4. Legacy namespaces remain mixed (`casahud`, `domara`, and `casaflix`) across UI/routes/lib, increasing architectural ambiguity.
@@ -191,7 +191,7 @@ Not implemented:
 - data ownership boundaries between `casahud_projects` and run tables
 2. Implement/enable real publish/schedule path (or formalize long-term blocked mode) for CasaFlix execution endpoints.
 3. Continue migration toward CasaFlix-first naming while preserving backward-compatible route/storage aliases where required.
-4. Define dedicated UAP Forge runtime skeleton if it remains on the Studio launcher.
+4. Define dedicated Reelify runtime skeleton if it remains on the Studio launcher.
 5. Clarify long-term credential-store ownership for Studio integrations (currently stored via `directoryiq_signal_source_credentials`).
 
 Where product direction is not explicit in code, architecture intent is unclear and pending architecture interview.
@@ -200,12 +200,12 @@ Where product direction is not explicit in code, architecture intent is unclear 
 
 | File | What it proves |
 | --- | --- |
-| `app/apps/studio/page.tsx` | Studio launcher cards: CasaFlix active, UAP Forge disabled, future apps placeholder. |
-| `app/apps/studio/casaflix/page.tsx` | CasaFlix route mounts the current command-center client implementation. |
-| `app/apps/studio/casahud/page.tsx` | Backward-compatible legacy alias points to the same CasaFlix workspace. |
-| `app/apps/studio/studio-domara-client.tsx` | Single client entrypoint (legacy module name) into the command center. |
-| `app/apps/studio/studio-casahud-command-center.tsx` | Primary operator UI sections, next-step logic, and API wiring (legacy module name). |
-| `app/apps/studio/casahud/import/review-client.tsx` | Browser-assisted import review/edit/save workflow. |
+| `app/(shell)/dashboard/page.tsx` | Studio launcher cards: CasaFlix active, Reelify disabled, future apps placeholder. |
+| `app/casaflix/page.tsx` | CasaFlix route mounts the current command-center client implementation. |
+| `app/reelify/page.tsx` | Backward-compatible legacy alias points to the same CasaFlix workspace. |
+| `app/casaflix/studio-domara-client.tsx` | Single client entrypoint (legacy module name) into the command center. |
+| `app/casaflix/studio-casahud-command-center.tsx` | Primary operator UI sections, next-step logic, and API wiring (legacy module name). |
+| `app/reelify/import/review-client.tsx` | Browser-assisted import review/edit/save workflow. |
 | `app/api/studio/domara/opportunity/route.ts` | Viral title opportunity generation endpoint and provider resolution. |
 | `app/api/studio/domara/campaigns/route.ts` | Campaign create/list endpoints and duplicate-title handling. |
 | `app/api/studio/domara/campaigns/[id]/discover-listings/route.ts` | Discovery phase route and integration-aware discovery execution. |

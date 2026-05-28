@@ -1,5 +1,7 @@
-import { redirect } from "next/navigation";
+import DirectoryIqDashboardClient from "./directoryiq-dashboard-client";
 
-export default function LegacyDirectoryIqRootRedirect() {
-  redirect("/apps/directoryiq");
+export const dynamic = "force-dynamic";
+
+export default function DirectoryIQPage() {
+  return <DirectoryIqDashboardClient />;
 }

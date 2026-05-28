@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Seed the first private Hub Feed Control Center surface at `/apps/ecomviper/hub` using static/demo content aligned to Hub planning architecture.
+Seed the first private Hub Feed Control Center surface at `/ecomviper/hub` using static/demo content aligned to Hub planning architecture.
 
 ## Scope
 
@@ -24,10 +24,10 @@ Seed the first private Hub Feed Control Center surface at `/apps/ecomviper/hub` 
 
 ## App Files Changed
 
-- `app/apps/ecomviper/hub/hub-workspace-client.tsx`
-- `app/apps/ecomviper/hub/_components/hub-sidebar.tsx`
-- `app/apps/ecomviper/hub/_components/hub-feed-control-center.tsx`
-- `app/apps/ecomviper/hub/hub-feed-control-content.ts`
+- `app/ecomviper/hub/hub-workspace-client.tsx`
+- `app/ecomviper/hub/_components/hub-sidebar.tsx`
+- `app/ecomviper/hub/_components/hub-feed-control-center.tsx`
+- `app/ecomviper/hub/hub-feed-control-content.ts`
 
 ## Planning Files Changed
 
@@ -42,10 +42,10 @@ Seed the first private Hub Feed Control Center surface at `/apps/ecomviper/hub` 
 
 ## Static / Demo Feed Sources
 
-- `EcomViper/Walmart` (`/apps/ecomviper/walmart`)
-- `EcomViper/eBay` (`/apps/ecomviper/ebay`)
-- `EcomViper/Amazon` (`/apps/ecomviper/amazon`)
-- `EcomViper/Shopify` (`/apps/ecomviper/shopify`)
+- `EcomViper/Walmart` (`/optiwal`)
+- `EcomViper/eBay` (`/optibay`)
+- `EcomViper/Amazon` (`/optizon`)
+- `EcomViper/Shopify` (`/ecomviper/shopify`)
 
 Mode:
 
@@ -54,7 +54,7 @@ Mode:
 
 ## Acceptance Criteria
 
-- private Hub route `/apps/ecomviper/hub` visibly includes Feed Control Center foundation content
+- private Hub route `/ecomviper/hub` visibly includes Feed Control Center foundation content
 - feed intake sources include Walmart, eBay, Amazon, and Shopify
 - workspace communicates private workflow: optimized feeds -> Hub intake -> canonicalization -> publication/routing approval
 - workspace includes explicit static/demo-only language and does not imply live sync is implemented

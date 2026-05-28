@@ -4,7 +4,7 @@ import path from "node:path";
 
 describe("siteforge active project override guard contract", () => {
   it("locks active project intent after create and blocks stale load override paths", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("const activeProjectIntentRef = useRef<string | null>(null);")).toBe(true);
@@ -18,7 +18,7 @@ describe("siteforge active project override guard contract", () => {
   });
 
   it("does not render project selector fallback in default user shell", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("selectedProjectId && !selectedProjectInOptions")).toBe(false);

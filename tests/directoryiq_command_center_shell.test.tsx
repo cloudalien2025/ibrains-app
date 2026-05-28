@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import DirectoryIqLayout from "@/app/apps/directoryiq/layout";
-import DirectoryIQPage from "@/app/apps/directoryiq/page";
+import DirectoryIqLayout from "@/app/directoryiq/layout";
+import DirectoryIQPage from "@/app/directoryiq/page";
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -13,7 +13,7 @@ vi.mock("next/link", async () => {
 });
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/apps/directoryiq",
+  usePathname: () => "/directoryiq",
 }));
 
 describe("DirectoryIQ workspace shell", () => {

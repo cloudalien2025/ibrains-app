@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import WalmartProductsClient from "@/app/apps/ecomviper/walmart/products/products-client";
+import WalmartProductsClient from "@/app/optiwal/products/products-client";
 import { walmartNavItems } from "@/lib/ecomviper/walmart/walmart-nav";
 import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
 
@@ -58,7 +58,7 @@ describe("Walmart products client UX", () => {
   it("links SKU and title to the product editor route with encoded SKU", () => {
     const html = renderToStaticMarkup(<WalmartProductsClient products={[createProduct()]} />);
 
-    expect(html).toContain('href="/apps/ecomviper/walmart/products/SKU%2030066%2F841"');
+    expect(html).toContain('href="/optiwal/products/SKU%2030066%2F841"');
     expect(html).toContain(">SKU 30066/841<");
     expect(html).toContain(">Walmart Product<");
   });

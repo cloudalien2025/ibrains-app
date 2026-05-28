@@ -4,7 +4,7 @@ import path from "node:path";
 
 describe("siteforge connection orchestration contract", () => {
   it("keeps canonical active project binding and orchestrated connect flow", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("const activeProjectId = activeProject?.id ?? null;")).toBe(true);
@@ -17,7 +17,7 @@ describe("siteforge connection orchestration contract", () => {
   });
 
   it("maps stale project-not-found responses to precise selected-project message", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes('if (text.includes("project not found")) return "Selected project could not be loaded.";')).toBe(true);

@@ -33,21 +33,21 @@ export default function Home() {
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-2xl border border-[#D9E4F0] bg-[#EAF1F8]/75 p-5">
-              <div className="text-xs text-[#64748B]">Apps</div>
-              <div className="mt-1 text-sm font-medium text-[#0F172A]">DirectoryIQ + SiteForge</div>
-              <div className="mt-2 text-xs text-[#64748B]">Integrated under the iBrains app launcher.</div>
+              <div className="text-xs text-[#64748B]">Brains</div>
+              <div className="mt-1 text-sm font-medium text-[#0F172A]">DirectoryIQ + PageBolt</div>
+              <div className="mt-2 text-xs text-[#64748B]">Integrated under the iBrains brain workspace launcher.</div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link
-                  href="/apps/directoryiq"
+                  href="/directoryiq"
                   className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#334155] transition hover:bg-[#F8FBFF]"
                 >
                   Open DirectoryIQ
                 </Link>
                 <Link
-                  href="/apps/siteforge"
+                  href="/pagebolt"
                   className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#334155] transition hover:bg-[#F8FBFF]"
                 >
-                  Open SiteForge
+                  Open PageBolt
                 </Link>
               </div>
             </div>

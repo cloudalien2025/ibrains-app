@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { renderToStaticMarkup } from "react-dom/server";
-import WalmartConnectPage from "@/app/apps/ecomviper/walmart/connect/page";
+import WalmartConnectPage from "@/app/optiwal/connect/page";
 import { POST as saveOpenAiRoute, GET as getOpenAiStatusRoute } from "@/app/api/ecomviper/walmart/connect/openai/route";
 import { POST as generateWalmartAiRoute } from "@/app/api/ecomviper/walmart/ai/generate/route";
 import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer";

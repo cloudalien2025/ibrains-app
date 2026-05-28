@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import ProductEditorClient from "@/app/apps/ecomviper/walmart/products/[sku]/product-editor-client";
+import ProductEditorClient from "@/app/optiwal/products/[sku]/product-editor-client";
 import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProductRecord {

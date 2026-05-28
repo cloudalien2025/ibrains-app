@@ -16,9 +16,9 @@ export type SiteForgeSidebarItem = SiteForgeSidebarRouteItem | SiteForgeSidebarL
 export const siteforgeSidebarItems: SiteForgeSidebarItem[] = [
   {
     kind: "route",
-    href: "/apps/siteforge",
+    href: "/pagebolt",
     label: "Command Center",
-    description: "SiteForge workspace home",
+    description: "PageBolt workspace home",
   },
   {
     kind: "lane",

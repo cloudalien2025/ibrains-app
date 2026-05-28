@@ -3,7 +3,7 @@
 This document describes conceptual UI zones.
 It does not implement routes or UI in this sprint.
 
-## Private Hub Control Plane Zones (`app.ibrains.ai/apps/ecomviper/hub`)
+## Private Hub Control Plane Zones (`app.ibrains.ai/ecomviper/hub`)
 
 ### Hub Overview Dashboard
 

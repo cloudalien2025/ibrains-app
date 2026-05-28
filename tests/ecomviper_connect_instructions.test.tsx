@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import WalmartConnectClient from "@/app/apps/ecomviper/walmart/connect/connect-client";
+import WalmartConnectClient from "@/app/optiwal/connect/connect-client";
 import type { WalmartConnectionHealth } from "@/lib/ecomviper/walmart/walmart-types";
 
 function buildInitialHealth(): WalmartConnectionHealth {

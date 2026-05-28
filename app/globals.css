@@ -95,7 +95,7 @@ body {
   background: #ffffff;
 }
 
-/* DirectoryIQ full-app palette normalization (scoped to /apps/directoryiq only). */
+/* DirectoryIQ full-app palette normalization (scoped to /directoryiq only). */
 .directoryiq-app-theme [class*="text-slate-100"] {
   color: #0f172a !important;
 }

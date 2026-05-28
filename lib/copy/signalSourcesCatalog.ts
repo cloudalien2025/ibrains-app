@@ -104,7 +104,7 @@ export const studioSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Channel and transcript ingest for narrative legibility.",
     actionLabel: "Configure",
-    actionHref: "/studio/signal-sources?connector=youtube",
+    actionHref: "/reelify?connector=youtube",
   },
   {
     id: "openai",
@@ -113,7 +113,7 @@ export const studioSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Narrative synthesis, evidence mapping, and mention scaffolding.",
     actionLabel: "Configure",
-    actionHref: "/studio/signal-sources?connector=openai",
+    actionHref: "/reelify?connector=openai",
   },
   {
     id: "podcast-rss",

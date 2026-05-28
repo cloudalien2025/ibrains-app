@@ -1,21 +1,21 @@
-# SiteForge Architecture
+# PageBolt Architecture
 
 Last updated: 2026-05-18 (UTC)
 
 ## Purpose
 
-Document current SiteForge architecture from repository implementation evidence.
+Document current PageBolt architecture from repository implementation evidence.
 
 ## Runtime Entry Points
 
 App route:
 
-- `/apps/siteforge` via `app/apps/siteforge/page.tsx`
+- `/pagebolt` via `app/pagebolt/page.tsx`
 
 App shell:
 
-- `app/apps/siteforge/layout.tsx`
-- `app/apps/siteforge/_components/siteforge-sidebar.tsx`
+- `app/pagebolt/layout.tsx`
+- `app/pagebolt/_components/siteforge-sidebar.tsx`
 - `lib/siteforge/siteforge-nav.ts`
 
 ## Current UI Architecture
@@ -44,7 +44,7 @@ Primary route families under `app/api/siteforge`:
 
 ## Domain/Service Layers
 
-SiteForge core libraries provide:
+PageBolt core libraries provide:
 
 - project/workspace shape normalization (`workspaceShape.ts`)
 - repository contracts and persistence policy (`repository/*`)
@@ -82,9 +82,9 @@ Deferred:
 
 ## Source-of-Truth Files
 
-- `app/apps/siteforge/page.tsx`
-- `app/apps/siteforge/layout.tsx`
-- `app/apps/siteforge/_components/siteforge-sidebar.tsx`
+- `app/pagebolt/page.tsx`
+- `app/pagebolt/layout.tsx`
+- `app/pagebolt/_components/siteforge-sidebar.tsx`
 - `lib/siteforge/siteforge-nav.ts`
 - `app/api/siteforge/*`
 - `lib/siteforge/*`

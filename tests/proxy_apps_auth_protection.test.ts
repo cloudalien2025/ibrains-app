@@ -65,12 +65,12 @@ describe("proxy app/auth protection", () => {
     expect(state.clerkProxyCalls).toBe(0);
   });
 
-  it("redirects unauthenticated users from /apps/ecomviper/walmart/connect to sign-in with redirect_url", async () => {
+  it("redirects unauthenticated users from /optiwal/connect to sign-in with redirect_url", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
     const response = await handler(
-      new NextRequest("https://app.ibrains.ai/apps/ecomviper/walmart/connect")
+      new NextRequest("https://app.ibrains.ai/optiwal/connect")
     );
 
     expect(response.status).toBe(307);
@@ -114,12 +114,12 @@ describe("proxy app/auth protection", () => {
     expect(state.clerkProxyCalls).toBe(0);
   });
 
-  it("allows authenticated users into /apps/ecomviper/walmart/connect", async () => {
+  it("allows authenticated users into /optiwal/connect", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
     const response = await handler(
-      new NextRequest("https://app.ibrains.ai/apps/ecomviper/walmart/connect", {
+      new NextRequest("https://app.ibrains.ai/optiwal/connect", {
         headers: {
           cookie: "__session=valid_cookie",
         },

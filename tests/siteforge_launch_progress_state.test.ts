@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getLaunchProgressState } from "@/app/apps/siteforge/page";
+import { getLaunchProgressState } from "@/app/pagebolt/page";
 
 describe("siteforge launch progress state", () => {
   it("shows all required human-readable stages", () => {

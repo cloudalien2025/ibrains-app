@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import ProductEditorClient from "@/app/apps/ecomviper/walmart/products/[sku]/product-editor-client";
+import ProductEditorClient from "@/app/optiwal/products/[sku]/product-editor-client";
 import type { WalmartDraftRecord, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 const { productAiVisibilityDiagnosticsMock } = vi.hoisted(() => ({

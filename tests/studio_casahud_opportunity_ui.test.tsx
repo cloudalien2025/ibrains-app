@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import StudioDomaraClient from "@/app/apps/studio/studio-domara-client";
+import StudioDomaraClient from "@/app/casaflix/studio-domara-client";
 import { applyCasaHudMediaPlan, type CasaHudCampaign, type CasaHudCampaignSummary } from "@/lib/studio/domara/campaigns";
 import { createEmptyCasaHudExecutionData } from "@/lib/studio/domara/campaign-execution";
 import { createEmptyCasaHudLocationData } from "@/lib/studio/domara/campaign-location-intelligence";

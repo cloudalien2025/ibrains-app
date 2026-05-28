@@ -39,14 +39,14 @@ describe("siteforge project editor contract", () => {
   });
 
   it("does not render manual Save Project button in SiteForge page", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("Save Project")).toBe(false);
   });
 
   it("keeps rename/create project controls out of default user shell", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("Rename current project")).toBe(false);

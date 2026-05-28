@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import EcomViperEbayDashboardPage from "@/app/apps/ecomviper/ebay/page";
+import EcomViperEbayDashboardPage from "@/app/optibay/page";
 import { importEbayListingsForPhase1 } from "@/lib/ecomviper/ebay/dashboard";
 import type { EbayDashboardConnectionSummary } from "@/lib/ecomviper/ebay/types";
 
@@ -24,7 +24,7 @@ function buildMockConnection(): EbayDashboardConnectionSummary {
 }
 
 describe("EcomViper eBay dashboard phase 1", () => {
-  it("renders the /apps/ecomviper/ebay route", () => {
+  it("renders the /optibay route", () => {
     const html = renderToStaticMarkup(<EcomViperEbayDashboardPage />);
 
     expect(html).toContain("ecomviper-ebay-dashboard");

@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
-import WalmartProductsClient from "@/app/apps/ecomviper/walmart/products/products-client";
+import WalmartProductsClient from "@/app/optiwal/products/products-client";
 import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
 
 vi.mock("next/link", async () => {

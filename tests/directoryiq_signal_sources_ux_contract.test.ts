@@ -6,7 +6,7 @@ describe("directoryiq signal-sources ux contract", () => {
   it("keeps BD technical inputs behind advanced troubleshooting", () => {
     const filePath = path.join(
       process.cwd(),
-      "app/apps/directoryiq/signal-sources/directoryiq-signal-sources-client.tsx"
+      "app/directoryiq/signal-sources/directoryiq-signal-sources-client.tsx"
     );
     const source = fs.readFileSync(filePath, "utf8");
 
@@ -19,7 +19,7 @@ describe("directoryiq signal-sources ux contract", () => {
   it("uses backend-readiness messaging for non-BD connectors and keeps save gating tied to readiness", () => {
     const filePath = path.join(
       process.cwd(),
-      "app/apps/directoryiq/signal-sources/directoryiq-signal-sources-client.tsx"
+      "app/directoryiq/signal-sources/directoryiq-signal-sources-client.tsx"
     );
     const source = fs.readFileSync(filePath, "utf8");
 

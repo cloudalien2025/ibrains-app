@@ -27,8 +27,8 @@ Execute a narrow foundation sprint that combines planning architecture alignment
 
 ## App Change Areas
 
-- `app/apps/directoryiq/layout.tsx`
-- `app/apps/directoryiq/_components/directoryiq-sidebar.tsx` (new)
+- `app/directoryiq/layout.tsx`
+- `app/directoryiq/_components/directoryiq-sidebar.tsx` (new)
 - existing DirectoryIQ pages remain functionally unchanged
 
 ## Test Change Areas

@@ -456,7 +456,7 @@ describe("CasaFlix bookmarklet loader route", () => {
 
     expect(response.status).toBe(200);
     expect(script).toContain('var APP_ORIGIN = "https://app.ibrains.ai"');
-    expect(script).toContain("/apps/studio/casaflix/import");
+    expect(script).toContain("/casaflix/import");
     expect(script).toContain("captureMethod");
     expect(script).toContain("priceCandidates");
     expect(script).toContain("descriptionCandidates");
@@ -542,7 +542,7 @@ describe("CasaFlix bookmarklet loader route", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/javascript");
-    expect(script).toContain("/apps/studio/casaflix/import");
+    expect(script).toContain("/casaflix/import");
     expect(script).toContain("captureMethod");
     expect(script).toContain("priceCandidates");
     expect(script).toContain("descriptionCandidates");

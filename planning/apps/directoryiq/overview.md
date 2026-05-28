@@ -48,7 +48,7 @@ Planning:
 - `planning/apps/directoryiq/product-intent.md`
 
 Implementation evidence families:
-- `app/apps/directoryiq/*`
+- `app/directoryiq/*`
 - `app/api/directoryiq/*`
 - `lib/directoryiq/*`
 - `tests/directoryiq_*`

@@ -574,7 +574,7 @@ describe("walmart products persistence", () => {
 
     expect(saveDraftResponse.status).toBe(201);
 
-    const WalmartProductsPage = (await import("@/app/apps/ecomviper/walmart/products/page")).default;
+    const WalmartProductsPage = (await import("@/app/optiwal/products/page")).default;
     const html = renderToStaticMarkup(await WalmartProductsPage());
     expect(html).toContain("OPA Nutrition");
     expect(html).toContain("Pending draft");
@@ -614,7 +614,7 @@ describe("walmart products persistence", () => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_draft_fallback__ = fallbackStore;
 
     authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
-    const WalmartProductsPage = (await import("@/app/apps/ecomviper/walmart/products/page")).default;
+    const WalmartProductsPage = (await import("@/app/optiwal/products/page")).default;
     const html = renderToStaticMarkup(await WalmartProductsPage());
 
     expect(html).toContain("Legacy Overlay Brand");
@@ -652,7 +652,7 @@ describe("walmart products persistence", () => {
     expect(saveDraftResponse.status).toBe(201);
 
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
-    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+    const WalmartProductEditorPage = (await import("@/app/optiwal/products/[sku]/page")).default;
     const html = renderToStaticMarkup(
       await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC808" }) })
     );
@@ -694,7 +694,7 @@ describe("walmart products persistence", () => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_draft_fallback__ = fallbackStore;
 
     authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
-    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+    const WalmartProductEditorPage = (await import("@/app/optiwal/products/[sku]/page")).default;
 
     const html = renderToStaticMarkup(
       await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC822" }) })
@@ -760,13 +760,13 @@ describe("walmart products persistence", () => {
     ]);
 
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
-    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+    const WalmartProductEditorPage = (await import("@/app/optiwal/products/[sku]/page")).default;
     const editorHtml = renderToStaticMarkup(
       await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC949" }) })
     );
     expect(editorHtml).toContain("https://i5.walmartimages.com/asr/18410702298-primary.jpeg");
 
-    const WalmartProductsPage = (await import("@/app/apps/ecomviper/walmart/products/page")).default;
+    const WalmartProductsPage = (await import("@/app/optiwal/products/page")).default;
     const productsHtml = renderToStaticMarkup(await WalmartProductsPage());
     expect(productsHtml).toContain('src="https://i5.walmartimages.com/asr/18410702298-primary.jpeg"');
     expect(productsHtml).toContain("Source: Public Walmart listing via SerpApi");
@@ -879,7 +879,7 @@ describe("walmart products persistence", () => {
     expect(allDrafts).toHaveLength(1);
     expect(allDrafts[0]?.status).toBe("discarded");
 
-    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+    const WalmartProductEditorPage = (await import("@/app/optiwal/products/[sku]/page")).default;
     const html = renderToStaticMarkup(
       await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC808" }) })
     );

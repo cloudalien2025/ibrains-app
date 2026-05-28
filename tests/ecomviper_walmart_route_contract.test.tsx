@@ -1,15 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import AppsIndexPage from "@/app/apps/page";
-import EcomViperDashboardPage from "@/app/apps/ecomviper/page";
-import WalmartLayout from "@/app/apps/ecomviper/walmart/layout";
-import WalmartDashboardPage from "@/app/apps/ecomviper/walmart/page";
-import WalmartConnectPage from "@/app/apps/ecomviper/walmart/connect/page";
-import WalmartFeedsPage from "@/app/apps/ecomviper/walmart/feeds/page";
-import WalmartProductsPage from "@/app/apps/ecomviper/walmart/products/page";
-import WalmartActivityPage from "@/app/apps/ecomviper/walmart/activity/page";
-import WalmartAiOptimizerPage from "@/app/apps/ecomviper/walmart/ai-optimizer/page";
+import DashboardPage from "@/app/(shell)/dashboard/page";
+import EcomViperDashboardPage from "@/app/ecomviper/page";
+import WalmartLayout from "@/app/optiwal/layout";
+import WalmartDashboardPage from "@/app/optiwal/page";
+import WalmartConnectPage from "@/app/optiwal/connect/page";
+import WalmartFeedsPage from "@/app/optiwal/feeds/page";
+import WalmartProductsPage from "@/app/optiwal/products/page";
+import WalmartActivityPage from "@/app/optiwal/activity/page";
+import WalmartAiOptimizerPage from "@/app/optiwal/ai-optimizer/page";
 import { replaceWalmartProductsForUser } from "@/lib/ecomviper/walmart/walmart-products";
 import type { WalmartConnectionHealth } from "@/lib/ecomviper/walmart/walmart-types";
 
@@ -27,7 +27,7 @@ vi.mock("next/link", async () => {
 });
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/apps/ecomviper/walmart",
+  usePathname: () => "/optiwal",
   useRouter: () => ({
     refresh: vi.fn(),
   }),
@@ -133,23 +133,21 @@ describe("EcomViper Walmart route contracts", () => {
     walmartRouteMocks.getWalmartConnectionHealthForUser.mockResolvedValue(buildConnectionHealth());
   });
 
-  it("shows EcomViper in /apps launcher", () => {
-    const html = renderToStaticMarkup(<AppsIndexPage />);
+  it("shows EcomViper in brain dashboard launcher", () => {
+    const html = renderToStaticMarkup(<DashboardPage />);
     expect(html).toContain(">EcomViper<");
-    expect(html).toContain('href="/apps/ecomviper"');
-    expect(html).toContain(">Open EcomViper<");
-    expect(html).toContain("apps-launcher-shell");
-    expect(html).toContain("ibrains-shell");
-    expect(html).toContain("rounded-3xl");
+    expect(html).toContain('href="/ecomviper"');
+    expect(html).toContain(">Open Brain<");
+    expect(html).toContain("brain-dashboard-cards");
   });
 
-  it("renders /apps/ecomviper marketplace cards", async () => {
+  it("renders /ecomviper marketplace cards", async () => {
     const html = renderToStaticMarkup(await EcomViperDashboardPage());
     expect(html).toContain("ecomviper-overview-page");
-    expect(html).toContain(">Walmart<");
+    expect(html).toContain(">OptiWal<");
     expect(html).toContain(">EcomViper Hub<");
-    expect(html).toContain(">Amazon<");
-    expect(html).toContain(">eBay<");
+    expect(html).toContain(">OptiZon<");
+    expect(html).toContain(">OptiBay<");
     expect(html).toContain(">Shopify Source Catalog<");
   });
 
@@ -168,9 +166,9 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).not.toContain(">AI Visibility<");
     expect(html).not.toContain(">Listing Intelligence<");
     expect(html).toContain("ecomviper-walmart-metric-cards");
-    expect(html).toContain("Walmart Agentic Commerce Command Center");
+    expect(html).toContain("OptiWal Marketplace Command Center");
     expect(html).not.toContain(">AI Optimizer<");
-    expect(html).toContain("No Walmart products imported yet");
+    expect(html).toContain("No OptiWal products imported yet");
     expect(html).toContain("ecomviper-walmart-capability-map");
     expect(html).toContain("ecomviper-walmart-agentic-coverage-panel");
     expect(html).toContain("Walmart Agentic Optimization Coverage");
@@ -203,8 +201,8 @@ describe("EcomViper Walmart route contracts", () => {
     const html = renderToStaticMarkup(await WalmartDashboardPage());
 
     expect(html).toContain(">Connected<");
-    expect(html).toContain(">Manage Walmart Connection<");
-    expect(html).not.toContain(">Connect Walmart<");
+    expect(html).toContain(">Manage OptiWal Connection<");
+    expect(html).not.toContain(">Connect OptiWal<");
   });
 
   it("renders dashboard timestamps safely when connection data includes Date objects", async () => {
@@ -285,7 +283,7 @@ describe("EcomViper Walmart route contracts", () => {
     const html = renderToStaticMarkup(await WalmartDashboardPage());
 
     expect(html).toContain(">Connected<");
-    expect(html).toContain(">Manage Walmart Connection<");
+    expect(html).toContain(">Manage OptiWal Connection<");
   });
 
   it("renders not connected dashboard state and connect CTA when credentials are missing", async () => {
@@ -307,8 +305,8 @@ describe("EcomViper Walmart route contracts", () => {
     const html = renderToStaticMarkup(await WalmartDashboardPage());
 
     expect(html).toContain(">Not Connected<");
-    expect(html).toContain(">Connect Walmart<");
-    expect(html).not.toContain(">Manage Walmart Connection<");
+    expect(html).toContain(">Connect OptiWal<");
+    expect(html).not.toContain(">Manage OptiWal Connection<");
   });
 
   it("renders walmart connect credential form in production-only mode", async () => {
@@ -387,10 +385,10 @@ describe("EcomViper Walmart route contracts", () => {
   it("redirects deprecated ai-optimizer route into product workspace routes", async () => {
     await expect(
       WalmartAiOptimizerPage({ searchParams: Promise.resolve({ sku: "ROC808" }) })
-    ).rejects.toThrow("NEXT_REDIRECT:/apps/ecomviper/walmart/products/ROC808");
+    ).rejects.toThrow("NEXT_REDIRECT:/optiwal/products/ROC808");
 
     await expect(
       WalmartAiOptimizerPage({ searchParams: Promise.resolve({}) })
-    ).rejects.toThrow("NEXT_REDIRECT:/apps/ecomviper/walmart/products");
+    ).rejects.toThrow("NEXT_REDIRECT:/optiwal/products");
   });
 });

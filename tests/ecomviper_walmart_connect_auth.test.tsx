@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { renderToStaticMarkup } from "react-dom/server";
-import WalmartConnectClient from "@/app/apps/ecomviper/walmart/connect/connect-client";
+import WalmartConnectClient from "@/app/optiwal/connect/connect-client";
 import { POST as testConnectionRoute } from "@/app/api/ecomviper/walmart/connect/test/route";
 import { POST as saveConnectionRoute } from "@/app/api/ecomviper/walmart/connect/save/route";
 import { GET as healthRoute } from "@/app/api/ecomviper/walmart/health/route";

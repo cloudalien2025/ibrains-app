@@ -8,9 +8,9 @@ This file documents the current implementation architecture for DirectoryIQ from
 
 ## Runtime Route Surface
 
-Primary app route: `/apps/directoryiq`
+Primary app route: `/directoryiq`
 
-Current route families under `app/apps/directoryiq`:
+Current route families under `app/directoryiq`:
 
 - Dashboard: `page.tsx`, `directoryiq-dashboard-client.tsx`
 - Listings: `listings/`, `listings/[listingId]/`
@@ -72,7 +72,7 @@ Planning:
 
 Implementation:
 
-- `app/apps/directoryiq/*`
+- `app/directoryiq/*`
 - `app/api/directoryiq/*`
 - `lib/directoryiq/*`
 - `src/directoryiq/*`

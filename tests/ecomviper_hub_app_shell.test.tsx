@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
-import HubLayout from "@/app/apps/ecomviper/hub/layout";
-import EcomViperHubPage from "@/app/apps/ecomviper/hub/page";
+import HubLayout from "@/app/ecomviper/hub/layout";
+import EcomViperHubPage from "@/app/ecomviper/hub/page";
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -47,6 +47,6 @@ describe("EcomViper Hub app shell route", () => {
     expect(html).toContain("not a listing database");
     expect(html).toContain("initial Hub shell only");
     expect(html).toContain("No feed ingestion");
-    expect(html).toContain("planning/apps/ecomviper/hub/");
+    expect(html).toContain("planning/ecomviper/hub/");
   });
 });

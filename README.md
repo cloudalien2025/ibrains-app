@@ -26,9 +26,17 @@ Read in order:
 Planning mirrors app structure:
 
 - `planning/apps/ecomviper/` (Shopify, Walmart, eBay, Amazon)
-- `planning/apps/studio/` (CasaFlix, UAP Forge, Future Studio Apps)
+- `planning/apps/studio/` (CasaFlix, Reelify, Future Studio Apps)
 - `planning/apps/siteforge/`
 - `planning/apps/directoryiq/`
+
+## Authenticated Route Model
+
+The authenticated workspace now uses standalone top-level brain routes.
+
+- Core workspace routes: `/`, `/dashboard`, `/brains`, `/tasks`, `/reports`, `/add-brain`, `/settings`, `/billing`
+- Brain workspace routes: `/ecomviper`, `/optibay`, `/optiwal`, `/optizon`, `/directoryiq`, `/casaflix`, `/pagebolt`, `/reelify`, `/ipetzo`
+- `/apps` and `/apps/*` are deprecated and removed with no compatibility redirects.
 
 Each app should have an `overview.md` and `product-intent.md` baseline.
 

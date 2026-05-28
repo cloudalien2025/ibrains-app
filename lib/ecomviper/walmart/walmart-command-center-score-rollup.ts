@@ -20,7 +20,7 @@ export function buildWalmartCommandCenterScoreRollup(input: {
     inputRefs: [
       "lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts",
       "lib/ecomviper/walmart/walmart-command-center-score-rollup.ts",
-      "app/apps/ecomviper/walmart/page.tsx",
+      "app/optiwal/page.tsx",
     ],
   });
 

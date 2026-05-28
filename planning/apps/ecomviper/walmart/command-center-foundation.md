@@ -11,7 +11,7 @@ Goal: Define what the Walmart Command Center currently does in real code, what i
 
 ## Current Command Center Role (Implemented)
 
-The Command Center at `/apps/ecomviper/walmart` is the operational read/triage hub for Walmart workflows, not a direct live-write console.
+The Command Center at `/optiwal` is the operational read/triage hub for Walmart workflows, not a direct live-write console.
 
 What it currently does in code:
 
@@ -36,7 +36,7 @@ What it currently does in code:
 
 Source pointers:
 
-- `app/apps/ecomviper/walmart/page.tsx`
+- `app/optiwal/page.tsx`
 - `lib/ecomviper/walmart/walmart-products.ts` (`getWalmartDashboardSnapshotForUser`)
 - `lib/ecomviper/walmart/walmart-auth.ts` (`getWalmartConnectionHealthForUser`)
 - `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
@@ -49,7 +49,7 @@ Command Center readiness/confidence rollups now consume the canonical `ai_visibi
 
 - `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
 - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
-- `app/apps/ecomviper/walmart/page.tsx`
+- `app/optiwal/page.tsx`
 
 This keeps existing UI labels stable while sourcing rollup values from canonical score semantics.
 
@@ -76,7 +76,7 @@ This keeps existing UI labels stable while sourcing rollup values from canonical
 
 Source pointers:
 
-- `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+- `app/optiwal/products/[sku]/product-editor-client.tsx`
 - `lib/ecomviper/walmart/walmart-publish-lanes.ts`
 - `lib/ecomviper/walmart/walmart-inventory.ts`
 - `lib/ecomviper/walmart/walmart-pricing.ts`

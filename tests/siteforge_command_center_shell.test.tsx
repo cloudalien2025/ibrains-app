@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import fs from "node:fs";
 import path from "node:path";
-import SiteForgeLayout from "@/app/apps/siteforge/layout";
-import SiteForgePage from "@/app/apps/siteforge/page";
+import SiteForgeLayout from "@/app/pagebolt/layout";
+import SiteForgePage from "@/app/pagebolt/page";
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -15,7 +15,7 @@ vi.mock("next/link", async () => {
 });
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/apps/siteforge",
+  usePathname: () => "/pagebolt",
 }));
 
 describe("siteforge command-center shell", () => {
@@ -55,8 +55,8 @@ describe("siteforge command-center shell", () => {
   });
 
   it("keeps page content shell-free so route layout owns command-center framing", () => {
-    const pagePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
-    const layoutPath = path.join(process.cwd(), "app/apps/siteforge/layout.tsx");
+    const pagePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
+    const layoutPath = path.join(process.cwd(), "app/pagebolt/layout.tsx");
     const pageSource = fs.readFileSync(pagePath, "utf8");
     const layoutSource = fs.readFileSync(layoutPath, "utf8");
 

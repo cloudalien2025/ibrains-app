@@ -1,4 +1,4 @@
-# SiteForge Roadmap (Implementation-Grounded)
+# PageBolt Roadmap (Implementation-Grounded)
 
 Last updated: 2026-05-18 (UTC)
 
@@ -6,9 +6,9 @@ Last updated: 2026-05-18 (UTC)
 
 ### Goals
 
-- establish SiteForge architecture/builder planning docs
+- establish PageBolt architecture/builder planning docs
 - introduce command-center shell layout (sidebar + workspace)
-- preserve existing SiteForge behavior
+- preserve existing PageBolt behavior
 
 ### Deliverables
 
@@ -54,7 +54,7 @@ Last updated: 2026-05-18 (UTC)
 
 ### Non-goals
 
-- no full rewrite of SiteForge UI state machine in one sprint
+- no full rewrite of PageBolt UI state machine in one sprint
 
 ## Phase 4: Operator Observability and Governance
 

@@ -144,7 +144,7 @@ test.describe("SiteForge 2050 connect + describe flow", () => {
 
     const intent = "Build a high-converting homepage for my AI pet app.";
 
-    await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
+    await page.goto("/pagebolt", { waitUntil: "networkidle" });
 
     await page.getByPlaceholder("https://example.com").fill("https://example.com");
     await page.getByPlaceholder("WordPress username").fill("admin");

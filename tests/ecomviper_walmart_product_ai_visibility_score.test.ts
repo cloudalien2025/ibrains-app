@@ -44,7 +44,7 @@ describe("Walmart product ai visibility score adapter", () => {
       input_refs: [
         "lib/ecomviper/walmart/walmart-listing-quality.ts",
         "lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts",
-        "app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx",
+        "app/optiwal/products/[sku]/product-editor-client.tsx",
       ],
     });
   });

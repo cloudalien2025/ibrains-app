@@ -26,33 +26,33 @@ Primary goal: keep labels, data model names, and operator meaning aligned while 
 
 | Label / Signal | Location | Type / Example Values | Surface | Operator Meaning | Backing |
 | --- | --- | --- | --- | --- | --- |
-| `Command Center Health` | `app/apps/ecomviper/walmart/page.tsx` | badge: `Connected` / `Failed` / `Not Connected` | Command Center card | Connection/control-plane health for operator readiness | Mixed: connection health is real; card presentation is derived |
-| `Catalog Coverage` | `app/apps/ecomviper/walmart/page.tsx`, `lib/ecomviper/walmart/walmart-products.ts` | number (`productsImported`) | Command Center card | Imported Walmart catalog breadth | Production-backed (persisted product repo) |
-| `Action Queue` | `app/apps/ecomviper/walmart/page.tsx`, `lib/ecomviper/walmart/walmart-products.ts` | number (`draftChanges`) | Command Center card | Pending draft work awaiting review/publish flow | Production-backed (persisted drafts) |
-| `Trust Signal Alerts` | `app/apps/ecomviper/walmart/page.tsx`, `lib/ecomviper/walmart/walmart-products.ts` | number (`feedErrors`) | Command Center card | Feed error pressure affecting trust/discoverability | Partial (runtime feed store + staged feed flow) |
-| `Priority Opportunities` | `app/apps/ecomviper/walmart/page.tsx`, `lib/ecomviper/walmart/walmart-products.ts` | count + categories (`listingsNeedingAttention`) | Command Center card | Number of products needing intervention | Production-backed + derived from product issues/status |
-| `AI Recommendation Readiness` | `app/apps/ecomviper/walmart/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | 0-100 (`overallAiRecommendationReadinessScore`) | Coverage panel | Top-level rollup of current AI readiness model | Derived (coverage matrix + optional per-product blend) |
-| `AI Confidence Score` | `app/apps/ecomviper/walmart/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | 0-100 (`aiConfidenceScore`) | Coverage panel | Confidence companion to readiness rollup | Derived |
+| `Command Center Health` | `app/optiwal/page.tsx` | badge: `Connected` / `Failed` / `Not Connected` | Command Center card | Connection/control-plane health for operator readiness | Mixed: connection health is real; card presentation is derived |
+| `Catalog Coverage` | `app/optiwal/page.tsx`, `lib/ecomviper/walmart/walmart-products.ts` | number (`productsImported`) | Command Center card | Imported Walmart catalog breadth | Production-backed (persisted product repo) |
+| `Action Queue` | `app/optiwal/page.tsx`, `lib/ecomviper/walmart/walmart-products.ts` | number (`draftChanges`) | Command Center card | Pending draft work awaiting review/publish flow | Production-backed (persisted drafts) |
+| `Trust Signal Alerts` | `app/optiwal/page.tsx`, `lib/ecomviper/walmart/walmart-products.ts` | number (`feedErrors`) | Command Center card | Feed error pressure affecting trust/discoverability | Partial (runtime feed store + staged feed flow) |
+| `Priority Opportunities` | `app/optiwal/page.tsx`, `lib/ecomviper/walmart/walmart-products.ts` | count + categories (`listingsNeedingAttention`) | Command Center card | Number of products needing intervention | Production-backed + derived from product issues/status |
+| `AI Recommendation Readiness` | `app/optiwal/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | 0-100 (`overallAiRecommendationReadinessScore`) | Coverage panel | Top-level rollup of current AI readiness model | Derived (coverage matrix + optional per-product blend) |
+| `AI Confidence Score` | `app/optiwal/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | 0-100 (`aiConfidenceScore`) | Coverage panel | Confidence companion to readiness rollup | Derived |
 | `Recommendation Probability` | `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | enum `low` / `medium` / `high` | Coverage model output | Coarse probability guidance for recommendation quality | Derived |
-| `Readiness Subscores` | `app/apps/ecomviper/walmart/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | record of 9 groups, each 0-100 | Coverage panel | Which readiness dimensions are weak/strong | Derived |
-| Coverage status counts | `app/apps/ecomviper/walmart/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | counts by `supported`/`partial`/`missing`/`recommendation_only`/`requires_credentials`/`requires_walmart_access` | Coverage panel | Capability availability and gaps | Static scaffold + derived counts |
-| `Next Best Actions` | `app/apps/ecomviper/walmart/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | prioritized list (`critical/high/medium/low`, impact) | Coverage panel + queue intent | What operator should do next | Derived + recommendation-only for many rows |
-| `Missing From Code` | `app/apps/ecomviper/walmart/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | list of missing/partial rows | Coverage panel | Explicit implementation gaps | Static scaffold inventory |
+| `Readiness Subscores` | `app/optiwal/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | record of 9 groups, each 0-100 | Coverage panel | Which readiness dimensions are weak/strong | Derived |
+| Coverage status counts | `app/optiwal/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | counts by `supported`/`partial`/`missing`/`recommendation_only`/`requires_credentials`/`requires_walmart_access` | Coverage panel | Capability availability and gaps | Static scaffold + derived counts |
+| `Next Best Actions` | `app/optiwal/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | prioritized list (`critical/high/medium/low`, impact) | Coverage panel + queue intent | What operator should do next | Derived + recommendation-only for many rows |
+| `Missing From Code` | `app/optiwal/page.tsx`, `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | list of missing/partial rows | Coverage panel | Explicit implementation gaps | Static scaffold inventory |
 | Status-to-score mapping | `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts` | `supported=100`, `partial=72`, `recommendation_only=52`, `requires_credentials=42`, `requires_walmart_access=34`, `missing=18` | Internal readiness math | How coverage status contributes to readiness score | Derived/internal contract |
 
 ## 2.2 Product Editor and products list visibility/readiness signals
 
 | Label / Signal | Location | Type / Example Values | Surface | Operator Meaning | Backing |
 | --- | --- | --- | --- | --- | --- |
-| `Agentic Visibility Score` | `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`, `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts` | 0-100 ring; labels: `Poor`, `Needs work`, `Good`, `Strong`, `Perfectly optimized` | Product Editor summary | Per-product visibility quality snapshot | Derived from listing-quality score through canonical adapter mapping (optional projected suggestion score preserved) |
+| `Agentic Visibility Score` | `app/optiwal/products/[sku]/product-editor-client.tsx`, `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts` | 0-100 ring; labels: `Poor`, `Needs work`, `Good`, `Strong`, `Perfectly optimized` | Product Editor summary | Per-product visibility quality snapshot | Derived from listing-quality score through canonical adapter mapping (optional projected suggestion score preserved) |
 | Listing quality score | `lib/ecomviper/walmart/walmart-listing-quality.ts` | 1-100 (`score`) | Product Editor internals + proposal generation | Product quality baseline used by editor | Derived heuristics |
 | Listing quality factors | `lib/ecomviper/walmart/walmart-listing-quality.ts` | string list (for example missing image, title quality, price/inventory issues) | Product Editor diagnostics | Why score dropped | Derived heuristics |
 | Listing recommendations severity | `lib/ecomviper/walmart/walmart-listing-quality.ts` | enum `high` / `medium` / `low` | Product Editor diagnostics | Relative importance of suggested fixes | Derived from penalty weights |
-| `Validation / readiness summary` | `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx` | counts: blockers, warnings, info | Product Editor | Publish-readiness diagnostics | Derived live from validation + lane preview |
-| Readiness status label | `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx` | `Ready for publish validation` / `Needs review` | Product Editor | Immediate publish-validation state | Derived |
-| Merchant readiness label | `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx` | `Ready to publish` / `Needs review` / `Missing required fields` / `Unsafe claims need review` | Product Editor | Merchant-facing readiness wording | Derived |
-| Publish status label | `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx` | `Idle` / `Needs review` / `Preview ready` / `Submitted` / `Failed` | Product Editor | State of guarded publish lane | Staged (preview-only path implemented) |
-| Products list `source confidence` badge | `app/apps/ecomviper/walmart/products/products-client.tsx` | `high` / `medium` / `needs refresh` / `low` | Products table | Catalog confidence at SKU level | Derived from backfill confidence + content checks |
+| `Validation / readiness summary` | `app/optiwal/products/[sku]/product-editor-client.tsx` | counts: blockers, warnings, info | Product Editor | Publish-readiness diagnostics | Derived live from validation + lane preview |
+| Readiness status label | `app/optiwal/products/[sku]/product-editor-client.tsx` | `Ready for publish validation` / `Needs review` | Product Editor | Immediate publish-validation state | Derived |
+| Merchant readiness label | `app/optiwal/products/[sku]/product-editor-client.tsx` | `Ready to publish` / `Needs review` / `Missing required fields` / `Unsafe claims need review` | Product Editor | Merchant-facing readiness wording | Derived |
+| Publish status label | `app/optiwal/products/[sku]/product-editor-client.tsx` | `Idle` / `Needs review` / `Preview ready` / `Submitted` / `Failed` | Product Editor | State of guarded publish lane | Staged (preview-only path implemented) |
+| Products list `source confidence` badge | `app/optiwal/products/products-client.tsx` | `high` / `medium` / `needs refresh` / `low` | Products table | Catalog confidence at SKU level | Derived from backfill confidence + content checks |
 | Catalog match confidence | `lib/ecomviper/walmart/walmart-catalog-candidate-scoring.ts` | enum `exact` / `strong` / `moderate` / `weak` / `none` from score thresholds (`>=90`, `>=75`, `>=55`, `>=35`) | Backfill/match diagnostics | Reliability of catalog candidate match | Derived/internal |
 | Source confidence summary | `lib/ecomviper/walmart/walmart-source-confidence.ts` | `overallConfidence`, `byAction`, `byConfidence`, `actionableFields` | Product Editor diagnostics | Trust/provenance quality of field updates | Derived/internal |
 | Import per-product confidence | `app/api/ecomviper/walmart/products/import/route.ts` | `high` / `medium` / `low` / `null` | Import diagnostics + products UI | Confidence for match/search attempt diagnostics | Derived/internal |
@@ -62,7 +62,7 @@ Primary goal: keep labels, data model names, and operator meaning aligned while 
 
 | Label / Signal | Location | Type / Example Values | Surface | Operator Meaning | Backing |
 | --- | --- | --- | --- | --- | --- |
-| `Agentic Visibility Score` (summary) | `app/apps/ecomviper/walmart/ibrains-intelligence/walmart-ibrains-intelligence-client.tsx`, `lib/ecomviper/walmart/walmart-ibrains-intelligence.ts` | 0-100 average opportunity score | iBrains summary card | Overall quality of generated opportunity set | Derived |
+| `Agentic Visibility Score` (summary) | `app/optiwal/ibrains-intelligence/walmart-ibrains-intelligence-client.tsx`, `lib/ecomviper/walmart/walmart-ibrains-intelligence.ts` | 0-100 average opportunity score | iBrains summary card | Overall quality of generated opportunity set | Derived |
 | `Opportunities Found` | same as above | integer count | iBrains summary card | Opportunity volume | Derived |
 | `High-Impact Actions` | same as above | integer count where opportunity score `>=75` | iBrains summary card | Number of high-priority actions | Derived |
 | `Compliance Warnings` | same as above | integer count where risk is not low | iBrains summary card | Compliance review pressure | Derived |
@@ -76,10 +76,10 @@ Primary goal: keep labels, data model names, and operator meaning aligned while 
 
 | Label / Signal | Location | Type / Example Values | Surface | Operator Meaning | Backing |
 | --- | --- | --- | --- | --- | --- |
-| `Prompt Match` lane mapping | `lib/ecomviper/walmart/walmart-nav.ts`, `app/apps/ecomviper/walmart/activity/page.tsx` | mapped to activity log; result badges `success`/`warning`/`error` | Prompt Match (current route: Activity) | Operational event diagnostics, not prompt coverage scoring | Partial (runtime activity store) |
-| `Semantic Gaps` lane mapping | `lib/ecomviper/walmart/walmart-nav.ts`, `app/apps/ecomviper/walmart/inventory/inventory-client.tsx` | low stock/out-of-stock lists + recent changes | Semantic Gaps (current route: Inventory) | Inventory risk diagnostics | Partial (draft path real; direct write disabled) |
-| `Product Opportunities` lane mapping | `lib/ecomviper/walmart/walmart-nav.ts`, `app/apps/ecomviper/walmart/pricing/pricing-client.tsx` | price validation warnings + recent changes | Product Opportunities (current route: Pricing) | Pricing-quality diagnostics | Partial (draft path real; direct submit disabled) |
-| `Trust Signals` lane mapping | `lib/ecomviper/walmart/walmart-nav.ts`, `app/apps/ecomviper/walmart/feeds/feeds-client.tsx` | feed status + `errorReport.length` | Trust Signals (current route: Feeds) | Feed/trust failure monitoring | Partial/staged (approval + write mode gates) |
+| `Prompt Match` lane mapping | `lib/ecomviper/walmart/walmart-nav.ts`, `app/optiwal/activity/page.tsx` | mapped to activity log; result badges `success`/`warning`/`error` | Prompt Match (current route: Activity) | Operational event diagnostics, not prompt coverage scoring | Partial (runtime activity store) |
+| `Semantic Gaps` lane mapping | `lib/ecomviper/walmart/walmart-nav.ts`, `app/optiwal/inventory/inventory-client.tsx` | low stock/out-of-stock lists + recent changes | Semantic Gaps (current route: Inventory) | Inventory risk diagnostics | Partial (draft path real; direct write disabled) |
+| `Product Opportunities` lane mapping | `lib/ecomviper/walmart/walmart-nav.ts`, `app/optiwal/pricing/pricing-client.tsx` | price validation warnings + recent changes | Product Opportunities (current route: Pricing) | Pricing-quality diagnostics | Partial (draft path real; direct submit disabled) |
+| `Trust Signals` lane mapping | `lib/ecomviper/walmart/walmart-nav.ts`, `app/optiwal/feeds/feeds-client.tsx` | feed status + `errorReport.length` | Trust Signals (current route: Feeds) | Feed/trust failure monitoring | Partial/staged (approval + write mode gates) |
 
 ## 3) Proposed Canonical Model (Implementation-Constrained)
 
@@ -166,10 +166,10 @@ Use explicit labels tied to this contract:
 - Command Center readiness/confidence rollup now aligns to canonical score semantics via:
   - `lib/ecomviper/walmart/walmart-command-center-score-rollup.ts`
   - `lib/ecomviper/walmart/walmart-ai-visibility-score.ts`
-  - `app/apps/ecomviper/walmart/page.tsx`
+  - `app/optiwal/page.tsx`
 - Product Editor `Agentic Visibility Score` now consumes a canonical product-level adapter boundary via:
   - `lib/ecomviper/walmart/walmart-product-ai-visibility-score.ts`
-  - `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`
+  - `app/optiwal/products/[sku]/product-editor-client.tsx`
   - `tests/ecomviper_walmart_product_ai_visibility_score.test.ts`
   - `tests/ecomviper_walmart_product_editor_score_alignment.test.tsx`
 - Product-level test coverage explicitly guards:
@@ -199,22 +199,22 @@ Use explicit labels tied to this contract:
 
 ## 7) Source-Of-Truth Files Inspected
 
-- `app/apps/ecomviper/walmart/page.tsx`: command center cards, queue panels, coverage/readiness panel labels.
+- `app/optiwal/page.tsx`: command center cards, queue panels, coverage/readiness panel labels.
 - `lib/ecomviper/walmart/walmart-products.ts`: dashboard snapshot counts and activity/feed-derived rollups.
 - `lib/ecomviper/walmart/walmart-agentic-optimization-coverage.ts`: coverage matrix, status taxonomy, readiness scoring contract.
-- `app/apps/ecomviper/walmart/products/[sku]/product-editor-client.tsx`: agentic score ring, readiness/publish status labels, validation summaries.
+- `app/optiwal/products/[sku]/product-editor-client.tsx`: agentic score ring, readiness/publish status labels, validation summaries.
 - `lib/ecomviper/walmart/walmart-listing-quality.ts`: per-product quality scoring and severity-weighted recommendations.
-- `app/apps/ecomviper/walmart/ibrains-intelligence/walmart-ibrains-intelligence-client.tsx`: iBrains score cards and opportunity table labels.
+- `app/optiwal/ibrains-intelligence/walmart-ibrains-intelligence-client.tsx`: iBrains score cards and opportunity table labels.
 - `lib/ecomviper/walmart/walmart-ibrains-intelligence.ts`: opportunity scoring, risk classification, destination fit scoring.
-- `app/apps/ecomviper/walmart/products/products-client.tsx`: source-confidence badge semantics.
+- `app/optiwal/products/products-client.tsx`: source-confidence badge semantics.
 - `lib/ecomviper/walmart/walmart-source-confidence.ts`: confidence/actions summary contract.
 - `lib/ecomviper/walmart/walmart-catalog-candidate-scoring.ts`: candidate score-to-confidence thresholds.
 - `lib/ecomviper/walmart/walmart-docket-freshness.ts`: section coverage/freshness signals.
 - `lib/ecomviper/walmart/walmart-nav.ts`: lane-label to route ownership mapping.
-- `app/apps/ecomviper/walmart/activity/page.tsx`: Prompt Match-mapped activity diagnostics.
-- `app/apps/ecomviper/walmart/inventory/inventory-client.tsx`: Semantic Gaps-mapped inventory diagnostics.
-- `app/apps/ecomviper/walmart/pricing/pricing-client.tsx`: Product Opportunities-mapped pricing diagnostics.
-- `app/apps/ecomviper/walmart/feeds/feeds-client.tsx`: Trust Signals-mapped feed diagnostics.
+- `app/optiwal/activity/page.tsx`: Prompt Match-mapped activity diagnostics.
+- `app/optiwal/inventory/inventory-client.tsx`: Semantic Gaps-mapped inventory diagnostics.
+- `app/optiwal/pricing/pricing-client.tsx`: Product Opportunities-mapped pricing diagnostics.
+- `app/optiwal/feeds/feeds-client.tsx`: Trust Signals-mapped feed diagnostics.
 - `lib/ecomviper/walmart/walmart-feeds.ts`: feed status/error storage behavior.
 - `app/api/ecomviper/walmart/feeds/submit/route.ts`: approval/write gates and staged submit contract.
 - `tests/ecomviper_walmart_agentic_optimization_coverage.test.ts`: readiness matrix and scorecard expectations.

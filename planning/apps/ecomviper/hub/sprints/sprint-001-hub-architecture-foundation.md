@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Create the first architecture/content baseline for EcomViper Hub at `/apps/ecomviper/hub`, defining Hub as canonical product intelligence and orchestration control plane rather than a listing database.
+Create the first architecture/content baseline for EcomViper Hub at `/ecomviper/hub`, defining Hub as canonical product intelligence and orchestration control plane rather than a listing database.
 
 ## Scope
 

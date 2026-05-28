@@ -320,7 +320,7 @@ describe("CasaFlix production contracts", () => {
   });
 
   it("presents CasaFlix as a compact user-facing AI wizard instead of a manual builder", () => {
-    const source = fs.readFileSync(path.join(process.cwd(), "app/apps/studio/studio-domara-client.tsx"), "utf8");
+    const source = fs.readFileSync(path.join(process.cwd(), "app/brains/studio-domara-client.tsx"), "utf8");
     const runRoute = fs.readFileSync(path.join(process.cwd(), "app/api/studio/domara/ai-channel/runs/route.ts"), "utf8");
     const opportunityRoute = fs.readFileSync(path.join(process.cwd(), "app/api/studio/domara/opportunity/route.ts"), "utf8");
     const connectionUi = fs.readFileSync(path.join(process.cwd(), "lib/studio/domara/integrations-ui.ts"), "utf8");
