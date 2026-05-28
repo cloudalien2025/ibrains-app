@@ -177,9 +177,17 @@ Last updated: 2026-05-28 (UTC)
   - add `app/(shell)/error.tsx` boundary so unexpected shell errors render recoverable UI rather than generic 500.
   - add regression coverage for production config fail-closed behavior.
 
-## Active Sprint Log: Clerk Host Attribution /brains 500 Fix
+## Sprint Completion Log: Clerk Host Attribution /brains 500 Fix
 
-- Sprint: `sprint-017-fix-clerk-host-brains-500` (in progress).
+- Sprint: `sprint-017-fix-clerk-host-brains-500` (completed).
+- MR: `!214` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/214`).
+- MR pipeline: `2560243494` (status: `success`, finished `2026-05-28T21:20:01Z` UTC).
+- Default-branch deploy pipeline: `2560249506` (status: `success`, finished `2026-05-28T21:28:51Z` UTC).
+- Merge commit SHA: `2ff62822afaf8f41c7de645c7fc1f666f6e36c39`.
+- Deployed production SHA: `2ff62822afaf8f41c7de645c7fc1f666f6e36c39`.
+- Source branch deletion:
+  - Remote: deleted by GitLab merge.
+  - Local: pending final cleanup after this state closeout.
 - Incident context:
   - A signed-in browser can still hit an Internal Server Error on `/brains` after redirect/refresh.
   - Refresh can surface Clerk `host_invalid`, even though `app.ibrains.ai` is an allowed subdomain under the primary `ibrains.ai` Clerk domain.
@@ -193,6 +201,10 @@ Last updated: 2026-05-28 (UTC)
   - Remove Clerk frontend API proxying from middleware/provider for the current allowed-subdomain topology.
   - Preserve Clerk route protection, `/brains` local inventory rendering, clean protected API auth responses, and deprecated route hard-404 behavior.
   - Add regression tests and update auth architecture docs.
+- Implementation summary:
+  - `proxy.ts` no longer enables Clerk `frontendApiProxy`.
+  - `ConfiguredClerkProvider` no longer passes stale `NEXT_PUBLIC_CLERK_PROXY_URL` values as `proxyUrl`.
+  - CI now runs Clerk provider/proxy regression tests so the half-proxy topology is not reintroduced silently.
 - Local validation:
   - focused auth/proxy/brains suites passed.
   - CI-targeted frontdoor/auth suite passed.
@@ -203,6 +215,16 @@ Last updated: 2026-05-28 (UTC)
   - Playwright local production-style smoke passed for `/sign-in`, `/brains`, and `Open Brains` flow with E2E mock auth.
   - `npm run lint` remains red on unrelated repository baseline lint failures outside this sprint scope.
   - `npm test` remains red on unrelated repository baseline failures outside this sprint scope; auth/proxy/brains-targeted coverage passed.
+- Production verification:
+  - `/api/meta/release` reported deployed SHA `2ff62822afaf8f41c7de645c7fc1f666f6e36c39` and build ID `2560249506`.
+  - Signed-out `/` returned `200`.
+  - Direct `/sign-in` and `/sign-up` rendered Clerk UI in browser automation with no `host_invalid`.
+  - `/sign-in?redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fbrains` rendered Clerk UI in browser automation with no `host_invalid`.
+  - Signed-out `/brains` returned `307` to `/sign-in?redirect_url=.../brains`.
+  - Signed-out `/api/brains` and `/api/brains/ecomviper/stats` returned `401`.
+  - `/apps`, `/apps/studio`, `/studio`, `/siteforge`, and `/uapforge` returned `404`.
+  - Authenticated production browser verification still requires a real signed-in user session; no test credentials were invented or exposed.
+- Recommended next sprint: resolve existing unrelated repo-wide test/lint baseline failures or continue `Walmart Sprint 008 - Product Editor score diagnostics alignment`.
 
 ## Current Operating Reminder
 
