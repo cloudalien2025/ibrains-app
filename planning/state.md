@@ -82,6 +82,32 @@ Last updated: 2026-05-28 (UTC)
   - status: clean (`git status` with no changes)
 - Recommended next sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
 
+## Sprint Completion Log: Brains Auth 401 Follow-up
+
+- Sprint: `sprint-011-fix-brains-auth-unavailable-401` (completed).
+- MR: `!208` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/208`).
+- Pipeline: `2559833620` (status: `success`, finished during MR merge gate).
+- Root-cause summary:
+  - Signed-out `/api/brains*` returned `503 AUTH_UNAVAILABLE` after Sprint 010 because Clerk middleware-detection errors were treated as generic auth-unavailable in `requireSignedInUser()`.
+- Implementation summary:
+  - `requireSignedInUser()` now maps Clerk middleware-context detection errors to canonical `401 UNAUTHORIZED` (`Sign-in required`).
+  - existing `503 AUTH_UNAVAILABLE` behavior remains for generic/unclassified auth-unavailable failures.
+  - regression test added for middleware-context error -> `401`.
+- Validation summary:
+  - focused route/auth tests passed, including updated `tests/require_signed_in_user_auth_unavailable.test.ts`.
+  - `npm run build` passed.
+  - `bash scripts/check_route_signatures.sh` passed.
+  - `git diff --check` passed.
+  - `npm test` remains red on existing repository baseline failures outside sprint scope.
+- Merge commit SHA: `c81c2b86d20f77f2f30e7d5983be65f03ded2688`.
+- Source branch deletion:
+  - Remote: deleted.
+  - Local: deleted.
+- Final local repository state after merge:
+  - branch: `main`
+  - status: clean (`git status` with no changes)
+- Recommended next sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
+
 ## Current Operating Reminder
 
 - Do not begin a new sprint unless local repository is clean on `main`.
