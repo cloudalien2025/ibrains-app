@@ -15,10 +15,6 @@ vi.mock("@clerk/nextjs/server", () => ({
   auth: mocks.auth,
 }));
 
-vi.mock("@clerk/nextjs", () => ({
-  UserButton: () => createElement("div", { "data-testid": "user-button" }, "user"),
-}));
-
 vi.mock("next/navigation", () => ({
   redirect: mocks.redirect,
   usePathname: () => "/brains",
@@ -61,6 +57,19 @@ describe("shell layout auth fail-closed behavior", () => {
   it("redirects to sign-in instead of throwing server error when auth cannot resolve a user", async () => {
     mocks.auth.mockRejectedValue(new Error("auth unavailable"));
     mocks.resolveVerifiedClerkSessionUserId.mockResolvedValue(null);
+
+    const { default: ShellLayout } = await import("@/app/(shell)/layout");
+
+    await expect(
+      ShellLayout({ children: createElement("span", null, "brains-shell") })
+    ).rejects.toThrow("REDIRECT:/sign-in");
+    expect(mocks.redirect).toHaveBeenCalledWith("/sign-in");
+  });
+
+  it("fails closed to sign-in when production clerk config is invalid", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.CLERK_SECRET_KEY;
+    mocks.auth.mockResolvedValue({ userId: "user_123" });
 
     const { default: ShellLayout } = await import("@/app/(shell)/layout");
 
