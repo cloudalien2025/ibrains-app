@@ -108,34 +108,51 @@ Last updated: 2026-05-28 (UTC)
   - status: clean (`git status` with no changes)
 - Recommended next sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
 
-## Active Sprint Log: Auth Workspace End-Goal Stabilization
+## Sprint Completion Log: Auth Workspace End-Goal Stabilization
 
-- Sprint: `sprint-012-stabilize-auth-workspace-end-goal` (in progress).
-- Root-cause findings so far:
-  - Production sign-in payload still exposed Clerk `fallbackRedirectUrl` as `/apps` from env-derived route contract drift.
-  - Root/auth route middleware bypass (`/`, `/sign-in`, `/sign-up`) allowed inconsistent server auth-context resolution for frontdoor/auth surfaces.
-- Implementation in progress:
-  - Clerk route contract now sanitizes deprecated fallback redirects to `/brains`.
-  - Clerk provider wiring now consumes route-contract fallback values.
-  - Proxy now runs `/`, `/sign-in`, and `/sign-up` through Clerk middleware context.
-  - Added regression coverage for fallback sanitization and updated proxy auth-route expectations.
-- Validation so far:
-  - Focused auth/brains regression suite and targeted Playwright tests pass on branch.
+- Sprint: `sprint-012-stabilize-auth-workspace-end-goal` (completed).
+- MR: `!209` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/209`).
+- Pipeline:
+  - branch pipeline `2559958620` (status: `success`)
+  - MR pipeline `2559959368` (status: `success`)
+- Merge commit SHA: `3bd40f13304ed8fde446912838eaf13161fb4959`.
+- Root-cause summary:
+  - Clerk fallback redirect contract still allowed legacy `/apps*` values in production.
+  - `ConfiguredClerkProvider` fallback wiring was not fully route-contract driven.
+  - Public-route middleware changes introduced follow-up production proxy rewrite risk, handled in Sprint 013.
+- Implementation summary:
+  - fallback redirect sanitization to `/brains` for deprecated legacy targets.
+  - Clerk provider fallback values wired from shared route contract.
+  - regression tests added/updated for route contract and signed-out/signed-in browser flows.
+- Validation summary:
+  - targeted auth/brains regression suites passed.
   - `npm run build` passed.
   - `bash scripts/check_route_signatures.sh` passed.
   - `git diff --check` passed.
-  - `npm test` remains red on existing repository baseline failures outside this sprint scope; one affected expectation family now reflects legacy naming assumptions.
+  - `npm test` remains red on known baseline failure families outside sprint scope.
 
-## Active Sprint Log: Clerk Public Route Proxy 500 Hotfix
+## Sprint Completion Log: Clerk Public Route Proxy 500 Hotfix
 
-- Sprint: `sprint-013-fix-clerk-public-route-proxy-500` (in progress).
-- Production post-merge finding:
+- Sprint: `sprint-013-fix-clerk-public-route-proxy-500` (completed).
+- MR: `!210` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/210`).
+- Pipeline:
+  - branch pipeline `2559999437` (status: `success`)
+  - MR pipeline `2559999675` (status: `success`)
+- Merge commit SHA: `456ffb0f21867f710dabaf5e9eb8f58e18d6a67f`.
+- Root-cause summary:
   - after Sprint 012 deploy, signed-out `/`, `/sign-in`, and `/sign-up` returned `500` with `x-middleware-rewrite: https://localhost:3001/...`.
-- Root cause:
-  - public routes were routed through Clerk middleware proxy path; signed-out behavior rewrote to localhost frontend API proxy target in production.
-- Hotfix scope:
-  - restore explicit public-route passthrough for `/`, `/sign-in`, and `/sign-up`.
-  - retain Clerk fallback redirect sanitization and standalone-brain route model.
+  - public routes were routed through Clerk frontend proxy middleware, which rewrote signed-out public traffic to localhost.
+- Implementation summary:
+  - restored explicit passthrough for `/`, `/sign-in`, and `/sign-up`.
+  - retained protected-route auth behavior, `/brains` standalone model, and deprecated-route hard 404 policy.
+- Validation summary:
+  - focused proxy/auth/browser regression checks passed.
+  - `npm run build` passed.
+  - `bash scripts/check_route_signatures.sh` passed.
+  - `git diff --check` passed.
+  - `npm test` remains red on known baseline failure families outside sprint scope.
+- Production verification status:
+  - post-merge deployment verification remains pending at the time of this update; `/api/meta/release` temporarily reports missing release metadata and production still showed pre-hotfix proxy-rewrite behavior during immediate post-merge checks.
 
 ## Current Operating Reminder
 
