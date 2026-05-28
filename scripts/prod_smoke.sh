@@ -10,6 +10,7 @@ EXPECT_BUILD_ID="${EXPECT_BUILD_ID:-}"
 EXPECT_GIT_SHA="${EXPECT_GIT_SHA:-}"
 PUBLIC_SMOKE_PATHS="${PUBLIC_SMOKE_PATHS:-/ /sign-in}"
 PROTECTED_REDIRECT_PATHS="${PROTECTED_REDIRECT_PATHS:-/dashboard /optiwal/connect}"
+LEGACY_NOT_FOUND_PATHS="${LEGACY_NOT_FOUND_PATHS:-/apps /apps/studio /studio /siteforge /uapforge}"
 SKIP_SERVICE_CHECKS="${SKIP_SERVICE_CHECKS:-0}"
 
 curl_host_args=()
@@ -222,6 +223,18 @@ PY
   pass "${route_path} returned expected 307 protected redirect"
 }
 
+check_not_found() {
+  local route_path="$1"
+  local url="$2"
+  local code
+  code=$(curl -sS -o /dev/null -w "%{http_code}" "${curl_host_args[@]}" "$url" || true)
+  if [ "$code" = "404" ]; then
+    pass "${route_path} returned 404 as expected"
+  else
+    fail "${route_path} expected 404, got ${code:-missing}"
+  fi
+}
+
 check_health_json() {
   local url="$1"
   local body_file
@@ -351,6 +364,10 @@ done
 
 for route_path in ${PROTECTED_REDIRECT_PATHS}; do
   check_protected_redirect "$(normalize_route_path "$route_path")" "${BASE_URL}${route_path}"
+done
+
+for route_path in ${LEGACY_NOT_FOUND_PATHS}; do
+  check_not_found "$(normalize_route_path "$route_path")" "${BASE_URL}${route_path}"
 done
 
 check_health_json "${BASE_URL}/api/health"

@@ -246,4 +246,24 @@ describe("proxy trusted service bypass", () => {
     expect(res.status).toBe(200);
     expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
   });
+
+  it("returns 404 for deprecated legacy app routes without invoking Clerk middleware", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const routes = [
+      "https://app.ibrains.ai/apps",
+      "https://app.ibrains.ai/apps/studio",
+      "https://app.ibrains.ai/studio",
+      "https://app.ibrains.ai/siteforge",
+      "https://app.ibrains.ai/uapforge",
+    ];
+
+    for (const route of routes) {
+      const res = await handler(new NextRequest(route, { method: "GET" }));
+      expect(res.status).toBe(404);
+    }
+
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
 });

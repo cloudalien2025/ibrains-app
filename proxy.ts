@@ -39,6 +39,7 @@ const isClerkConfigured = clerkRuntimeContract.configuredForProxy;
 const trustedIngestPathRegex = /^\/api\/brains\/[^/]+\/ingest$/;
 const trustedRetrievePathRegex = /^\/api\/brains\/[^/]+\/retrieve$/;
 const trustedRunStatusPathRegex = /^\/api\/runs\/[^/]+$/;
+const deprecatedLegacyRouteRegex = /^\/(?:apps(?:\/.*)?|studio(?:\/.*)?|siteforge(?:\/.*)?|uapforge(?:\/.*)?)$/;
 
 function resolveAppBaseUrlOrigin(): string {
   const configured = process.env.APP_BASE_URL?.trim();
@@ -143,6 +144,10 @@ function isTrustedRunStatusServiceRequest(req: NextRequest): boolean {
   return hasServiceApiKey(req);
 }
 
+function isDeprecatedLegacyRoute(req: NextRequest): boolean {
+  return deprecatedLegacyRouteRegex.test(req.nextUrl.pathname);
+}
+
 const clerkProxy = clerkMiddleware(async (auth, req) => {
   if (req.nextUrl.pathname === "/api/_meta/release") {
     const url = req.nextUrl.clone();
@@ -174,6 +179,15 @@ export default e2eMockGraph
             "cache-control": "no-store",
             "content-type": "text/plain; charset=utf-8",
             "x-ibrains-auth-status": "misconfigured",
+          },
+        });
+      }
+      if (isDeprecatedLegacyRoute(req)) {
+        return new NextResponse("Not Found", {
+          status: 404,
+          headers: {
+            "cache-control": "no-store",
+            "content-type": "text/plain; charset=utf-8",
           },
         });
       }

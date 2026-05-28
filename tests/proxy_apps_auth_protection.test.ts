@@ -66,6 +66,7 @@ describe("proxy app/auth protection", () => {
   });
 
   it("redirects unauthenticated users from /optiwal/connect to sign-in with redirect_url", async () => {
+    state.denyProtect = true;
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -77,9 +78,9 @@ describe("proxy app/auth protection", () => {
     const location = response.headers.get("location");
     expect(location).toContain("/sign-in");
     expect(location).toContain(
-      "redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fapps%2Fecomviper%2Fwalmart%2Fconnect"
+      "redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Foptiwal%2Fconnect"
     );
-    expect(state.clerkProxyCalls).toBe(0);
+    expect(state.clerkProxyCalls).toBe(1);
   });
 
   it("keeps /api/ecomviper/walmart/connect/save behind auth checks", async () => {
@@ -127,7 +128,7 @@ describe("proxy app/auth protection", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(state.clerkProxyCalls).toBe(0);
+    expect(state.clerkProxyCalls).toBe(1);
   });
 
   it("redirects protected routes to sign-in when auth() throws", async () => {
