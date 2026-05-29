@@ -18,6 +18,7 @@ Implement Sprint 008 only.
 11. `planning/apps/ecomviper/shopify/sprints/sprint-008/requirements.md`
 12. `planning/apps/ecomviper/shopify/sprints/sprint-008/blueprint.md`
 13. `planning/apps/ecomviper/shopify/sprints/sprint-008/acceptance-criteria.md`
+14. `planning/apps/ecomviper/shopify/sprints/sprint-008/closure-checklist.md`
 
 ## Scope
 
