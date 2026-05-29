@@ -12,7 +12,7 @@ Last updated: 2026-05-29 (UTC)
 - Sprint 005: Completed (Shopify guarded publish execution scaffold).
 - Shopify Sprint 006: Completed and merged (`sprint-006-shopify-inventory-foundation`, Shopify-first `/ecomviper` inventory/listings foundation + PDP optimizer shell, production deployed).
 - Shopify Sprint 007: Completed and merged (`sprint-007-rocktomic-supplier-intelligence`, Rocktomic supplier intelligence engine foundation + Dropshipping/Rocktomic route shell, production deployed).
-- Shopify Sprint 008: In progress (`sprint-008-ai-pdp-intelligence-engine`, AI PDP Intelligence Engine foundation for generate/edit/save/reopen in `/ecomviper` product editor).
+- Shopify Sprint 008: Completed and merged (`sprint-008-ai-pdp-intelligence-engine`, AI PDP Intelligence Engine foundation for generate/edit/save/reopen in `/ecomviper` product editor, production deployed).
 - Walmart planning sprint: Completed and merged (`walmart-product-intent` docs baseline).
 - Walmart Sprint 001: Completed and merged (`walmart-command-center-foundation` docs baseline).
 - Walmart Sprint 003: Completed and merged (`sprint-003-walmart-ai-visibility`, docs/planning AI visibility workflow foundation).
@@ -30,28 +30,62 @@ Last updated: 2026-05-29 (UTC)
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
-- Current recommended sprint: `Shopify Sprint 008 - AI PDP Intelligence Engine foundation` (complete merge + deployment closure flow).
+- Current recommended sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
 
-## Active Sprint Log: Shopify Sprint 008 AI PDP Intelligence Engine
+## Sprint Completion Log: Shopify Sprint 008 Production Closure
 
-- Sprint: `sprint-008-ai-pdp-intelligence-engine` (in progress).
-- Scope:
-  - typed PDP intelligence model + FAQ/schema-ready fields
-  - server-side generation route using Shopify + Rocktomic context
-  - save/reopen persistence for signed-in user workspace scope
-  - deterministic compliance phrase-risk review metadata
-- Validation snapshot (in-progress):
-  - focused Sprint 008 tests passing locally:
+- Sprint/lane: `Shopify Sprint 008` (`sprint-008-ai-pdp-intelligence-engine`) - closed.
+- MR: `!227` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/227`).
+- Pipeline: `2561367558` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2561367558`).
+- Merge commit SHA: `a56ec4983bd43a6c914ab00cb3e6cabe565a329c`.
+- Production deployment status: completed manually on production host per `docs/PRODUCTION_DEPLOYMENT.md`.
+- Production deployed commit SHA: `a56ec4983bd43a6c914ab00cb3e6cabe565a329c`.
+- Implementation summary:
+  - added typed Shopify PDP intelligence record + FAQ schema fields.
+  - added server-side generation/compliance/persistence modules and `/api/ecomviper/pdp-intelligence` route.
+  - updated `/ecomviper` product editor with generate/edit/save/reopen AI PDP intelligence workflow.
+  - preserved explicit placeholders for Buy Now links, Image Studio, and Publish controls.
+  - added Sprint 008 sprint-pack docs and migration SQL for `shopify_pdp_intelligence`.
+- Validation summary:
+  - focused Sprint 008 tests passed:
     - `tests/ecomviper_pdp_intelligence_model.test.ts`
     - `tests/ecomviper_pdp_intelligence_compliance.test.ts`
     - `tests/ecomviper_pdp_intelligence_generation.test.ts`
     - `tests/ecomviper_pdp_intelligence_route.test.ts`
-  - Sprint 006/007 regression checks passing locally:
+  - Sprint 006/007 regression checks passed:
     - `tests/ecomviper_product_editor_route_contract.test.ts`
     - `tests/ecomviper_inventory_foundation_dashboard.test.tsx`
     - `tests/ecomviper_rocktomic_supplier_intelligence.test.ts`
     - `tests/ecomviper_rocktomic_route_shell.test.ts`
     - `tests/ecomviper_rocktomic_source_config.test.ts`
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+  - `npm test`: failed on known unrelated baseline suites outside Sprint 008 scope.
+- Source branch deletion:
+  - Remote: deleted (merged with source-branch removal).
+  - Local: deleted.
+- Final local repository state after sprint merge:
+  - branch: `main`
+  - status: clean (`git status` with no changes)
+- Production/runtime status:
+  - `GET http://127.0.0.1:3001/api/health` returned `200` with `ok: true`.
+  - service restart status: `ibrains-app` active after `sudo systemctl restart ibrains-app`.
+  - release metadata endpoint (`/api/meta/release`) still reports missing `git_sha/build_id`.
+- Log inspection summary:
+  - `journalctl -u ibrains-app` shows clean restart and active service state at deploy time.
+  - app log tail shows normal `next start` startup/ready lines.
+  - nginx error tail only shows unrelated blocked scanner request (`/.git/config`).
+- Browser verification status:
+  - verification date/time: `2026-05-29 09:34 UTC`.
+  - checked `https://app.ibrains.ai/ecomviper`, `/ecomviper/products/does-not-exist`, and `/ecomviper/dropshipping/rocktomic`.
+  - protected routes redirected to sign-in with preserved `redirect_url`.
+  - no browser console runtime errors observed in signed-out verification.
+  - authenticated in-app generation/save/reopen verification remains pending a real signed-in production session.
+- Production issues found:
+  - migration script step reported missing direct `DATABASE_URL` export in shell; runtime repository still auto-creates `shopify_pdp_intelligence` table as needed.
+- Follow-up risks/tasks:
+  - perform authenticated production pass for product table -> PDP editor -> generate/save/reopen.
+  - restore release metadata stamping so `/api/meta/release` reports deployed commit/build identifiers.
 
 ## Sprint Completion Log: Shopify Sprint 007 Production Closure
 
