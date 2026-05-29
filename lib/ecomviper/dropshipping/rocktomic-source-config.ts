@@ -3,9 +3,17 @@ import "server-only";
 export type RocktomicSourceStatus = "configured" | "pending";
 
 export interface RocktomicSourceReference {
-  id: "catalog_pdf" | "label_templates" | "order_refund_policy" | "plds_catalog" | "inventory_report_loc1" | "pricing_feed" | "shipping_policy" | "coa_repository";
+  id:
+    | "catalog_pdf"
+    | "label_mockup_templates"
+    | "order_refund_policy"
+    | "msrp_profit_margins_report"
+    | "plds_catalog"
+    | "inventory_report"
+    | "coa_repository";
   label: string;
   status: RocktomicSourceStatus;
+  sourceUrl: string | null;
   sourceUpdatedAt: string | null;
   sourceVersion: string | null;
 }
@@ -18,12 +26,29 @@ export interface RocktomicSourceConfigSnapshot {
   lastSyncedAt: string | null;
 }
 
+const DEFAULT_SUPPLEMENT_CATALOG_URL =
+  process.env.ECOMVIPER_ROCKTOMIC_SUPPLEMENT_CATALOG_URL ||
+  "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf?t=1780083599627";
+
 const DEFAULT_LABEL_TEMPLATES_URL =
   process.env.ECOMVIPER_ROCKTOMIC_LABEL_TEMPLATES_URL ||
-  "https://rocktomicplatform.blob.core.windows.net/client-resources/templates.html?t=1780038447445";
+  "https://rocktomicplatform.blob.core.windows.net/client-resources/templates.html?t=1780083599627";
+
 const DEFAULT_POLICY_URL =
   process.env.ECOMVIPER_ROCKTOMIC_ORDER_REFUND_POLICY_URL ||
-  "https://rocktomicplatform.blob.core.windows.net/client-resources/Order-Refund-Policy-Template.docx?t=1780037728245";
+  "https://rocktomicplatform.blob.core.windows.net/client-resources/Order-Refund-Policy-Template.docx?t=1780083599627";
+
+const DEFAULT_MSRP_PROFIT_MARGINS_REPORT_URL =
+  process.env.ECOMVIPER_ROCKTOMIC_MSRP_PROFIT_MARGINS_REPORT_URL ||
+  "https://docs.google.com/spreadsheets/d/15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU/edit?usp=sharing";
+
+const DEFAULT_PLDS_CATALOG_URL =
+  process.env.ECOMVIPER_ROCKTOMIC_PLDS_CATALOG_URL ||
+  "https://docs.google.com/spreadsheets/d/15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU/edit?usp=sharing";
+
+const DEFAULT_INVENTORY_REPORT_URL =
+  process.env.ECOMVIPER_ROCKTOMIC_INVENTORY_REPORT_URL ||
+  "https://docs.google.com/spreadsheets/d/1oOjqXsaCAjSOkA1lXrasNtUVtrsxvyxcFcolD8n6YXY/edit?usp=sharing";
 
 function extractVersion(url: string): string | null {
   try {
@@ -35,61 +60,74 @@ function extractVersion(url: string): string | null {
   }
 }
 
+function extractGoogleSheetId(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/\/spreadsheets\/d\/([^/]+)/i);
+    if (!match?.[1]) return null;
+    return match[1].trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export function getRocktomicSourceConfigSnapshot(): RocktomicSourceConfigSnapshot {
+  const sourceUpdatedAt = "2026-05-29T00:00:00.000Z";
+
   const references: RocktomicSourceReference[] = [
     {
       id: "catalog_pdf",
       label: "Supplement & Apparel Catalog",
       status: "configured",
-      sourceUpdatedAt: "2026-05-29T00:00:00.000Z",
-      sourceVersion: "catalog_reference_2026_05_29",
+      sourceUrl: DEFAULT_SUPPLEMENT_CATALOG_URL,
+      sourceUpdatedAt,
+      sourceVersion: extractVersion(DEFAULT_SUPPLEMENT_CATALOG_URL) || "catalog_reference_2026_05_29",
     },
     {
-      id: "label_templates",
-      label: "Label Templates",
+      id: "label_mockup_templates",
+      label: "Label & 3D Mockup Templates",
       status: "configured",
-      sourceUpdatedAt: "2026-05-29T00:00:00.000Z",
+      sourceUrl: DEFAULT_LABEL_TEMPLATES_URL,
+      sourceUpdatedAt,
       sourceVersion: extractVersion(DEFAULT_LABEL_TEMPLATES_URL),
     },
     {
       id: "order_refund_policy",
-      label: "Order / Refund Policy Template",
+      label: "Order Refund Policy Template",
       status: "configured",
-      sourceUpdatedAt: "2026-05-29T00:00:00.000Z",
+      sourceUrl: DEFAULT_POLICY_URL,
+      sourceUpdatedAt,
       sourceVersion: extractVersion(DEFAULT_POLICY_URL),
+    },
+    {
+      id: "msrp_profit_margins_report",
+      label: "Full MSRP and Estimated Profit Margins Report",
+      status: "configured",
+      sourceUrl: DEFAULT_MSRP_PROFIT_MARGINS_REPORT_URL,
+      sourceUpdatedAt,
+      sourceVersion: extractGoogleSheetId(DEFAULT_MSRP_PROFIT_MARGINS_REPORT_URL),
     },
     {
       id: "plds_catalog",
       label: "PLDS Catalog",
-      status: "pending",
-      sourceUpdatedAt: null,
-      sourceVersion: null,
+      status: "configured",
+      sourceUrl: DEFAULT_PLDS_CATALOG_URL,
+      sourceUpdatedAt,
+      sourceVersion: extractGoogleSheetId(DEFAULT_PLDS_CATALOG_URL),
     },
     {
-      id: "inventory_report_loc1",
-      label: "Inventory Report LOC1",
-      status: "pending",
-      sourceUpdatedAt: null,
-      sourceVersion: null,
-    },
-    {
-      id: "pricing_feed",
-      label: "Pricing Feed",
-      status: "pending",
-      sourceUpdatedAt: null,
-      sourceVersion: null,
-    },
-    {
-      id: "shipping_policy",
-      label: "Shipping Policy",
-      status: "pending",
-      sourceUpdatedAt: null,
-      sourceVersion: null,
+      id: "inventory_report",
+      label: "Inventory Report",
+      status: "configured",
+      sourceUrl: DEFAULT_INVENTORY_REPORT_URL,
+      sourceUpdatedAt,
+      sourceVersion: extractGoogleSheetId(DEFAULT_INVENTORY_REPORT_URL),
     },
     {
       id: "coa_repository",
       label: "COA Repository",
       status: "pending",
+      sourceUrl: null,
       sourceUpdatedAt: null,
       sourceVersion: null,
     },
@@ -103,6 +141,6 @@ export function getRocktomicSourceConfigSnapshot(): RocktomicSourceConfigSnapsho
     references,
     configuredReferenceCount,
     pendingReferenceCount,
-    lastSyncedAt: "2026-05-29T00:00:00.000Z",
+    lastSyncedAt: sourceUpdatedAt,
   };
 }

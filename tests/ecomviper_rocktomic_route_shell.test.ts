@@ -11,6 +11,8 @@ describe("ecomviper dropshipping rocktomic route shell", () => {
     expect(routeSource).toContain("Source Status");
     expect(routeSource).toContain("SKU Lookup");
     expect(routeSource).toContain("Catalog Source References");
+    expect(routeSource).toContain("Open source");
+    expect(routeSource).toContain("sourceConfig.references.map");
     expect(routeSource).toContain("Sync Placeholder / Logs");
     expect(routeSource).toContain("lookupRocktomicSupplierProductBySku");
   });
