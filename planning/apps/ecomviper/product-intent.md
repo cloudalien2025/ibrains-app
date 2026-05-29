@@ -46,6 +46,14 @@ Channel behavior and requirements are defined in channel planning docs and imple
 - Merchants continue to use Shopify as product source-of-truth and do not manually upload Rocktomic files.
 - Dropshipping -> Rocktomic is a platform/admin intelligence surface for source status, lookup, and future sync controls.
 
+## Sprint 008 UX Direction
+
+- Product editor adds AI PDP Intelligence sections that are generated, editable, saveable, and reopenable.
+- Shopify remains the product source of truth; Rocktomic remains supplier intelligence by SKU when matched.
+- OpenAI-powered generation is server-side only and must remain fact-grounded + compliance-safe.
+- Missing OpenAI server configuration must show a clear unavailable state without breaking workflow.
+- Image Studio execution remains deferred to Sprint 009+ (placeholder only in Sprint 008).
+
 ## Future Public Surface Direction (Preserved)
 
 - EcomViper.com remains the future public optimized PDP surface.

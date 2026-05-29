@@ -31,9 +31,9 @@ The Shopify app under `apps/ecomviper/shopify` provides an agentic workspace bac
 
 ## Current Sprint
 
-- Sprint 007: Rocktomic supplier intelligence engine foundation in `/ecomviper`:
-  - typed Rocktomic source configuration snapshot (platform-managed references)
-  - seeded supplier-product model with source traceability
-  - deterministic SKU normalization + exact-match lookup with confidence/reason
-  - PDP supplier-intelligence panel upgraded from placeholder to real SKU-backed facts
-  - Dropshipping -> Rocktomic route shell for source status + SKU lookup
+- Sprint 008: AI PDP Intelligence engine foundation in `/ecomviper` product editor:
+  - typed persisted PDP intelligence model for Shopify product + optional supplier linkage
+  - server-side generation action using Shopify listing facts + Rocktomic supplier context when matched
+  - deterministic compliance-risk phrase detection + review metadata
+  - editable/save/reopen intelligence workflow for signed-in operators
+  - explicit placeholders preserved for Buy Now links, Image Studio, and Publish controls

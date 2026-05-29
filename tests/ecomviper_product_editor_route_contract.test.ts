@@ -15,9 +15,11 @@ describe("ecomviper product editor route contract", () => {
     expect(clientSource).toContain("Supplier Intelligence");
     expect(clientSource).toContain("Match confidence");
     expect(clientSource).toContain("COA status");
-    expect(clientSource).toContain("AI PDP Optimizer");
-    expect(clientSource).toContain("Image Studio");
-    expect(clientSource).toContain("Buy Now Links");
-    expect(clientSource).toContain("Publish Controls");
+    expect(clientSource).toContain("AI PDP Intelligence");
+    expect(clientSource).toContain("Generate PDP Intelligence");
+    expect(clientSource).toContain("Expanded FAQ");
+    expect(clientSource).toContain("Image Studio placeholder");
+    expect(clientSource).toContain("Buy Now Links placeholder");
+    expect(clientSource).toContain("Publish Controls placeholder");
   });
 });
