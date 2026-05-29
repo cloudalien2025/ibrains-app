@@ -273,9 +273,18 @@ Last updated: 2026-05-28 (UTC)
   - Local: pending local branch cleanup during final sprint closure.
 - Recommended next sprint: resolve existing unrelated repo-wide baseline test/lint failures or continue `Walmart Sprint 008 - Product Editor score diagnostics alignment`.
 
-## Active Sprint Log: Signed-In /brains 500 Reverse-Proxy Rewrite Fix
+## Sprint Completion Log: Signed-In /brains 500 Reverse-Proxy Rewrite Fix
 
-- Sprint: `sprint-020-fix-brains-signed-in-render-500` (in progress).
+- Sprint: `sprint-020-fix-brains-signed-in-render-500` (completed).
+- MR: `!218` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/218`).
+- MR pipeline: `2560555090` (status: `success`).
+- Default-branch deploy pipeline: `2560558341` (status: `success`).
+- Merge commit SHA: `b9e4a77bc142bfb319675589be9e4aa8756486e0`.
+- Deployed production SHA: `b9e4a77bc142bfb319675589be9e4aa8756486e0`.
+- Deployed production build ID: `2560558341`.
+- Source branch deletion:
+  - Remote: deleted by GitLab merge.
+  - Local: pending final local cleanup in sprint closeout flow.
 - Incident context:
   - Production signed-out auth flows were healthy after Sprint 019, but signed-in `GET /brains` still returned `500 Internal Server Error`.
 - Root cause:
@@ -302,6 +311,18 @@ Last updated: 2026-05-28 (UTC)
   - `npm run build` passed.
   - `git diff --check` passed.
   - `npm test` remains red on unrelated baseline failure families outside this sprint scope (existing failures in Walmart/Studio/SiteForge/frontdoor suites).
+- Production verification:
+  - `/api/meta/release` reports SHA `b9e4a77bc142bfb319675589be9e4aa8756486e0` and build ID `2560558341`.
+  - `/__clerk/v1/client` returns `404` (not `500`).
+  - `/sign-in` returns `200` with Clerk UI markers.
+  - `/sign-up` returns `200` with Clerk UI markers.
+  - signed-out `/brains` returns `307` redirect to `/sign-in?redirect_url=.../brains`.
+  - signed-out `/api/brains` and `/api/brains/ecomviper/stats` return `401`.
+  - `/apps`, `/apps/studio`, `/studio`, `/siteforge`, and `/uapforge` return `404`.
+  - `/` returns `200`.
+  - Signed-in browser verification remains required with a real authenticated session to confirm My Brains renders all nine canonical brains and no Internal Server Error.
+- Recommended next sprint:
+  - run authenticated production browser verification for signed-in `/brains` and signed-in root CTA composition, then continue cleanup of unrelated baseline failure families.
 
 ## Current Operating Reminder
 
