@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { matchRocktomicBySkus } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
 import {
   createEmptyShopifyPdpIntelligenceRecord,
   sanitizeShopifyPdpIntelligenceRecord,
@@ -12,6 +11,14 @@ import {
 import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
 
 type AsyncStatus = "idle" | "loading" | "success" | "error";
+type EditorTab =
+  | "overview"
+  | "ingredients"
+  | "trust"
+  | "commerce"
+  | "agentic"
+  | "assets"
+  | "seo";
 
 interface PdpIntelligenceApiResponse {
   ok?: boolean;
@@ -28,6 +35,11 @@ function asIso(value: string | null): string {
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) return value;
   return new Date(parsed).toISOString();
+}
+
+function asMoney(value: number | null, currency = "USD"): string {
+  if (value == null || !Number.isFinite(value)) return "Unknown";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
 }
 
 function listToTextarea(values: string[]): string {
@@ -49,6 +61,12 @@ function upsertFaq(
   return faqs.map((faq, faqIndex) => (faqIndex === index ? { ...faq, ...patch } : faq));
 }
 
+function chipTone(ok: boolean): string {
+  return ok
+    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+    : "border-amber-200 bg-amber-50 text-amber-800";
+}
+
 export default function EcomViperProductEditorClient({ initialState }: { initialState: ShopifyProductEditorInitialState }) {
   const product = initialState.currentShopifyListing;
 
@@ -66,38 +84,92 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     );
   }
 
-  const skus = product.variants.map((variant) => variant.sku.trim()).filter(Boolean);
-  const supplierMatch = matchRocktomicBySkus(skus);
-
+  const supplierProduct = initialState.supplierContext.product;
   const baseRecord = useMemo(() => {
     const fallback = createEmptyShopifyPdpIntelligenceRecord({
       shopifyProductId: product.productId,
       productHandle: product.handle || null,
-      supplier: supplierMatch.product?.supplier ?? null,
-      supplierSku: supplierMatch.matchedSku,
+      supplier: supplierProduct?.supplier || null,
+      supplierSku: initialState.supplierContext.matchedSku,
     });
     const seeded = initialState.pdpIntelligence
       ? sanitizeShopifyPdpIntelligenceRecord(initialState.pdpIntelligence, fallback)
       : fallback;
+
     return {
       ...seeded,
       shopify_product_id: product.productId,
       product_handle: product.handle || null,
-      supplier: supplierMatch.product?.supplier ?? seeded.supplier,
-      supplier_sku: supplierMatch.matchedSku ?? seeded.supplier_sku,
+      supplier: supplierProduct?.supplier ?? seeded.supplier,
+      supplier_sku: initialState.supplierContext.matchedSku ?? seeded.supplier_sku,
+      certifications:
+        seeded.certifications.length > 0
+          ? seeded.certifications
+          : supplierProduct?.certifications?.length
+            ? supplierProduct.certifications
+            : [],
+      dietary_attributes:
+        seeded.dietary_attributes.length > 0
+          ? seeded.dietary_attributes
+          : supplierProduct?.dietaryAttributes?.length
+            ? supplierProduct.dietaryAttributes
+            : [],
+      manufacturing_claims:
+        seeded.manufacturing_claims.length > 0
+          ? seeded.manufacturing_claims
+          : supplierProduct?.manufacturingClaims?.length
+            ? supplierProduct.manufacturingClaims
+            : [],
+      inventory_status: seeded.inventory_status || supplierProduct?.inventoryStatus || "unknown",
+      availability_status: seeded.availability_status || "Availability Unknown",
+      coa_status: seeded.coa_status || supplierProduct?.coa?.status || "unknown",
+      coa_link: seeded.coa_link || supplierProduct?.coa?.url || "",
+      coa_testing_categories:
+        seeded.coa_testing_categories.length > 0
+          ? seeded.coa_testing_categories
+          : supplierProduct?.coa?.testingCategories || [],
+      coa_verification_status: seeded.coa_verification_status || supplierProduct?.coa?.verificationStatus || "unknown",
+      ships_from: seeded.ships_from || supplierProduct?.shipping?.shipsFrom || "Unknown",
+      processing_time: seeded.processing_time || supplierProduct?.shipping?.processingTime || "Unknown",
+      shipping_time: seeded.shipping_time || supplierProduct?.shipping?.shippingTime || "Unknown",
+      return_policy: seeded.return_policy || supplierProduct?.shipping?.returnPolicy || "Unknown",
+      fulfillment_status: seeded.fulfillment_status || supplierProduct?.shipping?.fulfillmentStatus || "unknown",
+      wholesale_cost: seeded.wholesale_cost ?? supplierProduct?.pricing?.wholesaleCost ?? null,
+      msrp: seeded.msrp ?? supplierProduct?.pricing?.msrp ?? null,
+      estimated_profit: seeded.estimated_profit ?? supplierProduct?.pricing?.estimatedProfit ?? null,
+      margin_percent: seeded.margin_percent ?? supplierProduct?.pricing?.marginPercent ?? null,
+      currency: seeded.currency || supplierProduct?.pricing?.currency || "USD",
+      supplement_facts: seeded.supplement_facts || supplierProduct?.supplementFacts?.value || "",
+      serving_size: seeded.serving_size || supplierProduct?.servingSize || "",
+      servings_per_container: seeded.servings_per_container || supplierProduct?.servingsPerContainer || "",
+      other_ingredients: seeded.other_ingredients || supplierProduct?.otherIngredients || "",
+      key_features:
+        seeded.key_features.length > 0
+          ? seeded.key_features
+          : supplierProduct?.productFeatures?.length
+            ? supplierProduct.productFeatures
+            : [],
+      ingredient_highlights:
+        seeded.ingredient_highlights.length > 0
+          ? seeded.ingredient_highlights
+          : supplierProduct?.ingredientHighlights?.length
+            ? supplierProduct.ingredientHighlights
+            : [],
+      source_diagnostics:
+        seeded.source_diagnostics.length > 0
+          ? seeded.source_diagnostics
+          : [
+              initialState.supplierContext.matched ? `Matched SKU: ${initialState.supplierContext.matchedSku}` : "Matched SKU: Unknown",
+              `Inventory source: ${initialState.supplierContext.inventoryAvailable ? "Available" : "Unavailable"}`,
+            ],
     };
-  }, [
-    initialState.pdpIntelligence,
-    product.handle,
-    product.productId,
-    supplierMatch.matchedSku,
-    supplierMatch.product,
-  ]);
+  }, [initialState.pdpIntelligence, initialState.supplierContext, product.handle, product.productId, supplierProduct]);
 
   const [record, setRecord] = useState<ShopifyPdpIntelligenceRecord>(baseRecord);
   const [generationStatus, setGenerationStatus] = useState<AsyncStatus>("idle");
   const [saveStatus, setSaveStatus] = useState<AsyncStatus>("idle");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<EditorTab>("overview");
 
   const productReference = initialState.productReference || product.handle || product.productId;
 
@@ -128,7 +200,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
       setStatusMessage(
         body.generationUnavailable
           ? "generation unavailable: missing server configuration"
-          : "PDP intelligence generated. Review and edit before saving."
+          : "Source-grounded intelligence generated. Review before saving."
       );
     } catch (error) {
       setGenerationStatus("error");
@@ -150,319 +222,382 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     }
   }
 
+  const tabs: Array<{ id: EditorTab; label: string }> = [
+    { id: "overview", label: "Overview" },
+    { id: "ingredients", label: "Ingredients" },
+    { id: "trust", label: "Trust & Compliance" },
+    { id: "commerce", label: "Commerce" },
+    { id: "agentic", label: "Agentic Visibility" },
+    { id: "assets", label: "Assets" },
+    { id: "seo", label: "SEO & Schema" },
+  ];
+
   return (
-    <main className="ibrains-shell min-h-screen p-6" data-testid="ecomviper-product-editor-page">
-      <div className="mx-auto max-w-6xl space-y-4">
-        <header className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">Product Editor / PDP Optimizer</p>
-          <h1 className="mt-2 text-2xl font-semibold text-[#0F172A]">{product.title}</h1>
-          <p className="mt-2 text-sm text-[#475569]">Shopify-first PDP editor foundation with Rocktomic SKU intelligence and editable AI PDP intelligence fields.</p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#334155]">
-            <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1">Source: {initialState.sourceLabel}</span>
-            <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1">Last synced: {asIso(initialState.lastSyncedAt)}</span>
-            <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1">OpenAI: {initialState.openAiStatusLabel}</span>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-3 text-sm">
-            <Link href="/ecomviper" className="text-[#1D4ED8] hover:underline">Back to Products</Link>
-            <Link href={`/ecomviper/shopify/products/${encodeURIComponent(initialState.productReference)}`} className="text-[#1D4ED8] hover:underline">
-              Open Shopify 3-step editor
-            </Link>
-          </div>
+    <main className="ibrains-shell min-h-screen text-[#0F172A]" data-testid="ecomviper-product-editor-page">
+      <div className="mx-auto max-w-[1500px] px-4 py-4 sm:px-6">
+        <header className="mb-3 flex items-center justify-between rounded-2xl border border-[#D9E4F0] bg-white/95 px-4 py-3">
+          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">iBrains BrainOS Dashboard</p>
+          <Link href="/ecomviper" className="text-sm text-[#1D4ED8] hover:underline">Back to Products</Link>
         </header>
 
-        <section className="grid gap-4 md:grid-cols-2" data-testid="ecomviper-product-editor-sections">
-          <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5">
-            <h2 className="text-base font-semibold text-[#0F172A]">Shopify Product Data</h2>
-            <p className="mt-2 text-sm text-[#475569]">Vendor: {product.vendor || "-"}</p>
-            <p className="text-sm text-[#475569]">Product type: {product.productType || "-"}</p>
-            <p className="text-sm text-[#475569]">Status: {product.status || "-"}</p>
-            <p className="text-sm text-[#475569]">Variants: {product.variants.length}</p>
-          </article>
-
-          <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5">
-            <h2 className="text-base font-semibold text-[#0F172A]">Supplier Intelligence</h2>
-            {supplierMatch.status === "rocktomic" ? (
-              <>
-                <p className="mt-2 text-sm text-[#475569]">Supplier: {supplierMatch.product?.supplier || "Rocktomic"}</p>
-                <p className="text-sm text-[#475569]">SKU: {supplierMatch.matchedSku}</p>
-                <p className="text-sm text-[#475569]">Match confidence: {Math.round(supplierMatch.matchConfidence * 100)}%</p>
-                <p className="text-sm text-[#475569]">Match reason: {supplierMatch.matchReason}</p>
-                <p className="text-sm text-[#475569]">Product Name: {supplierMatch.product?.productName || "-"}</p>
-                <p className="text-sm text-[#475569]">Certifications: {(supplierMatch.product?.certifications || []).join(", ") || "-"}</p>
-                <p className="text-sm text-[#475569]">COA status: {supplierMatch.product?.coa.status || "-"}</p>
-              </>
-            ) : (
-              <p className="mt-2 text-sm text-[#475569]">No Rocktomic SKU match found. Additional supplier intelligence sources are pending.</p>
-            )}
-          </article>
-
-          <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 md:col-span-2" data-testid="ecomviper-ai-pdp-intelligence-section">
-            <h2 className="text-base font-semibold text-[#0F172A]">AI PDP Intelligence</h2>
-            <p className="mt-2 text-sm text-[#475569]">Generate, edit, save, and reopen structured PDP intelligence. All generation runs server-side only.</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleGenerate}
-                className="rounded-lg border border-[#1D4ED8] bg-[#1D4ED8] px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-70"
-                disabled={generationStatus === "loading"}
-              >
-                {generationStatus === "loading" ? "Generating..." : "Generate PDP Intelligence"}
-              </button>
-              <button type="button" disabled className="rounded-lg border border-[#D9E4F0] px-3 py-2 text-sm text-[#64748B]">
-                Regenerate Summary (Planned)
-              </button>
-              <button type="button" disabled className="rounded-lg border border-[#D9E4F0] px-3 py-2 text-sm text-[#64748B]">
-                Regenerate FAQ (Planned)
-              </button>
-              <button type="button" disabled className="rounded-lg border border-[#D9E4F0] px-3 py-2 text-sm text-[#64748B]">
-                Regenerate Trust Signals (Planned)
-              </button>
-              <button type="button" disabled className="rounded-lg border border-[#D9E4F0] px-3 py-2 text-sm text-[#64748B]">
-                Regenerate Use Cases (Planned)
-              </button>
+        <section className="mb-3 rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Products &gt; {product.title}</p>
+              <h1 className="mt-1 text-xl font-semibold">{product.title}</h1>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled className="rounded-lg border border-[#D9E4F0] px-3 py-2 text-sm text-[#64748B]">Preview PDP</button>
               <button
                 type="button"
                 onClick={handleSave}
-                className="rounded-lg border border-[#0F766E] bg-[#0F766E] px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-70"
+                className="rounded-lg border border-[#0F766E] bg-[#0F766E] px-3 py-2 text-sm font-medium text-white disabled:opacity-70"
                 disabled={saveStatus === "loading"}
               >
-                {saveStatus === "loading" ? "Saving..." : "Save Intelligence"}
+                {saveStatus === "loading" ? "Saving..." : "Save Changes"}
+              </button>
+              <button
+                type="button"
+                onClick={handleGenerate}
+                className="rounded-lg border border-[#1D4ED8] bg-[#1D4ED8] px-3 py-2 text-sm font-medium text-white disabled:opacity-70"
+                disabled={generationStatus === "loading"}
+              >
+                {generationStatus === "loading" ? "Generating..." : "Generate Intelligence"}
               </button>
             </div>
-            {statusMessage ? <p className="mt-3 text-sm text-[#334155]">{statusMessage}</p> : null}
-            <p className="mt-2 text-xs text-[#64748B]">
-              Generation status: {record.generation_status} · Last generated: {asIso(record.last_generated_at)} · Last edited: {asIso(record.last_edited_at)}
-            </p>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <span className={`rounded-full border px-3 py-1 ${chipTone(initialState.source === "live_shopify")}`}>
+              Shopify {initialState.source === "live_shopify" ? "Connected" : "Snapshot"}
+            </span>
+            <span className={`rounded-full border px-3 py-1 ${chipTone(initialState.supplierContext.matched)}`}>
+              {initialState.supplierContext.matched ? "Supplier Matched" : "Supplier Unmatched"}
+            </span>
+            <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-[#334155]">
+              Inventory: {record.availability_status || "Availability Unknown"}
+            </span>
+            <span className={`rounded-full border px-3 py-1 ${chipTone(Boolean(record.coa_link || record.coa_status !== "unknown"))}`}>
+              COA: {record.coa_status || "unknown"}
+            </span>
+          </div>
+          <p className="mt-2 text-xs text-[#64748B]">
+            Last generated: {asIso(record.last_generated_at)} · Last edited: {asIso(record.last_edited_at)} · Last supplier check: {asIso(initialState.supplierContext.lastSupplierCheckAt)}
+          </p>
+          {statusMessage ? <p className="mt-2 text-sm text-[#334155]">{statusMessage}</p> : null}
+        </section>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-sm text-[#334155] md:col-span-2">
-                AI Product Summary
-                <textarea
-                  value={record.ai_product_summary}
-                  onChange={(event) => setRecord((current) => ({ ...current, ai_product_summary: event.target.value }))}
-                  rows={3}
-                  className="rounded-lg border border-[#D9E4F0] px-3 py-2"
-                />
-              </label>
-
-              <label className="grid gap-1 text-sm text-[#334155]">
-                Best For
-                <textarea
-                  value={listToTextarea(record.best_for)}
-                  onChange={(event) => setRecord((current) => ({ ...current, best_for: textareaToList(event.target.value) }))}
-                  rows={3}
-                  className="rounded-lg border border-[#D9E4F0] px-3 py-2"
-                />
-              </label>
-              <label className="grid gap-1 text-sm text-[#334155]">
-                Not Best For
-                <textarea
-                  value={listToTextarea(record.not_best_for)}
-                  onChange={(event) => setRecord((current) => ({ ...current, not_best_for: textareaToList(event.target.value) }))}
-                  rows={3}
-                  className="rounded-lg border border-[#D9E4F0] px-3 py-2"
-                />
-              </label>
-              <label className="grid gap-1 text-sm text-[#334155]">
-                Use Cases
-                <textarea
-                  value={listToTextarea(record.use_cases)}
-                  onChange={(event) => setRecord((current) => ({ ...current, use_cases: textareaToList(event.target.value) }))}
-                  rows={3}
-                  className="rounded-lg border border-[#D9E4F0] px-3 py-2"
-                />
-              </label>
-              <label className="grid gap-1 text-sm text-[#334155]">
-                Ingredient Highlights
-                <textarea
-                  value={listToTextarea(record.ingredient_highlights)}
-                  onChange={(event) =>
-                    setRecord((current) => ({ ...current, ingredient_highlights: textareaToList(event.target.value) }))
-                  }
-                  rows={3}
-                  className="rounded-lg border border-[#D9E4F0] px-3 py-2"
-                />
-              </label>
-              <label className="grid gap-1 text-sm text-[#334155]">
-                Trust Signals
-                <textarea
-                  value={listToTextarea(record.trust_signals)}
-                  onChange={(event) => setRecord((current) => ({ ...current, trust_signals: textareaToList(event.target.value) }))}
-                  rows={3}
-                  className="rounded-lg border border-[#D9E4F0] px-3 py-2"
-                />
-              </label>
-              <label className="grid gap-1 text-sm text-[#334155]">
-                Certifications
-                <textarea
-                  value={listToTextarea(record.certifications)}
-                  onChange={(event) => setRecord((current) => ({ ...current, certifications: textareaToList(event.target.value) }))}
-                  rows={3}
-                  className="rounded-lg border border-[#D9E4F0] px-3 py-2"
-                />
-              </label>
-              <label className="grid gap-1 text-sm text-[#334155]">
-                Compliance-Safe Claims
-                <textarea
-                  value={listToTextarea(record.compliance_safe_claims)}
-                  onChange={(event) =>
-                    setRecord((current) => ({ ...current, compliance_safe_claims: textareaToList(event.target.value) }))
-                  }
-                  rows={3}
-                  className="rounded-lg border border-[#D9E4F0] px-3 py-2"
-                />
-              </label>
-              <label className="grid gap-1 text-sm text-[#334155] md:col-span-2">
-                Comparison Content
-                <textarea
-                  value={record.comparison_content}
-                  onChange={(event) => setRecord((current) => ({ ...current, comparison_content: event.target.value }))}
-                  rows={2}
-                  className="rounded-lg border border-[#D9E4F0] px-3 py-2"
-                />
-              </label>
-              <label className="grid gap-1 text-sm text-[#334155] md:col-span-2">
-                Agentic Selection Notes
-                <textarea
-                  value={record.agentic_selection_notes}
-                  onChange={(event) =>
-                    setRecord((current) => ({ ...current, agentic_selection_notes: event.target.value }))
-                  }
-                  rows={2}
-                  className="rounded-lg border border-[#D9E4F0] px-3 py-2"
-                />
-              </label>
-            </div>
-
-            <div className="mt-4 rounded-lg border border-[#D9E4F0] p-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-[#0F172A]">Expanded FAQ</h3>
-                <button
-                  type="button"
-                  className="rounded border border-[#D9E4F0] px-2 py-1 text-xs text-[#334155]"
-                  onClick={() =>
-                    setRecord((current) => ({
-                      ...current,
-                      faqs: [
-                        ...current.faqs,
-                        {
-                          question: "",
-                          answer: "",
-                          category: "general",
-                          schema_eligible: false,
-                          compliance_status: "review_required",
-                        },
-                      ],
-                    }))
-                  }
-                >
-                  Add FAQ
-                </button>
+        <div className="grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
+          <aside className="space-y-3">
+            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
+              <div className="mb-3 flex items-center gap-2 border-b border-[#E2E8F0] pb-3">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#0F172A] text-xs font-semibold text-white">EV</span>
+                <p className="text-sm font-semibold">EcomViper</p>
               </div>
-              <div className="mt-3 space-y-3">
-                {record.faqs.map((faq, index) => (
-                  <div key={`${index}-${faq.question}`} className="rounded border border-[#E2E8F0] p-3">
-                    <label className="grid gap-1 text-xs text-[#475569]">
-                      Question
-                      <input
-                        value={faq.question}
-                        onChange={(event) =>
-                          setRecord((current) => ({ ...current, faqs: upsertFaq(current.faqs, index, { question: event.target.value }) }))
-                        }
-                        className="rounded border border-[#D9E4F0] px-2 py-1 text-sm"
-                      />
-                    </label>
-                    <label className="mt-2 grid gap-1 text-xs text-[#475569]">
-                      Answer
-                      <textarea
-                        value={faq.answer}
-                        onChange={(event) =>
-                          setRecord((current) => ({ ...current, faqs: upsertFaq(current.faqs, index, { answer: event.target.value }) }))
-                        }
-                        rows={2}
-                        className="rounded border border-[#D9E4F0] px-2 py-1 text-sm"
-                      />
-                    </label>
-                    <div className="mt-2 grid gap-2 md:grid-cols-3">
-                      <label className="grid gap-1 text-xs text-[#475569]">
-                        Category
-                        <input
-                          value={faq.category}
-                          onChange={(event) =>
-                            setRecord((current) => ({ ...current, faqs: upsertFaq(current.faqs, index, { category: event.target.value }) }))
-                          }
-                          className="rounded border border-[#D9E4F0] px-2 py-1 text-sm"
-                        />
-                      </label>
-                      <label className="grid gap-1 text-xs text-[#475569]">
-                        Compliance status
-                        <select
-                          value={faq.compliance_status}
-                          onChange={(event) =>
-                            setRecord((current) => ({
-                              ...current,
-                              faqs: upsertFaq(current.faqs, index, {
-                                compliance_status: event.target.value as ShopifyPdpFaqEntry["compliance_status"],
-                              }),
-                            }))
-                          }
-                          className="rounded border border-[#D9E4F0] px-2 py-1 text-sm"
-                        >
-                          <option value="approved">approved</option>
-                          <option value="review_required">review_required</option>
-                          <option value="blocked">blocked</option>
-                        </select>
-                      </label>
-                      <label className="flex items-center gap-2 text-xs text-[#475569]">
-                        <input
-                          type="checkbox"
-                          checked={faq.schema_eligible}
-                          onChange={(event) =>
-                            setRecord((current) => ({
-                              ...current,
-                              faqs: upsertFaq(current.faqs, index, { schema_eligible: event.target.checked }),
-                            }))
-                          }
-                        />
-                        Schema eligible
-                      </label>
-                    </div>
+              <nav className="grid gap-1 text-sm">
+                <a href="#product-editor-main" className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2">Products</a>
+                <span className="rounded-lg border border-transparent px-3 py-2 text-[#334155]">Image Studio</span>
+                <Link href="/ecomviper/dropshipping/rocktomic" className="rounded-lg border border-transparent px-3 py-2 text-[#334155]">Dropshipping</Link>
+                <span className="rounded-lg border border-transparent px-3 py-2 text-[#334155]">Agentic Visibility</span>
+                <Link href="/ecomviper/settings" className="rounded-lg border border-transparent px-3 py-2 text-[#334155]">Settings</Link>
+              </nav>
+            </section>
+
+            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
+              <h2 className="text-sm font-semibold">Product Rail</h2>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {(product.images.length ? product.images : [{ id: "none", url: "", altText: "", source: "product" as const }]).slice(0, 6).map((image) => (
+                  <div key={image.id} className="h-16 rounded-md border border-[#D9E4F0] bg-[#F8FBFF]">
+                    {image.url ? <img src={image.url} alt={image.altText || product.title} className="h-full w-full rounded-md object-cover" /> : null}
                   </div>
                 ))}
               </div>
+              <div className="mt-3 space-y-1 text-xs text-[#475569]">
+                <p><span className="font-medium text-[#0F172A]">Vendor:</span> {product.vendor || "-"}</p>
+                <p><span className="font-medium text-[#0F172A]">SKU:</span> {initialState.supplierContext.matchedSku || product.variants[0]?.sku || "-"}</p>
+                <p><span className="font-medium text-[#0F172A]">Product Type:</span> {product.productType || "-"}</p>
+                <p><span className="font-medium text-[#0F172A]">Form:</span> {record.serving_size || "Unknown"}</p>
+                <p><span className="font-medium text-[#0F172A]">Primary Benefit:</span> {record.best_for[0] || "Unknown"}</p>
+                <p><span className="font-medium text-[#0F172A]">AI Visibility:</span> {Math.max(0, 100 - record.compliance_review.risky_phrases_found.length * 20)}</p>
+                <p><span className="font-medium text-[#0F172A]">Last Updated:</span> {asIso(record.updated_at)}</p>
+              </div>
+            </section>
+          </aside>
+
+          <section id="product-editor-main" className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
+            <div className="mb-3 flex flex-wrap gap-2" data-testid="ecomviper-product-editor-tabs">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`rounded-lg border px-3 py-2 text-sm ${activeTab === tab.id ? "border-[#BFDBFE] bg-[#EFF6FF] text-[#0F172A]" : "border-[#D9E4F0] text-[#475569]"}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
-            <label className="mt-4 grid gap-1 text-sm text-[#334155]">
-              Compliance Notes
-              <textarea
-                value={listToTextarea(record.compliance_notes)}
-                onChange={(event) => setRecord((current) => ({ ...current, compliance_notes: textareaToList(event.target.value) }))}
-                rows={3}
-                className="rounded-lg border border-[#D9E4F0] px-3 py-2"
-              />
-            </label>
+            {activeTab === "overview" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm md:col-span-2">AI Product Summary
+                  <textarea value={record.ai_product_summary} onChange={(e) => setRecord((s) => ({ ...s, ai_product_summary: e.target.value }))} rows={3} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Best For
+                  <textarea value={listToTextarea(record.best_for)} onChange={(e) => setRecord((s) => ({ ...s, best_for: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Not Best For
+                  <textarea value={listToTextarea(record.not_best_for)} onChange={(e) => setRecord((s) => ({ ...s, not_best_for: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Use Cases
+                  <textarea value={listToTextarea(record.use_cases)} onChange={(e) => setRecord((s) => ({ ...s, use_cases: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Key Features
+                  <textarea value={listToTextarea(record.key_features)} onChange={(e) => setRecord((s) => ({ ...s, key_features: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-2">Quick Facts
+                  <textarea value={listToTextarea(record.quick_facts)} onChange={(e) => setRecord((s) => ({ ...s, quick_facts: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+              </div>
+            ) : null}
 
-            <p className="mt-3 text-xs text-[#64748B]">
-              Compliance review risk: {record.compliance_review.risk_level} · risky phrases:{" "}
-              {record.compliance_review.risky_phrases_found.join(", ") || "none"}
-            </p>
-          </article>
+            {activeTab === "ingredients" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm md:col-span-2">Supplement Facts
+                  <textarea value={record.supplement_facts} onChange={(e) => setRecord((s) => ({ ...s, supplement_facts: e.target.value }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Ingredient Highlights
+                  <textarea value={listToTextarea(record.ingredient_highlights)} onChange={(e) => setRecord((s) => ({ ...s, ingredient_highlights: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Ingredients
+                  <textarea value={listToTextarea(record.ingredients)} onChange={(e) => setRecord((s) => ({ ...s, ingredients: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Serving Size
+                  <input value={record.serving_size} onChange={(e) => setRecord((s) => ({ ...s, serving_size: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Servings Per Container
+                  <input value={record.servings_per_container} onChange={(e) => setRecord((s) => ({ ...s, servings_per_container: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-2">Other Ingredients
+                  <textarea value={record.other_ingredients} onChange={(e) => setRecord((s) => ({ ...s, other_ingredients: e.target.value }))} rows={2} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-2">Source Diagnostics
+                  <textarea value={listToTextarea(record.source_diagnostics)} onChange={(e) => setRecord((s) => ({ ...s, source_diagnostics: textareaToList(e.target.value) }))} rows={3} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+              </div>
+            ) : null}
 
-          <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5">
-            <h2 className="text-base font-semibold text-[#0F172A]">Buy Now Links placeholder</h2>
-            <p className="mt-2 text-sm text-[#475569]">Marketplace link mapping remains modeled and review-first in this sprint.</p>
-          </article>
+            {activeTab === "trust" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm">Certifications
+                  <textarea value={listToTextarea(record.certifications)} onChange={(e) => setRecord((s) => ({ ...s, certifications: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Dietary Attributes
+                  <textarea value={listToTextarea(record.dietary_attributes)} onChange={(e) => setRecord((s) => ({ ...s, dietary_attributes: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Manufacturing Claims
+                  <textarea value={listToTextarea(record.manufacturing_claims)} onChange={(e) => setRecord((s) => ({ ...s, manufacturing_claims: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Warnings
+                  <textarea value={listToTextarea(record.warnings_text)} onChange={(e) => setRecord((s) => ({ ...s, warnings_text: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">COA Status
+                  <input value={record.coa_status} onChange={(e) => setRecord((s) => ({ ...s, coa_status: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">COA Verification
+                  <input value={record.coa_verification_status} onChange={(e) => setRecord((s) => ({ ...s, coa_verification_status: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+              </div>
+            ) : null}
 
-          <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5">
-            <h2 className="text-base font-semibold text-[#0F172A]">Image Studio placeholder</h2>
-            <p className="mt-2 text-sm text-[#475569]">Image Studio execution is deferred to Sprint 009+.</p>
-          </article>
+            {activeTab === "commerce" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm">Price
+                  <input value={record.price ?? ""} onChange={(e) => setRecord((s) => ({ ...s, price: e.target.value ? Number(e.target.value) : null }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Compare At
+                  <input value={record.compare_at_price ?? ""} onChange={(e) => setRecord((s) => ({ ...s, compare_at_price: e.target.value ? Number(e.target.value) : null }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Wholesale Cost
+                  <input value={record.wholesale_cost ?? ""} onChange={(e) => setRecord((s) => ({ ...s, wholesale_cost: e.target.value ? Number(e.target.value) : null }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">MSRP
+                  <input value={record.msrp ?? ""} onChange={(e) => setRecord((s) => ({ ...s, msrp: e.target.value ? Number(e.target.value) : null }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Margin %
+                  <input value={record.margin_percent ?? ""} onChange={(e) => setRecord((s) => ({ ...s, margin_percent: e.target.value ? Number(e.target.value) : null }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Estimated Profit
+                  <input value={record.estimated_profit ?? ""} onChange={(e) => setRecord((s) => ({ ...s, estimated_profit: e.target.value ? Number(e.target.value) : null }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Inventory Status
+                  <input value={record.inventory_status} onChange={(e) => setRecord((s) => ({ ...s, inventory_status: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Availability Status
+                  <input value={record.availability_status} onChange={(e) => setRecord((s) => ({ ...s, availability_status: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+              </div>
+            ) : null}
 
-          <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 md:col-span-2">
-            <h2 className="text-base font-semibold text-[#0F172A]">Publish Controls placeholder</h2>
-            <p className="mt-2 text-sm text-[#475569]">EcomViper.com public publishing remains a future scope. PDP intelligence is generated and saved for operator review only in Sprint 008.</p>
-          </article>
-        </section>
+            {activeTab === "agentic" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm">FAQ Topics
+                  <textarea value={listToTextarea(record.faq)} onChange={(e) => setRecord((s) => ({ ...s, faq: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Buyer Intent Mapping
+                  <textarea value={listToTextarea(record.buyer_intent_mapping)} onChange={(e) => setRecord((s) => ({ ...s, buyer_intent_mapping: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Entity Mapping
+                  <textarea value={listToTextarea(record.entity_mapping)} onChange={(e) => setRecord((s) => ({ ...s, entity_mapping: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Semantic Coverage
+                  <textarea value={listToTextarea(record.semantic_coverage)} onChange={(e) => setRecord((s) => ({ ...s, semantic_coverage: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-2">Agentic Selection Notes
+                  <textarea value={record.agentic_selection_notes} onChange={(e) => setRecord((s) => ({ ...s, agentic_selection_notes: e.target.value }))} rows={3} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+
+                <div className="md:col-span-2 rounded-lg border border-[#D9E4F0] p-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-[#0F172A]">Expanded FAQ</h3>
+                    <button
+                      type="button"
+                      className="rounded border border-[#D9E4F0] px-2 py-1 text-xs text-[#334155]"
+                      onClick={() =>
+                        setRecord((current) => ({
+                          ...current,
+                          faqs: [
+                            ...current.faqs,
+                            {
+                              question: "",
+                              answer: "",
+                              category: "general",
+                              schema_eligible: false,
+                              compliance_status: "review_required",
+                            },
+                          ],
+                        }))
+                      }
+                    >
+                      Add FAQ
+                    </button>
+                  </div>
+                  <div className="mt-3 space-y-3">
+                    {record.faqs.map((faq, index) => (
+                      <div key={`${index}-${faq.question}`} className="rounded border border-[#E2E8F0] p-3">
+                        <label className="grid gap-1 text-xs text-[#475569]">
+                          Question
+                          <input
+                            value={faq.question}
+                            onChange={(event) =>
+                              setRecord((current) => ({ ...current, faqs: upsertFaq(current.faqs, index, { question: event.target.value }) }))
+                            }
+                            className="rounded border border-[#D9E4F0] px-2 py-1 text-sm"
+                          />
+                        </label>
+                        <label className="mt-2 grid gap-1 text-xs text-[#475569]">
+                          Answer
+                          <textarea
+                            value={faq.answer}
+                            onChange={(event) =>
+                              setRecord((current) => ({ ...current, faqs: upsertFaq(current.faqs, index, { answer: event.target.value }) }))
+                            }
+                            rows={2}
+                            className="rounded border border-[#D9E4F0] px-2 py-1 text-sm"
+                          />
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {activeTab === "assets" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm">Product Images
+                  <textarea value={listToTextarea(record.product_images)} onChange={(e) => setRecord((s) => ({ ...s, product_images: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Supplement Facts Assets
+                  <textarea value={listToTextarea(record.supplement_facts_assets)} onChange={(e) => setRecord((s) => ({ ...s, supplement_facts_assets: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">COA Assets
+                  <textarea value={listToTextarea(record.coa_assets)} onChange={(e) => setRecord((s) => ({ ...s, coa_assets: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Label Assets
+                  <textarea value={listToTextarea(record.label_assets)} onChange={(e) => setRecord((s) => ({ ...s, label_assets: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-2">Mockup Assets / Future Image Studio
+                  <textarea value={listToTextarea(record.mockup_assets)} onChange={(e) => setRecord((s) => ({ ...s, mockup_assets: textareaToList(e.target.value) }))} rows={3} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+              </div>
+            ) : null}
+
+            {activeTab === "seo" ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-sm">SEO Title
+                  <input value={record.seo_title} onChange={(e) => setRecord((s) => ({ ...s, seo_title: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Meta Description
+                  <input value={record.meta_description} onChange={(e) => setRecord((s) => ({ ...s, meta_description: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Product Schema
+                  <textarea value={record.product_schema} onChange={(e) => setRecord((s) => ({ ...s, product_schema: e.target.value }))} rows={2} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Offer Schema
+                  <textarea value={record.offer_schema} onChange={(e) => setRecord((s) => ({ ...s, offer_schema: e.target.value }))} rows={2} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">FAQ Schema
+                  <textarea value={record.faq_schema} onChange={(e) => setRecord((s) => ({ ...s, faq_schema: e.target.value }))} rows={2} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Review Schema
+                  <textarea value={record.review_schema} onChange={(e) => setRecord((s) => ({ ...s, review_schema: e.target.value }))} rows={2} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-2">Agentic Schema Readiness
+                  <input value={record.agentic_schema_readiness} onChange={(e) => setRecord((s) => ({ ...s, agentic_schema_readiness: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+              </div>
+            ) : null}
+          </section>
+
+          <aside className="space-y-3">
+            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4" data-testid="ecomviper-commerce-intelligence-card">
+              <h2 className="text-sm font-semibold">Commerce Intelligence</h2>
+              <div className="mt-2 space-y-1 text-xs text-[#475569]">
+                <p>Price: {asMoney(record.price, record.currency)}</p>
+                <p>Compare At: {asMoney(record.compare_at_price, record.currency)}</p>
+                <p>Wholesale Cost: {asMoney(record.wholesale_cost, record.currency)}</p>
+                <p>MSRP: {asMoney(record.msrp, record.currency)}</p>
+                <p>Margin: {record.margin_percent != null ? `${record.margin_percent}%` : "Unknown"}</p>
+                <p>Estimated Profit: {asMoney(record.estimated_profit, record.currency)}</p>
+                <p>Inventory: {record.inventory_status || "unknown"}</p>
+                <p>Availability: {record.availability_status || "Availability Unknown"}</p>
+                <p>Last Inventory Sync: {asIso(initialState.supplierContext.lastSupplierCheckAt)}</p>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4" data-testid="ecomviper-shipping-card">
+              <h2 className="text-sm font-semibold">Shipping</h2>
+              <div className="mt-2 space-y-1 text-xs text-[#475569]">
+                <p>Ships From: {record.ships_from || "Unknown"}</p>
+                <p>Processing Time: {record.processing_time || "Unknown"}</p>
+                <p>Shipping Time: {record.shipping_time || "Unknown"}</p>
+                <p>Return Policy: {record.return_policy || "Unknown"}</p>
+                <p>Fulfillment Status: {record.fulfillment_status || "unknown"}</p>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4" data-testid="ecomviper-coa-card">
+              <h2 className="text-sm font-semibold">COA</h2>
+              <div className="mt-2 space-y-1 text-xs text-[#475569]">
+                <p>COA Status: {record.coa_status || "unknown"}</p>
+                <p>COA Link: {record.coa_link ? <a className="text-[#1D4ED8] hover:underline" href={record.coa_link} target="_blank" rel="noreferrer">Open</a> : "Not available"}</p>
+                <p>Expiration Date: {record.coa_expiration_date || "Unknown"}</p>
+                <p>Testing Categories: {record.coa_testing_categories.join(", ") || "Unknown"}</p>
+                <p>Verification Status: {record.coa_verification_status || "unknown"}</p>
+              </div>
+            </section>
+          </aside>
+        </div>
       </div>
     </main>
   );

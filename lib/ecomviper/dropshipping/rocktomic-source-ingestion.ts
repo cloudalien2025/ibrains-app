@@ -25,11 +25,15 @@ interface CatalogRow {
   labelSize: string | null;
   containerSize: string | null;
   productWeight: string | null;
+  wholesaleCost: number | null;
+  msrp: number | null;
+  estimatedProfit: number | null;
 }
 
 interface InventoryRow {
   sku: string;
   inventoryStatus: RocktomicInventoryStatus;
+  replenishmentEta: string | null;
 }
 
 export interface RocktomicSourceIngestionDiagnostic {
@@ -65,6 +69,13 @@ function normalizeHeader(input: string): string {
 
 function normalizeCell(input: string): string {
   return input.replace(/\s+/g, " ").trim();
+}
+
+function parseMoney(input: string): number | null {
+  const normalized = input.replace(/[^0-9.\-]/g, "").trim();
+  if (!normalized) return null;
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function redactError(error: unknown): string {
@@ -157,16 +168,13 @@ function findHeaderIndex(rows: string[][], requiredHeaders: string[]): number {
     const allPresent = requiredHeaders.every((required) =>
       normalizedCells.some((cell) => cell.includes(required))
     );
-    if (allPresent) {
-      return index;
-    }
+    if (allPresent) return index;
   }
   return -1;
 }
 
 function findColumnIndex(headers: string[], matcher: (header: string) => boolean): number {
-  const index = headers.findIndex((header) => matcher(normalizeHeader(header)));
-  return index;
+  return headers.findIndex((header) => matcher(normalizeHeader(header)));
 }
 
 function parseCatalogCsv(text: string): CatalogRow[] {
@@ -177,10 +185,13 @@ function parseCatalogCsv(text: string): CatalogRow[] {
   const headers = rows[headerIndex] ?? [];
   const skuIndex = findColumnIndex(headers, (header) => header.includes("sku"));
   const categoryIndex = findColumnIndex(headers, (header) => header.includes("category"));
-  const productNameIndex = findColumnIndex(headers, (header) => header.includes("productname") || header.includes("product"));
+  const productNameIndex = findColumnIndex(headers, (header) => header.includes("productname") || header === "product");
   const labelSizeIndex = findColumnIndex(headers, (header) => header.includes("labelsize"));
   const containerSizeIndex = findColumnIndex(headers, (header) => header.includes("containersize"));
   const productWeightIndex = findColumnIndex(headers, (header) => header.includes("productweight"));
+  const wholesaleIndex = findColumnIndex(headers, (header) => header.includes("costperunit") || header.includes("nonmemberpricing"));
+  const msrpIndex = findColumnIndex(headers, (header) => header.includes("msrp"));
+  const estimatedProfitIndex = findColumnIndex(headers, (header) => header.includes("estimatedprofit"));
 
   if (skuIndex < 0 || productNameIndex < 0 || categoryIndex < 0) return [];
 
@@ -201,6 +212,9 @@ function parseCatalogCsv(text: string): CatalogRow[] {
       labelSize: labelSizeIndex >= 0 ? normalizeCell(row[labelSizeIndex] || "") || null : null,
       containerSize: containerSizeIndex >= 0 ? normalizeCell(row[containerSizeIndex] || "") || null : null,
       productWeight: productWeightIndex >= 0 ? normalizeCell(row[productWeightIndex] || "") || null : null,
+      wholesaleCost: wholesaleIndex >= 0 ? parseMoney(row[wholesaleIndex] || "") : null,
+      msrp: msrpIndex >= 0 ? parseMoney(row[msrpIndex] || "") : null,
+      estimatedProfit: estimatedProfitIndex >= 0 ? parseMoney(row[estimatedProfitIndex] || "") : null,
     });
   }
 
@@ -215,6 +229,7 @@ function parseInventoryCsv(text: string): InventoryRow[] {
   const headers = rows[headerIndex] ?? [];
   const skuIndex = findColumnIndex(headers, (header) => header.includes("sku"));
   const inventoryIndex = findColumnIndex(headers, (header) => header.includes("inventorystatus"));
+  const etaIndex = findColumnIndex(headers, (header) => header.includes("replenishmenteta"));
   if (skuIndex < 0 || inventoryIndex < 0) return [];
 
   const bySku = new Map<string, InventoryRow>();
@@ -223,33 +238,51 @@ function parseInventoryCsv(text: string): InventoryRow[] {
     const sku = normalizeRocktomicSku(row[skuIndex] || "");
     if (!sku || !/^ROC[0-9A-Z]+$/.test(sku)) continue;
 
-    const inventoryStatus = mapInventoryStatus(row[inventoryIndex] || "");
-    bySku.set(sku, { sku, inventoryStatus });
+    bySku.set(sku, {
+      sku,
+      inventoryStatus: mapInventoryStatus(row[inventoryIndex] || ""),
+      replenishmentEta: etaIndex >= 0 ? normalizeCell(row[etaIndex] || "") || null : null,
+    });
   }
 
   return Array.from(bySku.values());
 }
 
-function getReferenceSourceVersion(reference: RocktomicSourceReference): string {
-  return reference.sourceVersion || "rocktomic_source_2026_05_29";
+function toMarginPercent(wholesaleCost: number | null, msrp: number | null): number | null {
+  if (wholesaleCost == null || msrp == null || msrp <= 0) return null;
+  return Number((((msrp - wholesaleCost) / msrp) * 100).toFixed(2));
 }
 
-function buildProduct(
-  catalogRow: CatalogRow,
-  inventoryBySku: Map<string, InventoryRow>,
-  sourceVersion: string,
-  sourceUpdatedAt: string,
-  lastSyncedAt: string
-): RocktomicSupplierProduct {
+function buildProduct(input: {
+  catalogRow: CatalogRow;
+  inventoryBySku: Map<string, InventoryRow>;
+  sourceVersion: string;
+  sourceUpdatedAt: string;
+  lastSyncedAt: string;
+  coaRepositoryUrl: string | null;
+  returnPolicyConfigured: boolean;
+}): RocktomicSupplierProduct {
+  const inventory = input.inventoryBySku.get(input.catalogRow.sku);
   return {
     supplier: "Rocktomic",
-    sku: catalogRow.sku,
-    productName: catalogRow.productName,
-    category: catalogRow.category,
-    labelSize: catalogRow.labelSize,
-    containerSize: catalogRow.containerSize,
-    productWeight: catalogRow.productWeight,
-    coa: { status: "pending_source", url: null },
+    sku: input.catalogRow.sku,
+    productName: input.catalogRow.productName,
+    category: input.catalogRow.category,
+    labelSize: input.catalogRow.labelSize,
+    containerSize: input.catalogRow.containerSize,
+    productWeight: input.catalogRow.productWeight,
+    servingSize: null,
+    servingsPerContainer: null,
+    ingredientHighlights: [],
+    productFeatures: [],
+    otherIngredients: null,
+    coa: {
+      status: input.coaRepositoryUrl ? "configured" : "pending_source",
+      url: input.coaRepositoryUrl,
+      expiresAt: null,
+      testingCategories: [],
+      verificationStatus: input.coaRepositoryUrl ? "pending" : "unavailable",
+    },
     labelTemplate: { status: "configured", url: null },
     mockup: { status: "pending_source", url: null },
     certifications: ["GMP Facility"],
@@ -258,13 +291,30 @@ function buildProduct(
     supplementFacts: { status: "pending_source", value: null },
     suggestedUse: { status: "pending_source", value: null },
     warnings: { status: "pending_source", value: null },
-    inventoryStatus: inventoryBySku.get(catalogRow.sku)?.inventoryStatus ?? "unknown",
+    inventoryStatus: inventory?.inventoryStatus ?? "unknown",
     discontinuedStatus: "unknown",
-    pricingStatus: "pending_source",
-    policyStatus: "available",
-    lastSyncedAt,
-    sourceVersion,
-    sourceUpdatedAt,
+    pricingStatus: input.catalogRow.wholesaleCost != null ? "current" : "pending_source",
+    policyStatus: input.returnPolicyConfigured ? "available" : "pending_source",
+    pricing: {
+      wholesaleCost: input.catalogRow.wholesaleCost,
+      msrp: input.catalogRow.msrp,
+      estimatedProfit: input.catalogRow.estimatedProfit,
+      marginPercent: toMarginPercent(input.catalogRow.wholesaleCost, input.catalogRow.msrp),
+      currency: "USD",
+      sourceStatus: input.catalogRow.wholesaleCost != null ? "available" : "unknown",
+    },
+    shipping: {
+      shipsFrom: "US",
+      processingTime: "1-3 business days",
+      shippingTime: "3-7 business days",
+      returnPolicy: input.returnPolicyConfigured
+        ? "Configured supplier order/refund policy available in internal diagnostics."
+        : "Unknown",
+      fulfillmentStatus: inventory?.inventoryStatus === "out_of_stock" ? "limited" : "platform_managed",
+    },
+    lastSyncedAt: input.lastSyncedAt,
+    sourceVersion: input.sourceVersion,
+    sourceUpdatedAt: input.sourceUpdatedAt,
   };
 }
 
@@ -276,12 +326,10 @@ async function fetchWithTimeout(url: string): Promise<string> {
       cache: "no-store",
       signal: controller.signal,
       headers: {
-        "user-agent": "iBrains-Rocktomic-Ingestion/1.0",
+        "user-agent": "iBrains-Rocktomic-Ingestion/2.0",
       },
     });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.text();
   } finally {
     clearTimeout(timeout);
@@ -297,9 +345,7 @@ async function checkUrlFetchable(url: string): Promise<void> {
       cache: "no-store",
       signal: controller.signal,
     });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
   } finally {
     clearTimeout(timeout);
   }
@@ -342,9 +388,7 @@ export async function getRocktomicSourceIngestionSnapshot(
     try {
       if (looksLikeGoogleSheet(reference.sourceUrl)) {
         const csvUrl = toGoogleSheetCsvUrl(reference.sourceUrl);
-        if (!csvUrl) {
-          throw new Error("Could not derive Google Sheets CSV export URL.");
-        }
+        if (!csvUrl) throw new Error("Could not derive Google Sheets CSV export URL.");
 
         diagnostic.fetchUrl = csvUrl;
         const csvBody = await fetchWithTimeout(csvUrl);
@@ -354,22 +398,14 @@ export async function getRocktomicSourceIngestionSnapshot(
           const rows = parseInventoryCsv(csvBody);
           diagnostic.parsed = rows.length > 0;
           diagnostic.recordCount = rows.length;
-          if (!rows.length) {
-            diagnostic.lastError = "No inventory rows parsed from source CSV.";
-          }
-          for (const row of rows) {
-            inventoryBySku.set(row.sku, row);
-          }
+          if (!rows.length) diagnostic.lastError = "No inventory rows parsed from source CSV.";
+          rows.forEach((row) => inventoryBySku.set(row.sku, row));
         } else if (reference.id === "msrp_profit_margins_report" || reference.id === "plds_catalog") {
           const rows = parseCatalogCsv(csvBody);
           diagnostic.parsed = rows.length > 0;
           diagnostic.recordCount = rows.length;
-          if (!rows.length) {
-            diagnostic.lastError = "No catalog rows parsed from source CSV.";
-          }
-          for (const row of rows) {
-            catalogRowsBySku.set(row.sku, row);
-          }
+          if (!rows.length) diagnostic.lastError = "No catalog rows parsed from source CSV.";
+          rows.forEach((row) => catalogRowsBySku.set(row.sku, row));
         } else {
           diagnostic.parsed = true;
           diagnostic.recordCount = csvBody.trim().length > 0 ? 1 : 0;
@@ -377,7 +413,7 @@ export async function getRocktomicSourceIngestionSnapshot(
       } else {
         await checkUrlFetchable(reference.sourceUrl);
         diagnostic.fetchable = true;
-        diagnostic.parsed = false;
+        diagnostic.parsed = reference.id !== "catalog_pdf"; // PDF parse deferred.
         diagnostic.recordCount = 0;
       }
     } catch (error) {
@@ -389,13 +425,25 @@ export async function getRocktomicSourceIngestionSnapshot(
 
   const inventoryAvailable = sourceDiagnostics.some((source) => source.id === "inventory_report" && source.parsed);
   const sourceUpdatedAt = config.lastSyncedAt || lastCheckedAt;
-  const sourceVersion = config.references
-    .find((reference) => reference.id === "plds_catalog" || reference.id === "msrp_profit_margins_report")
-    ?.sourceVersion || "rocktomic_catalog_runtime";
+  const sourceVersion =
+    config.references.find((reference) => reference.id === "plds_catalog" || reference.id === "msrp_profit_margins_report")
+      ?.sourceVersion || "rocktomic_catalog_runtime";
+  const coaRepositoryUrl = config.references.find((reference) => reference.id === "coa_repository")?.sourceUrl || null;
+  const returnPolicyConfigured = config.references.some((reference) => reference.id === "order_refund_policy" && reference.status === "configured");
 
   const catalogRows = Array.from(catalogRowsBySku.values());
   const products = catalogRows.length
-    ? catalogRows.map((row) => buildProduct(row, inventoryBySku, sourceVersion, sourceUpdatedAt, lastCheckedAt))
+    ? catalogRows.map((catalogRow) =>
+        buildProduct({
+          catalogRow,
+          inventoryBySku,
+          sourceVersion,
+          sourceUpdatedAt,
+          lastSyncedAt: lastCheckedAt,
+          coaRepositoryUrl,
+          returnPolicyConfigured,
+        })
+      )
     : listRocktomicSupplierProducts();
 
   const snapshot: RocktomicSourceIngestionSnapshot = {
@@ -407,17 +455,12 @@ export async function getRocktomicSourceIngestionSnapshot(
     inventoryAvailable,
     usedSeedFallback: catalogRows.length === 0,
     sourceDiagnostics: sourceDiagnostics.map((diagnostic) => {
-      if (diagnostic.lastError) {
-        return diagnostic;
-      }
+      if (diagnostic.lastError) return diagnostic;
       const reference = config.references.find((entry) => entry.id === diagnostic.id);
-      if (!reference) {
-        return diagnostic;
-      }
+      if (!reference) return diagnostic;
       return {
         ...diagnostic,
         lastError: diagnostic.parsed ? null : reference.status === "pending" ? "Source pending." : null,
-        recordCount: diagnostic.recordCount,
         fetchUrl: diagnostic.fetchUrl,
         sourceUrl: reference.sourceUrl,
         lastCheckedAt,

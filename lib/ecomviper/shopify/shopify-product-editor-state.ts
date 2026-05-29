@@ -4,8 +4,8 @@ import { buildShopifyAgenticDemoWorkspaceState } from "@/lib/ecomviper/shopify/s
 import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopify-connection";
 import { hydrateShopifyLiveWorkspaceForUser } from "@/lib/ecomviper/shopify/shopify-live-hydrator";
 import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify/openai-connection";
-import { getRocktomicSourceIngestionSnapshot } from "@/lib/ecomviper/dropshipping/rocktomic-source-ingestion";
-import { matchRocktomicBySkus } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
+import type { RocktomicSupplierProduct } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
+import { matchPrimarySupplierBySkus } from "@/lib/ecomviper/suppliers/supplier-intelligence";
 import {
   buildCurrentShopifyListingDocket,
   buildEditableShopifyDraft,
@@ -55,6 +55,16 @@ export interface ShopifyProductEditorInitialState {
   lastSyncedAt: string | null;
   warnings: string[];
   pdpIntelligence: ShopifyPdpIntelligenceRecord | null;
+  supplierContext: {
+    matched: boolean;
+    matchedSku: string | null;
+    matchConfidence: number;
+    matchReason: string;
+    platform: string | null;
+    inventoryAvailable: boolean;
+    lastSupplierCheckAt: string | null;
+    product: RocktomicSupplierProduct | null;
+  };
 }
 
 function asString(value: unknown): string {
@@ -132,6 +142,18 @@ function resolveByReference(
   if (byGidTail) return byGidTail;
 
   return null;
+}
+
+function computeShopifyInventoryStatus(product: ShopifyProductRecord): "in_stock" | "low_stock" | "out_of_stock" | "unknown" {
+  const quantities = product.variants
+    .map((variant) => variant.inventoryQuantity)
+    .filter((quantity): quantity is number => typeof quantity === "number" && Number.isFinite(quantity));
+
+  if (!quantities.length) return "unknown";
+  const inStockCount = quantities.filter((quantity) => quantity > 0).length;
+  if (inStockCount === 0) return "out_of_stock";
+  if (inStockCount === quantities.length) return "in_stock";
+  return "low_stock";
 }
 
 async function resolveProduct(
@@ -276,6 +298,16 @@ export async function buildShopifyProductEditorStateForUser(
       lastSyncedAt: resolved.lastSyncedAt,
       warnings: resolved.warnings,
       pdpIntelligence: null,
+      supplierContext: {
+        matched: false,
+        matchedSku: null,
+        matchConfidence: 0,
+        matchReason: "no_supplier_sku_match",
+        platform: null,
+        inventoryAvailable: false,
+        lastSupplierCheckAt: null,
+        product: null,
+      },
     };
   }
 
@@ -300,8 +332,17 @@ export async function buildShopifyProductEditorStateForUser(
   }
 
   const skus = currentShopifyListing.variants.map((entry) => entry.sku.trim()).filter(Boolean);
-  const rocktomicSnapshot = await getRocktomicSourceIngestionSnapshot().catch(() => null);
-  const supplierMatch = matchRocktomicBySkus(skus, rocktomicSnapshot?.products);
+  const supplierSnapshot = await matchPrimarySupplierBySkus(skus).catch(() => null);
+  const supplierMatch = supplierSnapshot?.match;
+  const supplierProduct = supplierMatch?.product ?? null;
+  const inventoryAvailable = supplierSnapshot?.inventoryAvailable ?? false;
+  const shopifyInventoryStatus = computeShopifyInventoryStatus(resolved.product);
+  const supplierInventoryStatus =
+    supplierProduct?.inventoryStatus && supplierProduct.inventoryStatus !== "unknown"
+      ? supplierProduct.inventoryStatus
+      : inventoryAvailable
+        ? shopifyInventoryStatus
+        : "unknown";
 
   return {
     productReference: reference,
@@ -318,12 +359,23 @@ export async function buildShopifyProductEditorStateForUser(
     lastSyncedAt: resolved.lastSyncedAt,
     warnings: resolved.warnings,
     pdpIntelligence:
-      pdpIntelligence && supplierMatch.product
+      pdpIntelligence && supplierProduct
         ? {
             ...pdpIntelligence,
-            supplier: supplierMatch.product.supplier,
-            supplier_sku: supplierMatch.product.sku,
+            supplier: supplierProduct.supplier,
+            supplier_sku: supplierProduct.sku,
+            inventory_status: supplierInventoryStatus,
           }
         : pdpIntelligence,
+    supplierContext: {
+      matched: supplierMatch?.status === "rocktomic",
+      matchedSku: supplierMatch?.matchedSku ?? null,
+      matchConfidence: supplierMatch?.matchConfidence ?? 0,
+      matchReason: supplierMatch?.matchReason ?? "no_supplier_sku_match",
+      platform: supplierSnapshot?.platform ?? null,
+      inventoryAvailable,
+      lastSupplierCheckAt: supplierSnapshot?.lastCheckedAt ?? null,
+      product: supplierProduct,
+    },
   };
 }

@@ -10,6 +10,8 @@ This standard defines operational dashboard layout contracts for all brain conso
 - `/optibay`
 - `/optiwal`
 - `/optizon`
+- `/casaflix`
+- `/pagebolt`
 - future brain dashboards
 
 ## Global Structure
@@ -25,6 +27,7 @@ This standard defines operational dashboard layout contracts for all brain conso
 2. Sidebar header shows current brain icon/logo and brain name.
 3. Brain icon size should stay consistent in the 24-32px range.
 4. Brain icon and name must render together in sidebar identity row.
+5. Include a compact workspace status row below brain identity so operators can read connection state above the fold.
 
 ## Workspace Row Contract
 
@@ -50,6 +53,13 @@ Sprint 008.2 applies this standard to `/ecomviper`:
 - Shopify no longer presents as a separate child workspace at `/ecomviper/shopify`.
 - `/ecomviper/shopify` redirects to `/ecomviper/settings`.
 - Rocktomic diagnostics remain available via Dropshipping route and Settings diagnostics.
+
+Sprint 009 extends this standard into the Product Editor workspace:
+
+- compact product breadcrumb + status chips
+- left product rail + center tab workspace + right intelligence rail
+- no duplicate horizontal module navigation
+- all high-value product intelligence controls visible above fold on desktop
 
 ## Non-Goals
 

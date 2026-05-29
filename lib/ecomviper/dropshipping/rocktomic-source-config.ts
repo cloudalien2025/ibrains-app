@@ -50,6 +50,9 @@ const DEFAULT_INVENTORY_REPORT_URL =
   process.env.ECOMVIPER_ROCKTOMIC_INVENTORY_REPORT_URL ||
   "https://docs.google.com/spreadsheets/d/1oOjqXsaCAjSOkA1lXrasNtUVtrsxvyxcFcolD8n6YXY/edit?usp=sharing";
 
+const DEFAULT_COA_REPOSITORY_URL =
+  process.env.ECOMVIPER_ROCKTOMIC_COA_REPOSITORY_URL || null;
+
 function extractVersion(url: string): string | null {
   try {
     const parsed = new URL(url);
@@ -126,10 +129,10 @@ export function getRocktomicSourceConfigSnapshot(): RocktomicSourceConfigSnapsho
     {
       id: "coa_repository",
       label: "COA Repository",
-      status: "pending",
-      sourceUrl: null,
-      sourceUpdatedAt: null,
-      sourceVersion: null,
+      status: DEFAULT_COA_REPOSITORY_URL ? "configured" : "pending",
+      sourceUrl: DEFAULT_COA_REPOSITORY_URL,
+      sourceUpdatedAt: DEFAULT_COA_REPOSITORY_URL ? sourceUpdatedAt : null,
+      sourceVersion: DEFAULT_COA_REPOSITORY_URL ? extractVersion(DEFAULT_COA_REPOSITORY_URL) : null,
     },
   ];
 
