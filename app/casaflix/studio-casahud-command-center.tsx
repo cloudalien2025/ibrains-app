@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import BackToBrainsLink from "@/components/brains/back-to-brains-link";
 import type {
   CasaHudCampaign,
   CasaHudCampaignSummary,
@@ -5688,6 +5689,12 @@ export default function StudioCasaHudCommandCenter() {
 
           <main className="flex-1 p-4 md:p-6 xl:p-7">
             <div className="mx-auto grid max-w-6xl gap-4">
+              <div className="flex items-center justify-between">
+                <BackToBrainsLink />
+                <div className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-white px-3 py-1 text-xs text-[#475569]">
+                  Brain Workspace
+                </div>
+              </div>
               {campaignNotice ? (
                 <div className="rounded-2xl border border-[#C6DFC9] bg-[#F2FBF3] px-4 py-3 text-sm text-[#0F5132]" data-testid="casahud-campaign-create-success">
                   {campaignNotice}

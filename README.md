@@ -37,6 +37,7 @@ The authenticated workspace now uses standalone top-level brain routes.
 - Core workspace routes: `/`, `/dashboard`, `/brains`, `/tasks`, `/reports`, `/add-brain`, `/settings`, `/billing`
 - Brain workspace routes: `/ecomviper`, `/optibay`, `/optiwal`, `/optizon`, `/directoryiq`, `/casaflix`, `/pagebolt`, `/reelify`, `/ipetzo`
 - `/brains` is the canonical "My Brains" index for the authenticated workspace.
+- Every standalone brain console route exposes `← Back to Brains` linked to `/brains`.
 - `/brains` SSR must render from canonical local brain inventory and must not block on protected runtime API calls.
 - brain stats/runtime telemetry are optional post-render enrichment and must fail gracefully.
 - Clerk auth for `app.ibrains.ai` uses the production instance's allowed-subdomain model under primary domain `ibrains.ai`; Clerk frontend API proxying is not part of the current route/auth contract.

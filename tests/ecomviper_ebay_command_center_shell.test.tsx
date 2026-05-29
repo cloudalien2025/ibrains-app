@@ -19,7 +19,9 @@ describe("EcomViper eBay command-center shell", () => {
 
     expect(html).toContain("ecomviper-ebay-layout");
     expect(html).toContain("ecomviper-ebay-sidebar");
-    expect(html).toContain("eBay Agentic Workspace");
+    expect(html).toContain("OptiBay Marketplace Workspace");
+    expect(html).toContain("Back to Brains");
+    expect(html).toContain('href="/brains"');
     expect(html).toContain(">Command Center<");
     expect(html).toContain(">Listing Intelligence<");
     expect(html).toContain(">AI Visibility<");

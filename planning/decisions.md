@@ -246,3 +246,16 @@ Last updated: 2026-05-28 (UTC)
   - Shell auth remains fail-closed in `app/(shell)/layout.tsx` via `auth()` + verified `__session` fallback.
   - Clerk middleware/proxy logic remains disabled for `frontendApiProxy` mode and `/__clerk` routes.
 - Rationale: In production behind reverse proxy, signed-in shell requests handled by Clerk middleware can trigger self-rewrites to `https://localhost:3001/...`, which Next.js then tries to proxy over TLS, causing `EPROTO` and user-facing `500` responses.
+
+## D-023 Standardize Standalone Brain Console Back Link And Shell Pattern
+
+- Status: Accepted
+- Decision:
+  - Every standalone brain console route must expose `← Back to Brains` linking to `/brains`.
+  - OptiBay, OptiWal, and OptiZon are standalone brains and must not show EcomViper-parent back-link copy.
+  - EcomViper and iPetzo should render with the standard brain console structure:
+    - top/back area
+    - left sidebar
+    - right workspace/dashboard region
+  - Deprecated route language (`Apps`, `Back to Apps`, `Open App`) stays excluded from standalone brain console surfaces.
+- Rationale: Enforces a consistent standalone brain model across authenticated routes and removes residual parent-child launcher language from legacy commerce UI shells.
