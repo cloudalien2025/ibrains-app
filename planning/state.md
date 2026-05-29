@@ -324,19 +324,78 @@ Last updated: 2026-05-28 (UTC)
 - Recommended next sprint:
   - run authenticated production browser verification for signed-in `/brains` and signed-in root CTA composition, then continue cleanup of unrelated baseline failure families.
 
-## Active Sprint Log: Standardize Standalone Brain Console UI
+## Sprint Completion Log: Standardize Standalone Brain Console UI
 
-- Sprint: `sprint-021-standardize-brain-console-ui` (in progress).
-- Scope:
-  - enforce `← Back to Brains` -> `/brains` across standalone brain consoles.
-  - remove OptiBay/OptiWal/OptiZon parent-child back-link language.
-  - align EcomViper and iPetzo to left-sidebar/right-workspace shell pattern.
-  - preserve auth, routing, API, and deprecated-route behavior.
-- Implementation in progress:
-  - added shared `BackToBrainsLink` component for route-level consistency.
-  - updated standalone brain route layouts/pages to consume shared back-link behavior.
-  - introduced shell markers for EcomViper and iPetzo sidebar/workspace structure.
-  - added focused brain console UI contract test coverage.
+- Sprint: `sprint-021-standardize-brain-console-ui` (completed).
+- MR: `!220` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/220`).
+- MR pipeline: `2560603393` (status: `success`).
+- Default-branch deploy pipeline: `2560606416` (status: `success`).
+- Merge commit SHA: `4df0f76cbf48bd668da93698e371f5a5c2c9e5b9`.
+- Deployed production SHA: `4df0f76cbf48bd668da93698e371f5a5c2c9e5b9`.
+- Deployed production build ID: `2560606416`.
+- Source branch deletion:
+  - Remote: deleted by GitLab merge (`sprint-021-standardize-brain-console-ui`).
+  - Local: pending final local cleanup in sprint closeout flow.
+- User-visible issue:
+  - Standalone brain routes had inconsistent or incorrect back-link behavior.
+  - OptiBay/OptiWal/OptiZon still showed parent-style `Back to EcomViper` language.
+  - EcomViper and iPetzo lacked the standard left-sidebar/right-workspace console shell.
+- Implementation summary:
+  - Added shared `components/brains/back-to-brains-link.tsx` with canonical `← Back to Brains` -> `/brains`.
+  - Applied shared back-link behavior across standalone brain routes (`/ecomviper`, `/optibay`, `/optiwal`, `/optizon`, `/directoryiq`, `/casaflix`, `/pagebolt`, `/reelify`, `/ipetzo`).
+  - Updated OptiBay and OptiWal layouts from `Back to EcomViper` to `Back to Brains`; OptiZon now includes canonical back-link shell framing.
+  - Standardized EcomViper and iPetzo pages into explicit sidebar/workspace shell structure.
+  - Reinforced OptiWal standalone identity by changing sidebar overline label from `ECOMVIPER` to `OPTIWAL`.
+  - Added focused test coverage in `tests/brain_console_ui_contract.test.ts` and updated OptiBay shell expectations in `tests/ecomviper_ebay_command_center_shell.test.tsx`.
+- Local validation summary:
+  - targeted UI/route/auth suites passed:
+    - `tests/brain_console_ui_contract.test.ts`
+    - `tests/brains_index_contract.test.ts`
+    - `tests/ecomviper_walmart_route_contract.test.tsx`
+    - `tests/ecomviper_ebay_command_center_shell.test.tsx`
+    - `tests/directoryiq_command_center_shell.test.tsx`
+    - `tests/proxy_apps_auth_protection.test.ts`
+  - `bash scripts/check_route_signatures.sh` passed.
+  - `npm run build` passed.
+  - `git diff --check` passed.
+  - `npm test` remains red on unrelated baseline failure families outside Sprint 021 scope.
+- Unrelated baseline `npm test` failure families:
+  - `tests/ecomviper_walmart_products_persistence.test.ts`
+  - `tests/studio_casahud_media_planning_engine.test.ts`
+  - `tests/studio_casahud_youtube_package_engine.test.ts`
+  - `tests/casahud_ai_channel_engine.test.ts`
+  - `tests/siteforge_command_center_shell.test.tsx`
+  - `tests/homepage_layout_contract.test.ts`
+  - `tests/frontdoor_env_copy_contract.test.ts`
+  - `tests/walmart/compliance.test.ts`
+- Production verification summary:
+  - `/api/meta/release` reports SHA `4df0f76cbf48bd668da93698e371f5a5c2c9e5b9` and build ID `2560606416`.
+  - Signed-out standalone brain routes redirect to `/sign-in` with redirect targets preserved:
+    - `/brains`
+    - `/directoryiq`
+    - `/optibay`
+    - `/optiwal`
+    - `/optizon`
+    - `/ecomviper`
+    - `/casaflix`
+    - `/pagebolt`
+    - `/reelify`
+    - `/ipetzo`
+  - Deprecated routes remain `404`:
+    - `/apps`
+    - `/apps/studio`
+    - `/studio`
+    - `/siteforge`
+    - `/uapforge`
+- Browser verification status:
+  - Signed-in browser checks were not executable in this environment due to lack of authenticated session credentials.
+  - Required manual production browser checks remain:
+    - confirm `← Back to Brains` rendering/link target on all standalone brain routes.
+    - confirm no `Back to EcomViper` on OptiBay/OptiWal/OptiZon.
+    - confirm EcomViper and iPetzo sidebar/workspace shell rendering.
+    - confirm no `/apps` links across brain consoles.
+- Recommended next sprint:
+  - run authenticated production browser verification checklist for standalone brain consoles and then continue unrelated baseline failure cleanup.
 
 ## Current Operating Reminder
 
