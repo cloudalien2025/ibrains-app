@@ -10,7 +10,7 @@ Last updated: 2026-05-29 (UTC)
 - Sprint 003: Completed (deterministic extraction precedence + extraction-source metadata + stable warning codes).
 - Sprint 004: Planned (typed warning/telemetry code contract).
 - Sprint 005: Completed (Shopify guarded publish execution scaffold).
-- Shopify Sprint 006: In progress (`sprint-006-shopify-inventory-foundation`, `/ecomviper` Shopify-first inventory/listings foundation + PDP optimizer shell).
+- Shopify Sprint 006: Completed and merged (`sprint-006-shopify-inventory-foundation`, Shopify-first `/ecomviper` inventory/listings foundation + PDP optimizer shell, production deployed).
 - Walmart planning sprint: Completed and merged (`walmart-product-intent` docs baseline).
 - Walmart Sprint 001: Completed and merged (`walmart-command-center-foundation` docs baseline).
 - Walmart Sprint 003: Completed and merged (`sprint-003-walmart-ai-visibility`, docs/planning AI visibility workflow foundation).
@@ -28,7 +28,41 @@ Last updated: 2026-05-29 (UTC)
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
-- Current recommended sprint: `Shopify Sprint 006 - Inventory foundation + PDP optimizer shell` (active in current branch).
+- Current recommended sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
+
+## Sprint Completion Log: Shopify Sprint 006 Production Closure
+
+- Sprint/lane: `Shopify Sprint 006` (`sprint-006-shopify-inventory-foundation`) - closed.
+- MR: `!223` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/223`).
+- Pipeline: `2561198984` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2561198984`).
+- Merge commit SHA: `7d5e5ca5799b411cca1d85b93325f450612957c3`.
+- Production deployment status: completed manually on production host per `docs/PRODUCTION_DEPLOYMENT.md`.
+- Production deployed commit SHA: `7d5e5ca5799b411cca1d85b93325f450612957c3`.
+- Production deployment summary:
+  - SSH to production host, verified `/root/ibrains-app` on `main`.
+  - `git fetch`, `git switch main`, `git pull --ff-only`.
+  - verified Sprint 006 merge commit ancestry on deployed `HEAD`.
+  - `npm ci`, `npm run build`, `bash scripts/apply_directoryiq_schema.sh`.
+  - `sudo systemctl restart ibrains-app` and health/log checks.
+- Service/runtime status:
+  - `ibrains-app` systemd service active after restart.
+  - `GET http://127.0.0.1:3001/api/health` returned `200` with `ok: true`.
+  - `GET https://app.ibrains.ai/api/meta/release` reports `git_sha=7d5e5ca5799b411cca1d85b93325f450612957c3` and `build_id=2561205429`.
+- Log inspection summary:
+  - no new service-level errors in `journalctl -u ibrains-app` after restart.
+  - no new post-ready app-log errors in `/var/log/ibrains-app/app.log`.
+  - nginx error log tail only showed unrelated blocked scanner request.
+- Browser verification status:
+  - verification date/time: `2026-05-29 08:32-08:34 UTC`.
+  - checked `https://app.ibrains.ai/ecomviper` and `/ecomviper/products/does-not-exist` via headless browser.
+  - both routes loaded and correctly redirected to Clerk sign-in with preserved `redirect_url`.
+  - no browser console runtime errors observed in this signed-out verification.
+  - authenticated in-app IA/table/editor verification remains dependent on a real signed-in production session.
+- Production issues found: none blocking deployment or service health.
+- Follow-up risks/tasks:
+  - perform authenticated browser pass for `/ecomviper` IA/table/row-to-editor UX using a real production user session to complete signed-in UX confirmation.
+- Closure statement:
+  - Sprint 006 is closed for merge, pipeline, deployment, runtime health, and signed-out browser verification; authenticated UX verification is tracked as a follow-up task, not a deployment blocker.
 
 ## Sprint Completion Log: EcomViper Commerce Brain Decoupling
 
