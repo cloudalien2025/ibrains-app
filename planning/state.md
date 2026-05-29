@@ -324,6 +324,20 @@ Last updated: 2026-05-28 (UTC)
 - Recommended next sprint:
   - run authenticated production browser verification for signed-in `/brains` and signed-in root CTA composition, then continue cleanup of unrelated baseline failure families.
 
+## Active Sprint Log: Standardize Standalone Brain Console UI
+
+- Sprint: `sprint-021-standardize-brain-console-ui` (in progress).
+- Scope:
+  - enforce `← Back to Brains` -> `/brains` across standalone brain consoles.
+  - remove OptiBay/OptiWal/OptiZon parent-child back-link language.
+  - align EcomViper and iPetzo to left-sidebar/right-workspace shell pattern.
+  - preserve auth, routing, API, and deprecated-route behavior.
+- Implementation in progress:
+  - added shared `BackToBrainsLink` component for route-level consistency.
+  - updated standalone brain route layouts/pages to consume shared back-link behavior.
+  - introduced shell markers for EcomViper and iPetzo sidebar/workspace structure.
+  - added focused brain console UI contract test coverage.
+
 ## Current Operating Reminder
 
 - Do not begin a new sprint unless local repository is clean on `main`.
