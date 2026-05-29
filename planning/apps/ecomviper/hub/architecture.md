@@ -133,6 +133,30 @@ Public discovery surfaces should consume only approved public-safe projections.
 
 These are conceptual architecture targets; routes are not implemented by this sprint.
 
+## Agentic Discoverability Contract (Future)
+
+Public `ecomviper.com` architecture should preserve:
+
+- crawlable public PDPs
+- structured schema families:
+  - `Product`
+  - `Offer`
+  - `FAQPage`
+  - `Organization`
+  - `BreadcrumbList`
+  - `ImageObject`
+- `robots.txt` AI crawler policy controls
+- `sitemap.xml` and product/brand/category sitemap families
+- `llms.txt`
+- `ai-products-feed.json`
+- future agent endpoints:
+  - `/.well-known/agent.json`
+  - `/api/agent/search`
+  - `/api/agent/products/[slug]`
+  - `/api/agent/answer`
+  - `/api/agent/offers`
+  - `/api/agent/compare`
+
 ## Event / Audit Flow
 
 All high-impact state transitions should emit auditable events, including:

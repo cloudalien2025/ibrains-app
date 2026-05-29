@@ -1,6 +1,6 @@
 # EcomViper Product Intent
 
-Last updated: 2026-05-18 (UTC)
+Last updated: 2026-05-29 (UTC)
 
 EcomViper is the multi-channel ecommerce operations family inside iBrains.
 
@@ -21,6 +21,41 @@ EcomViper coordinates channel work across:
 - Amazon
 
 Channel behavior and requirements are defined in channel planning docs and implementation, not invented at parent level.
+
+## Sprint 006 UX Direction
+
+- `/ecomviper` is Shopify-first with a Sellbrite-style listing workflow:
+  - connect Shopify
+  - view products table
+  - open PDP editor
+- Sidebar IA for this sprint:
+  - Overview
+  - Products
+  - Product Editor / PDP Optimizer
+  - Image Studio
+  - Dropshipping (Rocktomic)
+  - Agentic Visibility
+  - Settings
+- Hub is not treated as a separate IA concept in this sprint.
+- Buy Now Links are part of PDP editor scope (modeled/placeholder).
+
+## Future Public Surface Direction (Preserved)
+
+- EcomViper.com remains the future public optimized PDP surface.
+- Future discoverability architecture should preserve:
+  - crawlable public PDPs
+  - schema: Product, Offer, FAQPage, Organization, BreadcrumbList, ImageObject
+  - `robots.txt` AI crawler policy
+  - `sitemap.xml` + product/brand/category sitemaps
+  - `llms.txt`
+  - `ai-products-feed.json`
+  - future agent endpoints:
+    - `/.well-known/agent.json`
+    - `/api/agent/search`
+    - `/api/agent/products/[slug]`
+    - `/api/agent/answer`
+    - `/api/agent/offers`
+    - `/api/agent/compare`
 
 ## Planning Contract
 
