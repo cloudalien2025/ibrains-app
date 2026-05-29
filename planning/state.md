@@ -42,9 +42,11 @@ Last updated: 2026-05-29 (UTC)
 - MR: `!233` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/233`).
 - MR pipeline: `2562951240` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562951240`).
 - Branch pipeline: `2562950962` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562950962`).
-- Main/deploy pipeline: `2562957259` (status: `success`, includes `build_release` + `deploy_production`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562957259`).
+- Main/deploy pipelines:
+  - `2562957259` (status: `success`, merge commit deployment, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562957259`)
+  - `2562967143` (status: `success`, planning/state closure metadata deployment, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562967143`)
 - Merge commit SHA: `0e7edb00efb9d1e6420dc728807642f587ade690`.
-- Production deployed commit SHA: `0e7edb00efb9d1e6420dc728807642f587ade690`.
+- Production deployed commit SHA: `58443c2fbd1841caf575d8eebce37fd3caef93eb`.
 - Root-cause and correction summary:
   - Product editor remained a long-scroll Sprint 008 foundation with limited source grounding and weak inventory/pricing/COA modeling.
   - Supplier matching and generation flows were Rocktomic-coupled and allowed supplier-facing wording to bleed into generated shopper-facing text.
@@ -84,11 +86,11 @@ Last updated: 2026-05-29 (UTC)
   - branch: `main`
   - status: clean (`git status` with no changes)
 - Production/runtime status:
-  - `GET https://app.ibrains.ai/api/meta/release` returns `git_sha=0e7edb00efb9d1e6420dc728807642f587ade690`, `build_id=2562957259`.
+  - `GET https://app.ibrains.ai/api/meta/release` returns `git_sha=58443c2fbd1841caf575d8eebce37fd3caef93eb`, `build_id=2562967143`.
   - `GET https://app.ibrains.ai/api/health` returned `200` with `ok: true`.
   - `systemctl is-active ibrains-app` returned `active`.
 - Log inspection summary:
-  - `journalctl -u ibrains-app` shows clean restart/start at `2026-05-29 23:17 UTC` aligned with deployment.
+  - `journalctl -u ibrains-app` shows clean restart/start at `2026-05-29 23:17 UTC` and `23:26 UTC` aligned with deployment pipelines.
   - nginx error log tail shows no new Sprint 009-specific runtime faults.
 - Browser verification status:
   - verification date/time: `2026-05-29 23:18 UTC`.
