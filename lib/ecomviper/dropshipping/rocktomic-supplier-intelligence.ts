@@ -73,7 +73,7 @@ export interface RocktomicSkuMatchResult {
   matchReason: "exact_supplier_sku_match" | "no_supplier_sku_match";
 }
 
-const ROCKTOMIC_SOURCE_VERSION = "rocktomic_catalog_seed_2026_05_29";
+const ROCKTOMIC_SOURCE_VERSION = "rocktomic_seed_fallback_2026_05_29";
 const ROCKTOMIC_SOURCE_UPDATED_AT = "2026-05-29T00:00:00.000Z";
 const ROCKTOMIC_LAST_SYNCED_AT = "2026-05-29T00:00:00.000Z";
 
@@ -107,7 +107,7 @@ const ROCKTOMIC_PRODUCTS: RocktomicSupplierProduct[] = [
     supplier: "Rocktomic",
     sku: "ROC949",
     productName: "Premium Magnesium Glycinate Gummies",
-    category: "Mineral Support",
+    category: "Premium Gummies",
     labelSize: null,
     containerSize: "60 gummies",
     productWeight: null,
@@ -117,6 +117,106 @@ const ROCKTOMIC_PRODUCTS: RocktomicSupplierProduct[] = [
     certifications: ["GMP Facility"],
     dietaryAttributes: ["Vegan", "Non-GMO"],
     manufacturingClaims: ["Made in USA"],
+    supplementFacts: { status: "pending_source", value: null },
+    suggestedUse: { status: "pending_source", value: null },
+    warnings: { status: "pending_source", value: null },
+    inventoryStatus: "unknown",
+    discontinuedStatus: "active",
+    pricingStatus: "pending_source",
+    policyStatus: "available",
+    lastSyncedAt: ROCKTOMIC_LAST_SYNCED_AT,
+    sourceVersion: ROCKTOMIC_SOURCE_VERSION,
+    sourceUpdatedAt: ROCKTOMIC_SOURCE_UPDATED_AT,
+  },
+  {
+    supplier: "Rocktomic",
+    sku: "ROC948",
+    productName: "Premium Nitric Oxide Gummies",
+    category: "Premium Gummies",
+    labelSize: null,
+    containerSize: "60 gummies",
+    productWeight: null,
+    coa: { status: "pending_source", url: null },
+    labelTemplate: { status: "configured", url: null },
+    mockup: { status: "pending_source", url: null },
+    certifications: ["GMP Facility"],
+    dietaryAttributes: ["Vegan"],
+    manufacturingClaims: ["Made in USA"],
+    supplementFacts: { status: "pending_source", value: null },
+    suggestedUse: { status: "pending_source", value: null },
+    warnings: { status: "pending_source", value: null },
+    inventoryStatus: "unknown",
+    discontinuedStatus: "active",
+    pricingStatus: "pending_source",
+    policyStatus: "available",
+    lastSyncedAt: ROCKTOMIC_LAST_SYNCED_AT,
+    sourceVersion: ROCKTOMIC_SOURCE_VERSION,
+    sourceUpdatedAt: ROCKTOMIC_SOURCE_UPDATED_AT,
+  },
+  {
+    supplier: "Rocktomic",
+    sku: "ROC920",
+    productName: "Sleep Well Gummies",
+    category: "Premium Gummies",
+    labelSize: null,
+    containerSize: "60 gummies",
+    productWeight: null,
+    coa: { status: "pending_source", url: null },
+    labelTemplate: { status: "configured", url: null },
+    mockup: { status: "pending_source", url: null },
+    certifications: ["GMP Facility"],
+    dietaryAttributes: ["Vegan"],
+    manufacturingClaims: ["No melatonin crash blend"],
+    supplementFacts: { status: "pending_source", value: null },
+    suggestedUse: { status: "pending_source", value: null },
+    warnings: { status: "pending_source", value: null },
+    inventoryStatus: "unknown",
+    discontinuedStatus: "active",
+    pricingStatus: "pending_source",
+    policyStatus: "available",
+    lastSyncedAt: ROCKTOMIC_LAST_SYNCED_AT,
+    sourceVersion: ROCKTOMIC_SOURCE_VERSION,
+    sourceUpdatedAt: ROCKTOMIC_SOURCE_UPDATED_AT,
+  },
+  {
+    supplier: "Rocktomic",
+    sku: "ROC801",
+    productName: "Anxiety Formula",
+    category: "Nootropics",
+    labelSize: null,
+    containerSize: null,
+    productWeight: null,
+    coa: { status: "pending_source", url: null },
+    labelTemplate: { status: "configured", url: null },
+    mockup: { status: "pending_source", url: null },
+    certifications: ["GMP Facility"],
+    dietaryAttributes: [],
+    manufacturingClaims: [],
+    supplementFacts: { status: "pending_source", value: null },
+    suggestedUse: { status: "pending_source", value: null },
+    warnings: { status: "pending_source", value: null },
+    inventoryStatus: "unknown",
+    discontinuedStatus: "active",
+    pricingStatus: "pending_source",
+    policyStatus: "available",
+    lastSyncedAt: ROCKTOMIC_LAST_SYNCED_AT,
+    sourceVersion: ROCKTOMIC_SOURCE_VERSION,
+    sourceUpdatedAt: ROCKTOMIC_SOURCE_UPDATED_AT,
+  },
+  {
+    supplier: "Rocktomic",
+    sku: "ROC507",
+    productName: "Ultra Multivitamin For Men",
+    category: "Men's Health",
+    labelSize: null,
+    containerSize: null,
+    productWeight: null,
+    coa: { status: "pending_source", url: null },
+    labelTemplate: { status: "configured", url: null },
+    mockup: { status: "pending_source", url: null },
+    certifications: ["GMP Facility"],
+    dietaryAttributes: [],
+    manufacturingClaims: [],
     supplementFacts: { status: "pending_source", value: null },
     suggestedUse: { status: "pending_source", value: null },
     warnings: { status: "pending_source", value: null },
@@ -178,61 +278,11 @@ const ROCKTOMIC_PRODUCTS: RocktomicSupplierProduct[] = [
     sourceVersion: ROCKTOMIC_SOURCE_VERSION,
     sourceUpdatedAt: ROCKTOMIC_SOURCE_UPDATED_AT,
   },
-  {
-    supplier: "Rocktomic",
-    sku: "ROC918",
-    productName: "Multivitamin Gummies",
-    category: "Daily Wellness",
-    labelSize: null,
-    containerSize: "60 gummies",
-    productWeight: null,
-    coa: { status: "pending_source", url: null },
-    labelTemplate: { status: "configured", url: null },
-    mockup: { status: "pending_source", url: null },
-    certifications: ["GMP Facility"],
-    dietaryAttributes: ["Gluten-Free"],
-    manufacturingClaims: ["Natural flavor profile"],
-    supplementFacts: { status: "pending_source", value: null },
-    suggestedUse: { status: "pending_source", value: null },
-    warnings: { status: "pending_source", value: null },
-    inventoryStatus: "unknown",
-    discontinuedStatus: "active",
-    pricingStatus: "pending_source",
-    policyStatus: "available",
-    lastSyncedAt: ROCKTOMIC_LAST_SYNCED_AT,
-    sourceVersion: ROCKTOMIC_SOURCE_VERSION,
-    sourceUpdatedAt: ROCKTOMIC_SOURCE_UPDATED_AT,
-  },
-  {
-    supplier: "Rocktomic",
-    sku: "ROC920",
-    productName: "Sleep Well Gummies",
-    category: "Sleep Support",
-    labelSize: null,
-    containerSize: "60 gummies",
-    productWeight: null,
-    coa: { status: "pending_source", url: null },
-    labelTemplate: { status: "configured", url: null },
-    mockup: { status: "pending_source", url: null },
-    certifications: ["GMP Facility"],
-    dietaryAttributes: ["Vegan"],
-    manufacturingClaims: ["No melatonin crash blend"],
-    supplementFacts: { status: "pending_source", value: null },
-    suggestedUse: { status: "pending_source", value: null },
-    warnings: { status: "pending_source", value: null },
-    inventoryStatus: "unknown",
-    discontinuedStatus: "active",
-    pricingStatus: "pending_source",
-    policyStatus: "available",
-    lastSyncedAt: ROCKTOMIC_LAST_SYNCED_AT,
-    sourceVersion: ROCKTOMIC_SOURCE_VERSION,
-    sourceUpdatedAt: ROCKTOMIC_SOURCE_UPDATED_AT,
-  },
 ];
 
-const ROCKTOMIC_PRODUCT_BY_SKU: Record<string, RocktomicSupplierProduct> = Object.fromEntries(
-  ROCKTOMIC_PRODUCTS.map((product) => [product.sku, product])
-);
+function indexProducts(products: RocktomicSupplierProduct[]): Record<string, RocktomicSupplierProduct> {
+  return Object.fromEntries(products.map((product) => [normalizeRocktomicSku(product.sku), product]));
+}
 
 export function normalizeRocktomicSku(value: string): string {
   return value
@@ -241,15 +291,18 @@ export function normalizeRocktomicSku(value: string): string {
     .replace(/[^A-Z0-9]/g, "");
 }
 
-export function listRocktomicSupplierProducts(): RocktomicSupplierProduct[] {
-  return [...ROCKTOMIC_PRODUCTS];
+export function listRocktomicSupplierProducts(products?: RocktomicSupplierProduct[]): RocktomicSupplierProduct[] {
+  return [...(products ?? ROCKTOMIC_PRODUCTS)];
 }
 
-export function getRocktomicCatalogSkus(): string[] {
-  return ROCKTOMIC_PRODUCTS.map((product) => product.sku);
+export function getRocktomicCatalogSkus(products?: RocktomicSupplierProduct[]): string[] {
+  return (products ?? ROCKTOMIC_PRODUCTS).map((product) => product.sku);
 }
 
-export function lookupRocktomicSupplierProductBySku(skuInput: string): RocktomicSkuLookupResult {
+export function lookupRocktomicSupplierProductBySku(
+  skuInput: string,
+  products?: RocktomicSupplierProduct[]
+): RocktomicSkuLookupResult {
   const normalizedSku = normalizeRocktomicSku(skuInput);
   if (!normalizedSku) {
     return {
@@ -262,7 +315,8 @@ export function lookupRocktomicSupplierProductBySku(skuInput: string): Rocktomic
     };
   }
 
-  const product = ROCKTOMIC_PRODUCT_BY_SKU[normalizedSku] ?? null;
+  const productBySku = indexProducts(products ?? ROCKTOMIC_PRODUCTS);
+  const product = productBySku[normalizedSku] ?? null;
   if (!product) {
     return {
       skuInput,
@@ -284,9 +338,9 @@ export function lookupRocktomicSupplierProductBySku(skuInput: string): Rocktomic
   };
 }
 
-export function matchRocktomicBySkus(skus: string[]): RocktomicSkuMatchResult {
+export function matchRocktomicBySkus(skus: string[], products?: RocktomicSupplierProduct[]): RocktomicSkuMatchResult {
   for (const sku of skus) {
-    const result = lookupRocktomicSupplierProductBySku(sku);
+    const result = lookupRocktomicSupplierProductBySku(sku, products);
     if (result.status === "rocktomic") {
       return {
         status: result.status,

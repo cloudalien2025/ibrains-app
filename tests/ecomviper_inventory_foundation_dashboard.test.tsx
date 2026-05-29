@@ -26,22 +26,23 @@ function baseRows(): EcomViperProductInventoryRow[] {
   return [
     {
       id: "1",
-      productEditorHref: "/ecomviper/products/roc817",
+      productEditorHref: "/ecomviper/products/roc948",
       imageUrl: null,
-      productName: "ROC Product",
-      sku: "ROC817",
+      productName: "Premium Nitric Oxide Gummies",
+      sku: "ROC948",
       vendor: "OPA",
       productType: "Supplements",
       shopifyStatus: "active",
       supplierMatch: "rocktomic",
-      supplierMatchedSku: "ROC817",
+      supplierMatchedSku: "ROC948",
       supplierMatchConfidence: 1,
       supplierMatchReason: "exact_supplier_sku_match",
-      supplierProductName: "Sleep Formula",
+      supplierProductName: "Premium Nitric Oxide Gummies",
       aiPdpScore: 82,
       publishedToEcomViper: false,
       lastUpdated: "2026-05-20T00:00:00.000Z",
       inventoryStatus: "in_stock",
+      inventorySource: "rocktomic",
     },
     {
       id: "2",
@@ -60,7 +61,8 @@ function baseRows(): EcomViperProductInventoryRow[] {
       aiPdpScore: 40,
       publishedToEcomViper: false,
       lastUpdated: "2026-05-20T00:00:00.000Z",
-      inventoryStatus: "out_of_stock",
+      inventoryStatus: "unknown",
+      inventorySource: "unknown",
     },
   ];
 }
@@ -85,32 +87,34 @@ describe("ecomviper inventory foundation dashboard", () => {
     delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
   });
 
-  it("renders simplified sidebar IA", async () => {
+  it("renders BrainOS sidebar IA without duplicate horizontal module navigation", async () => {
     await act(async () => {
       root.render(
         <EcomViperDashboardClient
           shopifyConnected={true}
           storeDomain="example.myshopify.com"
           shopifyStatusLabel="Connected"
+          openAiStatusLabel="Connected"
           lastImportAt={null}
           productCount={2}
           sourceWarnings={[]}
           rows={baseRows()}
+          rocktomicProductCount={140}
+          rocktomicStatusLabel="Live source parsed"
+          rocktomicLastCheckedAt="2026-05-29T21:00:00.000Z"
         />
       );
     });
 
     const text = container.textContent || "";
-    expect(text).toContain("Overview");
+    expect(text).toContain("EcomViper");
     expect(text).toContain("Products");
-    expect(text).toContain("Product Editor / PDP Optimizer");
     expect(text).toContain("Image Studio");
     expect(text).toContain("Dropshipping");
-    expect(text).toContain("Rocktomic");
     expect(text).toContain("Agentic Visibility");
     expect(text).toContain("Settings");
-    const rocktomicLink = container.querySelector('a[href="/ecomviper/dropshipping/rocktomic"]');
-    expect(rocktomicLink).toBeTruthy();
+    expect(text).not.toContain("Overview");
+    expect(text).toContain("iBrains BrainOS Dashboard");
   });
 
   it("filters products by supplier match and supports row navigation", async () => {
@@ -120,10 +124,14 @@ describe("ecomviper inventory foundation dashboard", () => {
           shopifyConnected={true}
           storeDomain="example.myshopify.com"
           shopifyStatusLabel="Connected"
+          openAiStatusLabel="Connected"
           lastImportAt={null}
           productCount={2}
           sourceWarnings={[]}
           rows={baseRows()}
+          rocktomicProductCount={140}
+          rocktomicStatusLabel="Live source parsed"
+          rocktomicLastCheckedAt="2026-05-29T21:00:00.000Z"
         />
       );
     });
@@ -140,13 +148,13 @@ describe("ecomviper inventory foundation dashboard", () => {
 
     rows = container.querySelectorAll('[data-testid="ecomviper-product-row"]');
     expect(rows.length).toBe(1);
-    expect(container.textContent).toContain("ROC Product");
+    expect(container.textContent).toContain("Premium Nitric Oxide Gummies");
     expect(container.textContent).not.toContain("Generic Product");
 
     await act(async () => {
       (rows[0] as HTMLTableRowElement).click();
     });
 
-    expect(pushMock).toHaveBeenCalledWith("/ecomviper/products/roc817");
+    expect(pushMock).toHaveBeenCalledWith("/ecomviper/products/roc948");
   });
 });

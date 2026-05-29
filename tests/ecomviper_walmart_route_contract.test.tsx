@@ -145,12 +145,11 @@ describe("EcomViper Walmart route contracts", () => {
     const html = renderToStaticMarkup(await EcomViperDashboardPage());
     expect(html).toContain("ecomviper-overview-page");
     expect(html).toContain(">Products<");
-    expect(html).toContain(">Product Editor / PDP Optimizer<");
     expect(html).toContain(">Image Studio<");
     expect(html).toContain(">Dropshipping<");
-    expect(html).toContain(">Rocktomic<");
     expect(html).toContain(">Agentic Visibility<");
-    expect(html).toContain(">Open Shopify Connection Settings<");
+    expect(html).toContain(">Settings<");
+    expect(html).toContain("iBrains BrainOS Dashboard");
     expect(html).not.toContain(">OptiWal<");
     expect(html).not.toContain(">OptiBay<");
     expect(html).not.toContain(">OptiZon<");

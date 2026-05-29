@@ -1,0 +1,440 @@
+import "server-only";
+
+import {
+  getRocktomicSourceConfigSnapshot,
+  type RocktomicSourceReference,
+} from "@/lib/ecomviper/dropshipping/rocktomic-source-config";
+import {
+  listRocktomicSupplierProducts,
+  normalizeRocktomicSku,
+  type RocktomicInventoryStatus,
+  type RocktomicSupplierProduct,
+} from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
+
+const ROCKTOMIC_INGESTION_TTL_MS = 10 * 60 * 1000;
+const FETCH_TIMEOUT_MS = 12_000;
+
+interface CsvTable {
+  rows: string[][];
+}
+
+interface CatalogRow {
+  sku: string;
+  productName: string;
+  category: string;
+  labelSize: string | null;
+  containerSize: string | null;
+  productWeight: string | null;
+}
+
+interface InventoryRow {
+  sku: string;
+  inventoryStatus: RocktomicInventoryStatus;
+}
+
+export interface RocktomicSourceIngestionDiagnostic {
+  id: RocktomicSourceReference["id"];
+  label: string;
+  configured: boolean;
+  fetchable: boolean;
+  parsed: boolean;
+  recordCount: number;
+  lastCheckedAt: string;
+  lastError: string | null;
+  sourceUrl: string | null;
+  fetchUrl: string | null;
+}
+
+export interface RocktomicSourceIngestionSnapshot {
+  supplier: "Rocktomic";
+  products: RocktomicSupplierProduct[];
+  productCount: number;
+  catalogSkuCount: number;
+  inventorySkuCount: number;
+  inventoryAvailable: boolean;
+  usedSeedFallback: boolean;
+  sourceDiagnostics: RocktomicSourceIngestionDiagnostic[];
+  lastCheckedAt: string;
+}
+
+let cache: { expiresAt: number; snapshot: RocktomicSourceIngestionSnapshot } | null = null;
+
+function normalizeHeader(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeCell(input: string): string {
+  return input.replace(/\s+/g, " ").trim();
+}
+
+function redactError(error: unknown): string {
+  const text = (error instanceof Error ? error.message : String(error || "Unknown error"))
+    .replace(/(token|secret|key|password)=([^&\s]+)/gi, "$1=[redacted]")
+    .trim();
+  return text.slice(0, 220) || "Unknown error";
+}
+
+function mapInventoryStatus(value: string): RocktomicInventoryStatus {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.includes("low stock")) return "low_stock";
+  if (normalized.includes("out of stock")) return "out_of_stock";
+  if (normalized.includes("in stock")) return "in_stock";
+  return "unknown";
+}
+
+function toGoogleSheetCsvUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/\/spreadsheets\/d\/([^/]+)/i);
+    if (!match?.[1]) return null;
+    const gid = parsed.searchParams.get("gid") || "0";
+    return `https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq?tqx=out:csv&gid=${encodeURIComponent(gid)}`;
+  } catch {
+    return null;
+  }
+}
+
+function looksLikeGoogleSheet(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.includes("docs.google.com") && parsed.pathname.includes("/spreadsheets/");
+  } catch {
+    return false;
+  }
+}
+
+function parseCsv(text: string): CsvTable {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        field += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && char === ",") {
+      row.push(field);
+      field = "";
+      continue;
+    }
+
+    if (!inQuotes && (char === "\n" || char === "\r")) {
+      if (char === "\r" && next === "\n") {
+        i += 1;
+      }
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      continue;
+    }
+
+    field += char;
+  }
+
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return { rows };
+}
+
+function findHeaderIndex(rows: string[][], requiredHeaders: string[]): number {
+  for (let index = 0; index < rows.length; index += 1) {
+    const normalizedCells = rows[index].map((cell) => normalizeHeader(cell));
+    const allPresent = requiredHeaders.every((required) =>
+      normalizedCells.some((cell) => cell.includes(required))
+    );
+    if (allPresent) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function findColumnIndex(headers: string[], matcher: (header: string) => boolean): number {
+  const index = headers.findIndex((header) => matcher(normalizeHeader(header)));
+  return index;
+}
+
+function parseCatalogCsv(text: string): CatalogRow[] {
+  const { rows } = parseCsv(text);
+  const headerIndex = findHeaderIndex(rows, ["sku", "category", "product"]);
+  if (headerIndex < 0) return [];
+
+  const headers = rows[headerIndex] ?? [];
+  const skuIndex = findColumnIndex(headers, (header) => header.includes("sku"));
+  const categoryIndex = findColumnIndex(headers, (header) => header.includes("category"));
+  const productNameIndex = findColumnIndex(headers, (header) => header.includes("productname") || header.includes("product"));
+  const labelSizeIndex = findColumnIndex(headers, (header) => header.includes("labelsize"));
+  const containerSizeIndex = findColumnIndex(headers, (header) => header.includes("containersize"));
+  const productWeightIndex = findColumnIndex(headers, (header) => header.includes("productweight"));
+
+  if (skuIndex < 0 || productNameIndex < 0 || categoryIndex < 0) return [];
+
+  const bySku = new Map<string, CatalogRow>();
+  for (let index = headerIndex + 1; index < rows.length; index += 1) {
+    const row = rows[index] ?? [];
+    const sku = normalizeRocktomicSku(row[skuIndex] || "");
+    if (!sku || !/^ROC[0-9A-Z]+$/.test(sku)) continue;
+
+    const productName = normalizeCell(row[productNameIndex] || "");
+    const category = normalizeCell(row[categoryIndex] || "") || "Uncategorized";
+    if (!productName) continue;
+
+    bySku.set(sku, {
+      sku,
+      productName,
+      category,
+      labelSize: labelSizeIndex >= 0 ? normalizeCell(row[labelSizeIndex] || "") || null : null,
+      containerSize: containerSizeIndex >= 0 ? normalizeCell(row[containerSizeIndex] || "") || null : null,
+      productWeight: productWeightIndex >= 0 ? normalizeCell(row[productWeightIndex] || "") || null : null,
+    });
+  }
+
+  return Array.from(bySku.values());
+}
+
+function parseInventoryCsv(text: string): InventoryRow[] {
+  const { rows } = parseCsv(text);
+  const headerIndex = findHeaderIndex(rows, ["productname", "sku", "inventorystatus"]);
+  if (headerIndex < 0) return [];
+
+  const headers = rows[headerIndex] ?? [];
+  const skuIndex = findColumnIndex(headers, (header) => header.includes("sku"));
+  const inventoryIndex = findColumnIndex(headers, (header) => header.includes("inventorystatus"));
+  if (skuIndex < 0 || inventoryIndex < 0) return [];
+
+  const bySku = new Map<string, InventoryRow>();
+  for (let index = headerIndex + 1; index < rows.length; index += 1) {
+    const row = rows[index] ?? [];
+    const sku = normalizeRocktomicSku(row[skuIndex] || "");
+    if (!sku || !/^ROC[0-9A-Z]+$/.test(sku)) continue;
+
+    const inventoryStatus = mapInventoryStatus(row[inventoryIndex] || "");
+    bySku.set(sku, { sku, inventoryStatus });
+  }
+
+  return Array.from(bySku.values());
+}
+
+function getReferenceSourceVersion(reference: RocktomicSourceReference): string {
+  return reference.sourceVersion || "rocktomic_source_2026_05_29";
+}
+
+function buildProduct(
+  catalogRow: CatalogRow,
+  inventoryBySku: Map<string, InventoryRow>,
+  sourceVersion: string,
+  sourceUpdatedAt: string,
+  lastSyncedAt: string
+): RocktomicSupplierProduct {
+  return {
+    supplier: "Rocktomic",
+    sku: catalogRow.sku,
+    productName: catalogRow.productName,
+    category: catalogRow.category,
+    labelSize: catalogRow.labelSize,
+    containerSize: catalogRow.containerSize,
+    productWeight: catalogRow.productWeight,
+    coa: { status: "pending_source", url: null },
+    labelTemplate: { status: "configured", url: null },
+    mockup: { status: "pending_source", url: null },
+    certifications: ["GMP Facility"],
+    dietaryAttributes: [],
+    manufacturingClaims: [],
+    supplementFacts: { status: "pending_source", value: null },
+    suggestedUse: { status: "pending_source", value: null },
+    warnings: { status: "pending_source", value: null },
+    inventoryStatus: inventoryBySku.get(catalogRow.sku)?.inventoryStatus ?? "unknown",
+    discontinuedStatus: "unknown",
+    pricingStatus: "pending_source",
+    policyStatus: "available",
+    lastSyncedAt,
+    sourceVersion,
+    sourceUpdatedAt,
+  };
+}
+
+async function fetchWithTimeout(url: string): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "user-agent": "iBrains-Rocktomic-Ingestion/1.0",
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return await response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function checkUrlFetchable(url: string): Promise<void> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      method: "HEAD",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function getRocktomicSourceIngestionSnapshot(
+  options?: { forceRefresh?: boolean }
+): Promise<RocktomicSourceIngestionSnapshot> {
+  const now = Date.now();
+  if (!options?.forceRefresh && cache && cache.expiresAt > now) {
+    return cache.snapshot;
+  }
+
+  const config = getRocktomicSourceConfigSnapshot();
+  const lastCheckedAt = new Date(now).toISOString();
+  const sourceDiagnostics: RocktomicSourceIngestionDiagnostic[] = [];
+
+  const catalogRowsBySku = new Map<string, CatalogRow>();
+  const inventoryBySku = new Map<string, InventoryRow>();
+
+  for (const reference of config.references) {
+    const diagnostic: RocktomicSourceIngestionDiagnostic = {
+      id: reference.id,
+      label: reference.label,
+      configured: reference.status === "configured" && !!reference.sourceUrl,
+      fetchable: false,
+      parsed: false,
+      recordCount: 0,
+      lastCheckedAt,
+      lastError: null,
+      sourceUrl: reference.sourceUrl,
+      fetchUrl: null,
+    };
+
+    if (!diagnostic.configured || !reference.sourceUrl) {
+      sourceDiagnostics.push(diagnostic);
+      continue;
+    }
+
+    try {
+      if (looksLikeGoogleSheet(reference.sourceUrl)) {
+        const csvUrl = toGoogleSheetCsvUrl(reference.sourceUrl);
+        if (!csvUrl) {
+          throw new Error("Could not derive Google Sheets CSV export URL.");
+        }
+
+        diagnostic.fetchUrl = csvUrl;
+        const csvBody = await fetchWithTimeout(csvUrl);
+        diagnostic.fetchable = true;
+
+        if (reference.id === "inventory_report") {
+          const rows = parseInventoryCsv(csvBody);
+          diagnostic.parsed = rows.length > 0;
+          diagnostic.recordCount = rows.length;
+          if (!rows.length) {
+            diagnostic.lastError = "No inventory rows parsed from source CSV.";
+          }
+          for (const row of rows) {
+            inventoryBySku.set(row.sku, row);
+          }
+        } else if (reference.id === "msrp_profit_margins_report" || reference.id === "plds_catalog") {
+          const rows = parseCatalogCsv(csvBody);
+          diagnostic.parsed = rows.length > 0;
+          diagnostic.recordCount = rows.length;
+          if (!rows.length) {
+            diagnostic.lastError = "No catalog rows parsed from source CSV.";
+          }
+          for (const row of rows) {
+            catalogRowsBySku.set(row.sku, row);
+          }
+        } else {
+          diagnostic.parsed = true;
+          diagnostic.recordCount = csvBody.trim().length > 0 ? 1 : 0;
+        }
+      } else {
+        await checkUrlFetchable(reference.sourceUrl);
+        diagnostic.fetchable = true;
+        diagnostic.parsed = false;
+        diagnostic.recordCount = 0;
+      }
+    } catch (error) {
+      diagnostic.lastError = redactError(error);
+    }
+
+    sourceDiagnostics.push(diagnostic);
+  }
+
+  const inventoryAvailable = sourceDiagnostics.some((source) => source.id === "inventory_report" && source.parsed);
+  const sourceUpdatedAt = config.lastSyncedAt || lastCheckedAt;
+  const sourceVersion = config.references
+    .find((reference) => reference.id === "plds_catalog" || reference.id === "msrp_profit_margins_report")
+    ?.sourceVersion || "rocktomic_catalog_runtime";
+
+  const catalogRows = Array.from(catalogRowsBySku.values());
+  const products = catalogRows.length
+    ? catalogRows.map((row) => buildProduct(row, inventoryBySku, sourceVersion, sourceUpdatedAt, lastCheckedAt))
+    : listRocktomicSupplierProducts();
+
+  const snapshot: RocktomicSourceIngestionSnapshot = {
+    supplier: "Rocktomic",
+    products,
+    productCount: products.length,
+    catalogSkuCount: catalogRows.length,
+    inventorySkuCount: inventoryBySku.size,
+    inventoryAvailable,
+    usedSeedFallback: catalogRows.length === 0,
+    sourceDiagnostics: sourceDiagnostics.map((diagnostic) => {
+      if (diagnostic.lastError) {
+        return diagnostic;
+      }
+      const reference = config.references.find((entry) => entry.id === diagnostic.id);
+      if (!reference) {
+        return diagnostic;
+      }
+      return {
+        ...diagnostic,
+        lastError: diagnostic.parsed ? null : reference.status === "pending" ? "Source pending." : null,
+        recordCount: diagnostic.recordCount,
+        fetchUrl: diagnostic.fetchUrl,
+        sourceUrl: reference.sourceUrl,
+        lastCheckedAt,
+        configured: reference.status === "configured" && !!reference.sourceUrl,
+      };
+    }),
+    lastCheckedAt,
+  };
+
+  cache = {
+    snapshot,
+    expiresAt: now + ROCKTOMIC_INGESTION_TTL_MS,
+  };
+
+  return snapshot;
+}
+
+export function clearRocktomicSourceIngestionCache(): void {
+  cache = null;
+}

@@ -4,6 +4,7 @@ import { buildShopifyAgenticDemoWorkspaceState } from "@/lib/ecomviper/shopify/s
 import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopify-connection";
 import { hydrateShopifyLiveWorkspaceForUser } from "@/lib/ecomviper/shopify/shopify-live-hydrator";
 import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify/openai-connection";
+import { getRocktomicSourceIngestionSnapshot } from "@/lib/ecomviper/dropshipping/rocktomic-source-ingestion";
 import { matchRocktomicBySkus } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
 import {
   buildCurrentShopifyListingDocket,
@@ -299,7 +300,8 @@ export async function buildShopifyProductEditorStateForUser(
   }
 
   const skus = currentShopifyListing.variants.map((entry) => entry.sku.trim()).filter(Boolean);
-  const supplierMatch = matchRocktomicBySkus(skus);
+  const rocktomicSnapshot = await getRocktomicSourceIngestionSnapshot().catch(() => null);
+  const supplierMatch = matchRocktomicBySkus(skus, rocktomicSnapshot?.products);
 
   return {
     productReference: reference,
