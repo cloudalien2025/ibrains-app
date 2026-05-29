@@ -273,6 +273,36 @@ Last updated: 2026-05-28 (UTC)
   - Local: pending local branch cleanup during final sprint closure.
 - Recommended next sprint: resolve existing unrelated repo-wide baseline test/lint failures or continue `Walmart Sprint 008 - Product Editor score diagnostics alignment`.
 
+## Active Sprint Log: Signed-In /brains 500 Reverse-Proxy Rewrite Fix
+
+- Sprint: `sprint-020-fix-brains-signed-in-render-500` (in progress).
+- Incident context:
+  - Production signed-out auth flows were healthy after Sprint 019, but signed-in `GET /brains` still returned `500 Internal Server Error`.
+- Root cause:
+  - Production server logs showed `Failed to proxy https://localhost:3001/brains ... EPROTO ... wrong version number` on signed-in shell requests.
+  - The throw path is Next.js proxy handling of an upstream middleware rewrite target (`next/dist/server/lib/router-utils/proxy-request.js`).
+  - Signed-in protected shell traffic was still reaching Clerk middleware handling, which allowed self-rewrite/proxy behavior on reverse-proxied production origin paths.
+  - Prior assumption was incomplete: removing `/__clerk` matcher fixed stale proxy-mode cascades, but signed-in shell routes could still fail through a separate middleware rewrite path.
+- Fix summary:
+  - `proxy.ts` now short-circuits protected non-API shell routes:
+    - no `__session` cookie: redirect to `/sign-in` with `redirect_url`.
+    - with `__session` cookie: `NextResponse.next()` pass-through.
+  - This bypasses Clerk middleware proxy handling for signed-in shell page requests while preserving fail-closed auth in shell layout.
+  - Added regression coverage to assert signed-in `/brains` middleware pass-through without Clerk middleware invocation.
+- Local validation:
+  - Passed targeted suites:
+    - `tests/proxy_apps_auth_protection.test.ts`
+    - `tests/proxy_clerk_env_guard_contract.test.ts`
+    - `tests/clerk_auth_route_runtime.test.tsx`
+    - `tests/shell_layout_auth_fail_closed.test.tsx`
+    - `tests/brains_api_auth_contract.test.ts`
+    - `tests/brains_index_contract.test.ts`
+    - `tests/brains_table_hydration_resilience.test.tsx`
+  - `bash scripts/check_route_signatures.sh` passed.
+  - `npm run build` passed.
+  - `git diff --check` passed.
+  - `npm test` remains red on unrelated baseline failure families outside this sprint scope (existing failures in Walmart/Studio/SiteForge/frontdoor suites).
+
 ## Current Operating Reminder
 
 - Do not begin a new sprint unless local repository is clean on `main`.

@@ -126,6 +126,10 @@ function isBrainsApiRoute(req: NextRequest): boolean {
   return req.nextUrl.pathname.startsWith("/api/brains");
 }
 
+function isProtectedShellRoute(req: NextRequest): boolean {
+  return isProtectedRoute(req) && !req.nextUrl.pathname.startsWith("/api/");
+}
+
 function isTrustedIngestServiceRequest(req: NextRequest): boolean {
   if (req.method !== "POST") return false;
   if (!trustedIngestPathRegex.test(req.nextUrl.pathname)) return false;
@@ -210,6 +214,14 @@ export default e2eMockGraph
       }
       if (isBrainsApiRoute(req)) return NextResponse.next();
       if (isPublicClerkPassthroughRoute(req)) return NextResponse.next();
+      if (isProtectedShellRoute(req)) {
+        if (!hasClerkSessionCookie(req)) {
+          return buildSignInRedirect(req);
+        }
+        // Prevent Clerk middleware from issuing protected-route self-rewrites
+        // on signed-in shell traffic; shell layout enforces fail-closed auth.
+        return NextResponse.next();
+      }
       if (isTrustedIngestServiceRequest(req)) return NextResponse.next();
       if (isTrustedRetrieveServiceRequest(req)) return NextResponse.next();
       if (isTrustedRunStatusServiceRequest(req)) return NextResponse.next();
