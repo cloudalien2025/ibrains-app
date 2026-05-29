@@ -35,6 +35,12 @@ These planning roots are active in the current repository structure.
 - Hub is not modeled as a separate app concept in this sprint IA.
 - Rocktomic is the first dropshipping supplier intelligence source (SKU-match placeholder contract).
 
+## Sprint 007 Foundation Direction
+
+- Rocktomic placeholder contract has been advanced to a supplier intelligence engine foundation.
+- `/ecomviper` PDP/editor now consumes Rocktomic SKU-match confidence/reason and supplier fact/status fields.
+- Dropshipping -> Rocktomic route is now a dedicated platform-intelligence shell (source status + SKU lookup).
+
 ## Planning Navigation
 
 For family-level direction, start with:

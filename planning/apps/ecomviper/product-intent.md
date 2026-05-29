@@ -39,6 +39,13 @@ Channel behavior and requirements are defined in channel planning docs and imple
 - Hub is not treated as a separate IA concept in this sprint.
 - Buy Now Links are part of PDP editor scope (modeled/placeholder).
 
+## Sprint 007 UX Direction
+
+- Rocktomic supplier intelligence moves from placeholder to typed SKU-backed foundation.
+- Supplier match behavior is deterministic and exact-SKU-first with confidence + reason surfaced in UI.
+- Merchants continue to use Shopify as product source-of-truth and do not manually upload Rocktomic files.
+- Dropshipping -> Rocktomic is a platform/admin intelligence surface for source status, lookup, and future sync controls.
+
 ## Future Public Surface Direction (Preserved)
 
 - EcomViper.com remains the future public optimized PDP surface.

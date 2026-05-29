@@ -11,6 +11,7 @@ Last updated: 2026-05-29 (UTC)
 - Sprint 004: Planned (typed warning/telemetry code contract).
 - Sprint 005: Completed (Shopify guarded publish execution scaffold).
 - Shopify Sprint 006: Completed and merged (`sprint-006-shopify-inventory-foundation`, Shopify-first `/ecomviper` inventory/listings foundation + PDP optimizer shell, production deployed).
+- Shopify Sprint 007: In progress (`sprint-007-rocktomic-supplier-intelligence`, Rocktomic supplier intelligence engine foundation + Dropshipping/Rocktomic route shell).
 - Walmart planning sprint: Completed and merged (`walmart-product-intent` docs baseline).
 - Walmart Sprint 001: Completed and merged (`walmart-command-center-foundation` docs baseline).
 - Walmart Sprint 003: Completed and merged (`sprint-003-walmart-ai-visibility`, docs/planning AI visibility workflow foundation).
@@ -28,7 +29,30 @@ Last updated: 2026-05-29 (UTC)
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
-- Current recommended sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
+- Current recommended sprint: `Shopify Sprint 007 - Rocktomic supplier intelligence engine foundation` (complete merge + deployment closure flow).
+
+## Active Sprint Log: Shopify Sprint 007 Rocktomic Supplier Intelligence
+
+- Sprint: `sprint-007-rocktomic-supplier-intelligence` (in progress).
+- Recovery context:
+  - prior workspace disconnected mid-sprint on active branch.
+  - recovered on `2026-05-29` by verifying branch, status, and diffs across Sprint 007 files.
+  - partial implementation remained intact for Rocktomic source config, supplier intelligence model/lookup, dashboard integration, PDP supplier panel, and route shell.
+- Validation snapshot:
+  - focused suites passed:
+    - `npm test -- tests/ecomviper_rocktomic_supplier_intelligence.test.ts`
+    - `npm test -- tests/ecomviper_rocktomic_route_shell.test.ts`
+    - `npm test -- tests/ecomviper_rocktomic_source_config.test.ts`
+    - `npm test -- tests/ecomviper_inventory_foundation_dashboard.test.tsx`
+    - `npm test -- tests/ecomviper_product_editor_route_contract.test.ts`
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+  - `npm test`: failed on existing unrelated baseline suites outside Sprint 007 scope (no new Sprint 007-targeted failures).
+- Remaining closure steps:
+  - finalize docs/closure checklist and ensure sprint pack completeness.
+  - open MR, verify green pipeline, merge, delete source branch, and reset local `main` clean.
+  - deploy merged `main` to production and verify deployed SHA.
+  - run service/log/browser verification and update closure metadata block.
 
 ## Sprint Completion Log: Shopify Sprint 006 Production Closure
 

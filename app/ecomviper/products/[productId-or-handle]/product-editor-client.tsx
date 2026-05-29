@@ -64,9 +64,22 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
             <h2 className="text-base font-semibold text-[#0F172A]">Supplier Intelligence</h2>
             {supplierMatch.status === "rocktomic" ? (
               <>
-                <p className="mt-2 text-sm text-[#475569]">Matched supplier: Rocktomic</p>
-                <p className="text-sm text-[#475569]">Matched SKU: {supplierMatch.matchedSku}</p>
-                <p className="text-sm text-[#475569]">Supplier product: {supplierMatch.intelligence?.productName || "-"}</p>
+                <p className="mt-2 text-sm text-[#475569]">Supplier: {supplierMatch.product?.supplier || "Rocktomic"}</p>
+                <p className="text-sm text-[#475569]">SKU: {supplierMatch.matchedSku}</p>
+                <p className="text-sm text-[#475569]">Match confidence: {Math.round(supplierMatch.matchConfidence * 100)}%</p>
+                <p className="text-sm text-[#475569]">Match reason: {supplierMatch.matchReason}</p>
+                <p className="text-sm text-[#475569]">Product Name: {supplierMatch.product?.productName || "-"}</p>
+                <p className="text-sm text-[#475569]">Category: {supplierMatch.product?.category || "-"}</p>
+                <p className="text-sm text-[#475569]">Certifications: {(supplierMatch.product?.certifications || []).join(", ") || "-"}</p>
+                <p className="text-sm text-[#475569]">Dietary attributes: {(supplierMatch.product?.dietaryAttributes || []).join(", ") || "-"}</p>
+                <p className="text-sm text-[#475569]">Manufacturing claims: {(supplierMatch.product?.manufacturingClaims || []).join(", ") || "-"}</p>
+                <p className="text-sm text-[#475569]">COA status: {supplierMatch.product?.coa.status || "-"}</p>
+                <p className="text-sm text-[#475569]">Label template status: {supplierMatch.product?.labelTemplate.status || "-"}</p>
+                <p className="text-sm text-[#475569]">Mockup status: {supplierMatch.product?.mockup.status || "-"}</p>
+                <p className="text-sm text-[#475569]">Inventory status: {supplierMatch.product?.inventoryStatus || "-"}</p>
+                <p className="text-sm text-[#475569]">Pricing status: {supplierMatch.product?.pricingStatus || "-"}</p>
+                <p className="text-sm text-[#475569]">Policy status: {supplierMatch.product?.policyStatus || "-"}</p>
+                <p className="text-sm text-[#475569]">Last sync/source status: {supplierMatch.product?.lastSyncedAt ? asIso(supplierMatch.product.lastSyncedAt) : "-"}</p>
               </>
             ) : (
               <p className="mt-2 text-sm text-[#475569]">No Rocktomic SKU match found. Additional supplier intelligence sources are pending.</p>

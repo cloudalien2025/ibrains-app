@@ -35,6 +35,9 @@ function baseRows(): EcomViperProductInventoryRow[] {
       shopifyStatus: "active",
       supplierMatch: "rocktomic",
       supplierMatchedSku: "ROC817",
+      supplierMatchConfidence: 1,
+      supplierMatchReason: "exact_supplier_sku_match",
+      supplierProductName: "Sleep Formula",
       aiPdpScore: 82,
       publishedToEcomViper: false,
       lastUpdated: "2026-05-20T00:00:00.000Z",
@@ -51,6 +54,9 @@ function baseRows(): EcomViperProductInventoryRow[] {
       shopifyStatus: "draft",
       supplierMatch: "unmatched",
       supplierMatchedSku: null,
+      supplierMatchConfidence: 0,
+      supplierMatchReason: "no_supplier_sku_match",
+      supplierProductName: null,
       aiPdpScore: 40,
       publishedToEcomViper: false,
       lastUpdated: "2026-05-20T00:00:00.000Z",
@@ -103,6 +109,8 @@ describe("ecomviper inventory foundation dashboard", () => {
     expect(text).toContain("Rocktomic");
     expect(text).toContain("Agentic Visibility");
     expect(text).toContain("Settings");
+    const rocktomicLink = container.querySelector('a[href="/ecomviper/dropshipping/rocktomic"]');
+    expect(rocktomicLink).toBeTruthy();
   });
 
   it("filters products by supplier match and supports row navigation", async () => {

@@ -29,6 +29,11 @@ The Shopify app under `apps/ecomviper/shopify` provides an agentic workspace bac
 - Sprint 004: Completed product editor review/dry-run publish workflow foundations.
 - Sprint 005: Completed guarded publish route/service foundations with allowlist, confirmation token, idempotency, and stale guards.
 
-## Planned Next Sprint
+## Current Sprint
 
-- Sprint 006: Shopify inventory foundation in `/ecomviper` with simple listings table + PDP shell routing + Rocktomic SKU-match placeholder model.
+- Sprint 007: Rocktomic supplier intelligence engine foundation in `/ecomviper`:
+  - typed Rocktomic source configuration snapshot (platform-managed references)
+  - seeded supplier-product model with source traceability
+  - deterministic SKU normalization + exact-match lookup with confidence/reason
+  - PDP supplier-intelligence panel upgraded from placeholder to real SKU-backed facts
+  - Dropshipping -> Rocktomic route shell for source status + SKU lookup
