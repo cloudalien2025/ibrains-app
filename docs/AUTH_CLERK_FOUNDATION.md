@@ -47,6 +47,7 @@ Set a Clerk secret key for server-side auth and middleware protection:
 - Public frontdoor/auth routes (`/`, `/sign-in`, `/sign-up`) bypass Clerk frontend proxy middleware to avoid signed-out localhost rewrite failures.
 - `app.ibrains.ai` uses the Clerk production instance as an allowed subdomain of the primary `ibrains.ai` domain. The app must use direct Clerk frontend/auth requests for that allowed-subdomain model.
 - Do not enable Clerk frontend API proxying (`frontendApiProxy`) or pass `ClerkProvider proxyUrl` for `app.ibrains.ai` unless a future architecture decision explicitly changes the auth topology. Half-proxying Clerk requests can cause host attribution failures such as `host_invalid` and can destabilize signed-in `/brains` refreshes.
+- Middleware matcher contract: `/__clerk/**` must be excluded from proxy middleware matching (including the broad non-static matcher), so stale browser proxy-mode requests return clean `404` from Next.js.
 - Development/test may use a local placeholder publishable key to keep local rendering stable when Clerk env is intentionally absent.
 - Production must provide a real publishable key and `CLERK_SECRET_KEY`.
 - If production env is misconfigured, the app now fails explicitly with a diagnosable Clerk contract error (instead of silently behaving like a normal logout).
@@ -57,3 +58,17 @@ Set a Clerk secret key for server-side auth and middleware protection:
 - `/brains` server render must not call protected `/api/brains/*` endpoints.
 - Optional brain stats may hydrate client-side after the cards render and must fail safely.
 - Signed-out protected API routes such as `/api/brains` and `/api/brains/:id/stats` must return clean non-500 auth responses.
+
+## Production smoke checklist
+
+- `/__clerk/v1/client` returns `404` (not `500`).
+- `/sign-in` returns `200` and renders Clerk UI.
+- `/sign-up` returns `200` and renders Clerk UI.
+- signed-out `/brains` redirects (`307`) to `/sign-in` with `redirect_url` preserved.
+- signed-out `/api/brains` and `/api/brains/ecomviper/stats` return `401` (not `500`).
+- deprecated routes remain `404`: `/apps`, `/apps/studio`, `/studio`, `/siteforge`, `/uapforge`.
+
+If users previously hit stale proxy-mode/session errors, clear cookies/session once for:
+- `app.ibrains.ai`
+- `ibrains.ai`
+- `clerk.ibrains.ai`

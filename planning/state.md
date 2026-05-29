@@ -226,6 +226,19 @@ Last updated: 2026-05-28 (UTC)
   - Authenticated production browser verification still requires a real signed-in user session; no test credentials were invented or exposed.
 - Recommended next sprint: resolve existing unrelated repo-wide test/lint baseline failures or continue `Walmart Sprint 008 - Product Editor score diagnostics alignment`.
 
+## Active Sprint Log: Clerk /__clerk Matcher Exclusion Follow-up
+
+- Sprint: `sprint-019-exclude-clerk-matcher` (in progress).
+- Incident context:
+  - After Sprint 018 deploy, production `GET /__clerk/v1/client` still returned `500` with `x-middleware-rewrite: https://localhost:3001/__clerk/v1/client`.
+- Corrected root cause:
+  - `proxy.ts` removed `__clerk` from `/(api|trpc|__clerk)(.*)`, but the broad non-static matcher still matched `/__clerk/**`.
+  - Because middleware still ran for `/__clerk/**`, stale Clerk proxy-mode traffic could still enter Clerk middleware rewrite paths in production.
+- Fix scope:
+  - Exclude `__clerk` from the broad matcher as well, so `/__clerk/**` bypasses middleware entirely and resolves as clean `404`.
+  - Keep Clerk topology unchanged: allowed-subdomain mode (`ibrains.ai` + `app.ibrains.ai`), no `frontendApiProxy`, no `proxyUrl`.
+  - Preserve `/brains` auth redirects, signed-out protected API `401` responses, and deprecated-route `404` policy.
+
 ## Current Operating Reminder
 
 - Do not begin a new sprint unless local repository is clean on `main`.
