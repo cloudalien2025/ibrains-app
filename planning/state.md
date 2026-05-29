@@ -32,14 +32,24 @@ Last updated: 2026-05-29 (UTC)
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
-- Shopify Sprint 009: In progress (`sprint-009-source-grounded-product-editor`, source-grounded product intelligence + product editor redesign; local implementation and validation complete, delivery steps pending MR/pipeline/deploy closure).
-- Current recommended sprint: `Shopify Sprint 009 delivery closure` (MR/pipeline/merge/deploy/browser verification and state finalization).
+- Shopify Sprint 009: Completed and merged (`sprint-009-source-grounded-product-editor`, source-grounded product intelligence + Product Editor redesign, production deployed).
+- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Sprint 009 closure).
 
-## Sprint Execution Log: Shopify Sprint 009 (Work In Progress)
+## Sprint Completion Log: Shopify Sprint 009 Production Closure
 
-- Sprint/lane: `Shopify Sprint 009` (`sprint-009-source-grounded-product-editor`) - in progress.
+- Sprint/lane: `Shopify Sprint 009` (`sprint-009-source-grounded-product-editor`) - closed.
 - Branch: `sprint-009-source-grounded-product-editor`.
-- Scope delivered locally:
+- MR: `!233` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/233`).
+- MR pipeline: `2562951240` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562951240`).
+- Branch pipeline: `2562950962` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562950962`).
+- Main/deploy pipeline: `2562957259` (status: `success`, includes `build_release` + `deploy_production`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562957259`).
+- Merge commit SHA: `0e7edb00efb9d1e6420dc728807642f587ade690`.
+- Production deployed commit SHA: `0e7edb00efb9d1e6420dc728807642f587ade690`.
+- Root-cause and correction summary:
+  - Product editor remained a long-scroll Sprint 008 foundation with limited source grounding and weak inventory/pricing/COA modeling.
+  - Supplier matching and generation flows were Rocktomic-coupled and allowed supplier-facing wording to bleed into generated shopper-facing text.
+  - Sprint 009 introduced supplier abstraction + source-grounded mapping enforcement + BrainOS tabbed editor redesign to keep critical commerce/trust facts above fold.
+- Implementation summary:
   - supplier abstraction boundary added (`lib/ecomviper/suppliers/supplier-intelligence.ts`) and wired into product-editor state + PDP intelligence route.
   - Rocktomic source ingestion/config enriched for pricing/inventory/COA-aware supplier records and COA env-driven configured state.
   - PDP intelligence model expanded for source-grounded ingredient/trust/commerce/agentic/asset/schema fields.
@@ -62,20 +72,36 @@ Last updated: 2026-05-29 (UTC)
     - `planning/apps/ecomviper/shopify/product-editor-architecture.md`
     - `planning/apps/ecomviper/shopify/inventory-architecture.md`
     - `planning/apps/ecomviper/shopify/coa-architecture.md`
-- Local validation:
+- Validation summary:
   - focused Sprint 009/008.2/006-008 suites passed (Rocktomic ingestion/matching, inventory fallback, dashboard, PDP intelligence model/compliance/generation/route, product editor route contract).
   - `npm run build`: passed.
   - `git diff --check`: passed.
   - `npm test`: failed on unrelated pre-existing baseline suites outside Sprint 009 scope (CasaFlix/SiteForge/Walmart/frontdoor/homepage families), while Sprint 009-targeted suites passed.
-- Pending closure steps:
-  - commit + push
-  - MR creation URL
-  - pipeline URL/status
-  - merge commit SHA
-  - production deployed commit SHA
-  - production log inspection summary
-  - authenticated browser verification summary
-  - final closure metadata update once deployment is complete.
+- Source branch deletion:
+  - Remote: deleted after merge.
+  - Local: deleted.
+- Final local repository state after sprint merge:
+  - branch: `main`
+  - status: clean (`git status` with no changes)
+- Production/runtime status:
+  - `GET https://app.ibrains.ai/api/meta/release` returns `git_sha=0e7edb00efb9d1e6420dc728807642f587ade690`, `build_id=2562957259`.
+  - `GET https://app.ibrains.ai/api/health` returned `200` with `ok: true`.
+  - `systemctl is-active ibrains-app` returned `active`.
+- Log inspection summary:
+  - `journalctl -u ibrains-app` shows clean restart/start at `2026-05-29 23:17 UTC` aligned with deployment.
+  - nginx error log tail shows no new Sprint 009-specific runtime faults.
+- Browser verification status:
+  - verification date/time: `2026-05-29 23:18 UTC`.
+  - checked via headless browser:
+    - `https://app.ibrains.ai/ecomviper`
+    - `https://app.ibrains.ai/ecomviper/dropshipping/rocktomic`
+    - `https://app.ibrains.ai/ecomviper/shopify`
+  - signed-out behavior: all protected routes redirect to sign-in with preserved `redirect_url`.
+  - browser console error count: `0` during signed-out pass.
+  - authenticated in-app visual verification (tabs/layout, live supplier matches) remains follow-up for a signed-in session.
+- Final status: closed (merged + green MR/main pipelines + production deploy + runtime/log checks + signed-out browser verification + closure metadata recorded).
+- Risks/follow-ups:
+  - authenticated production UX verification required for final visual confirmation of source-grounded fields for real tenant data.
 
 ## Sprint Completion Log: Shopify Sprint 008.2 Production Closure
 
