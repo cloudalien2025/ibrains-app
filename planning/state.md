@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-05-28 (UTC)
+Last updated: 2026-05-29 (UTC)
 
 ## Program Status
 
@@ -29,15 +29,37 @@ Last updated: 2026-05-28 (UTC)
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
 - Current recommended sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (active).
 
-## Active Sprint Log: EcomViper Commerce Brain Decoupling
+## Sprint Completion Log: EcomViper Commerce Brain Decoupling
 
-- Sprint: `sprint-022-decouple-ecomviper-commerce-brains` (in progress).
-- User-visible issue:
-  - `/ecomviper` still behaved like a parent launcher for OptiBay, OptiWal, and OptiZon even after back-link standardization.
-- Scope in progress:
-  - remove OptiBay/OptiWal/OptiZon launcher language and navigation from `/ecomviper` console UI.
-  - preserve standalone commerce brain routes and canonical `/brains` navigation model.
-  - preserve auth/proxy/middleware/API behavior and deprecated-route `404` behavior.
+- Sprint: `sprint-022-decouple-ecomviper-commerce-brains` (completed).
+- MR: `!222` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/222`).
+- Pipeline: `2560656899` (status: `success`).
+- Merge commit SHA: `b57265f65d690fc7323b963ed0d25c279d0c275f`.
+- Root-cause summary:
+  - Sprint 021 standardized `← Back to Brains` but left parent-launcher UX in `app/ecomviper/page.tsx` (`Open OptiWal/Open OptiBay/Open OptiZon` links and corresponding cards).
+  - This contradicted the standalone commerce-brain contract (`/ecomviper`, `/optibay`, `/optiwal`, `/optizon` are peers).
+- Implementation summary:
+  - `/ecomviper` sidebar removed direct OptiBay/OptiWal/OptiZon launch links.
+  - `/ecomviper` workspace removed OptiBay/OptiWal/OptiZon launcher cards.
+  - EcomViper console now focuses on EcomViper-owned sections (Products, Shopify Source, Hub, Product Intelligence, Feed Operations, Drafts, Settings) while preserving standard shell.
+  - Cross-brain guidance points to `/brains` only.
+- Validation summary:
+  - `npm test -- tests/ecomviper_walmart_route_contract.test.tsx tests/brain_console_ui_contract.test.ts tests/brains_index_contract.test.ts` passed.
+  - `bash scripts/check_route_signatures.sh` passed.
+  - `npm run build` passed.
+  - `git diff --check` passed.
+  - `npm test` remains red on existing unrelated baseline failure families outside Sprint 022 scope.
+- Source branch deletion:
+  - Remote: deleted (merged with source-branch removal).
+  - Local: deleted.
+- Final local repository state after merge:
+  - branch: `main`
+  - status: clean (`git status` with no changes)
+- Production/browser verification status:
+  - deploy pipeline for this sprint was green at merge gate.
+  - `/api/meta/release` currently reports missing release metadata (`git_sha/build_id` null), so SHA-based production stamp confirmation remains unavailable through that endpoint.
+  - manual browser verification is required post-deploy for `/ecomviper`, `/optibay`, `/optiwal`, `/optizon`, `/brains`, and deprecated-route `404` checks.
+- Recommended next sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
 
 ## Sprint Completion Log: Standalone Brain Routes
 
