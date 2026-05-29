@@ -13,7 +13,7 @@ Last updated: 2026-05-29 (UTC)
 - Shopify Sprint 006: Completed and merged (`sprint-006-shopify-inventory-foundation`, Shopify-first `/ecomviper` inventory/listings foundation + PDP optimizer shell, production deployed).
 - Shopify Sprint 007: Completed and merged (`sprint-007-rocktomic-supplier-intelligence`, Rocktomic supplier intelligence engine foundation + Dropshipping/Rocktomic route shell, production deployed).
 - Shopify Sprint 008: Completed and merged (`sprint-008-ai-pdp-intelligence-engine`, AI PDP Intelligence Engine foundation for generate/edit/save/reopen in `/ecomviper` product editor, production deployed).
-- Shopify Sprint 008.1: In progress (`sprint-008-1-rocktomic-source-refresh`, Rocktomic source reference refresh before Sprint 009 Image Studio scope).
+- Shopify Sprint 008.1: Completed and merged (`sprint-008-1-rocktomic-source-refresh`, Rocktomic source reference refresh before Sprint 009 Image Studio scope, production deployed).
 - Walmart planning sprint: Completed and merged (`walmart-product-intent` docs baseline).
 - Walmart Sprint 001: Completed and merged (`walmart-command-center-foundation` docs baseline).
 - Walmart Sprint 003: Completed and merged (`sprint-003-walmart-ai-visibility`, docs/planning AI visibility workflow foundation).
@@ -31,7 +31,50 @@ Last updated: 2026-05-29 (UTC)
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
-- Current recommended sprint: `Shopify Sprint 008.1 - Rocktomic source reference refresh` (active scope).
+- Current recommended sprint: `Shopify Sprint 009 - Image Studio execution` (next planned scope after source refresh closure).
+
+## Sprint Completion Log: Shopify Sprint 008.1 Production Closure
+
+- Sprint/lane: `Shopify Sprint 008.1` (`sprint-008-1-rocktomic-source-refresh`) - closed.
+- MR: `!229` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/229`).
+- MR pipeline: `2562699028` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562699028`).
+- Merge commit SHA: `03a2471a6bdd3b9cd35dd0e6182d891581134110`.
+- Production deploy pipeline: `2562705053` (status: `success`, includes `deploy_production`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562705053`).
+- Production deployed commit SHA: `03a2471a6bdd3b9cd35dd0e6182d891581134110`.
+- Implementation summary:
+  - refreshed Rocktomic configured source references to latest provided catalog/template/policy/sheet links.
+  - switched MSRP + margins, PLDS catalog, and inventory report references to configured status.
+  - preserved COA Repository as the only pending reference.
+  - updated Dropshipping -> Rocktomic source table with direct source links.
+  - updated Rocktomic source-config/route tests to assert configured vs pending counts.
+- Validation summary:
+  - focused Rocktomic suites passed:
+    - `tests/ecomviper_rocktomic_source_config.test.ts`
+    - `tests/ecomviper_rocktomic_route_shell.test.ts`
+    - `tests/ecomviper_rocktomic_supplier_intelligence.test.ts`
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+- Source branch deletion:
+  - Remote: deleted (`sprint-008-1-rocktomic-source-refresh` removed on origin after merge).
+  - Local: deleted.
+- Final local repository state after sprint merge:
+  - branch: `main`
+  - status: clean (`git status` with no changes)
+- Production/runtime status:
+  - `GET https://app.ibrains.ai/api/meta/release` returns `git_sha=03a2471a6bdd3b9cd35dd0e6182d891581134110`, `build_id=2562705053`.
+  - `GET http://127.0.0.1:3001/api/health` returned `200` with `ok: true`.
+  - `sudo systemctl is-active ibrains-app` returned `active`.
+- Log inspection summary:
+  - `journalctl -u ibrains-app` shows clean stop/start at deploy window (`2026-05-29 20:11 UTC`).
+  - app log tail shows normal `next start` startup + ready lines.
+  - nginx error tail contains unrelated blocked scanner requests for dotfiles/env paths.
+- Browser verification status:
+  - verification date/time: `2026-05-29 20:11 UTC`.
+  - checked `https://app.ibrains.ai/ecomviper/dropshipping/rocktomic` via headless browser.
+  - route redirected to sign-in with preserved `redirect_url` (expected for signed-out protected route).
+  - browser console error count: `0`.
+- Follow-up risks/tasks:
+  - COA repository source remains pending final link/click target from user.
 
 ## Sprint Completion Log: Shopify Sprint 008 Production Closure
 
