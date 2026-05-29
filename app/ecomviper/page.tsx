@@ -10,51 +10,49 @@ export const dynamic = "force-dynamic";
 
 const marketplaceCards = [
   {
-    id: "walmart",
-    name: "OptiWal",
-    status: "Active",
-    description: "Connected marketplace manager for listings, drafts, inventory, pricing, and feed workflows.",
-    href: "/optiwal",
-    actionLabel: "Open OptiWal",
-    secondaryLabel: "Connect",
-    secondaryHref: "/optiwal/connect",
-    disabled: false,
-  },
-  {
-    id: "hub",
-    name: "EcomViper Hub",
-    status: "Active",
-    description:
-      "Canonical-first control plane for marketplace feed aggregation, product intelligence graph workflows, routing, and trust-aware operations.",
-    href: "/ecomviper/hub",
-    actionLabel: "Open Hub",
-    disabled: false,
-  },
-  {
-    id: "amazon",
-    name: "OptiZon",
-    status: "Coming Soon",
-    description: "Planned marketplace extension for Amazon catalog and listing operations.",
-    href: "/optizon",
-    actionLabel: "Coming Soon",
-    disabled: true,
-  },
-  {
-    id: "ebay",
-    name: "OptiBay",
-    status: "Active",
-    description: "Phase 1 read-only mock-first dashboard for eBay listing import, optimization scoring, and AI-ready recommendations.",
-    href: "/optibay",
-    actionLabel: "Open OptiBay",
-    disabled: false,
-  },
-  {
     id: "shopify",
     name: "Shopify Source Catalog",
     status: "Active",
     description: "Connect Shopify store domain + Admin API token, import Shopify products/images, and reconcile Walmart images by SKU/barcode/title.",
     href: "/ecomviper/shopify",
-    actionLabel: "Open Shopify",
+    actionLabel: "Open Shopify Source",
+    disabled: false,
+  },
+  {
+    id: "products",
+    name: "Products",
+    status: "Active",
+    description: "Track imported products, readiness posture, and product-level intelligence from one EcomViper workspace.",
+    href: "#products",
+    actionLabel: "View Products",
+    disabled: false,
+  },
+  {
+    id: "hub",
+    name: "Hub",
+    status: "Active",
+    description:
+      "Operate canonical feed and routing workflows in EcomViper Hub with approval-aware controls and operational visibility.",
+    href: "/ecomviper/hub",
+    actionLabel: "Open Hub",
+    disabled: false,
+  },
+  {
+    id: "feed-operations",
+    name: "Feed Operations",
+    status: "Active",
+    description: "Monitor sync health, import exceptions, and draft validation posture before publishing channel changes.",
+    href: "#feed-operations",
+    actionLabel: "Open Feed Operations",
+    disabled: false,
+  },
+  {
+    id: "product-intelligence",
+    name: "Product Intelligence",
+    status: "Active",
+    description: "Review AI commerce visibility, catalog readiness, and recommendation coverage by product and feed segment.",
+    href: "#product-intelligence",
+    actionLabel: "Open Product Intelligence",
     disabled: false,
   },
 ] as const;
@@ -99,27 +97,33 @@ export default async function EcomViperDashboardPage() {
               <p className="text-[11px] uppercase tracking-[0.16em] text-[#64748B]">ECOMVIPER</p>
               <h2 className="mt-1 text-base font-semibold text-[#0F172A]">Marketplace Brain Workspace</h2>
               <p className="mt-1 text-xs text-[#64748B]">
-                Coordinate independent commerce brains and channel workspaces from one console.
+                Manage EcomViper product intelligence, Shopify source imports, feed operations, and sync safety from one console.
               </p>
             </div>
             <nav className="grid gap-1" aria-label="EcomViper workspace navigation">
               <Link href="/ecomviper" className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-sm text-[#0F172A]">
                 Overview
               </Link>
-              <Link href="/optiwal" className="rounded-lg border border-transparent px-3 py-2 text-sm text-[#334155] transition hover:border-[#D9E4F0] hover:bg-white">
-                Open OptiWal
-              </Link>
-              <Link href="/optibay" className="rounded-lg border border-transparent px-3 py-2 text-sm text-[#334155] transition hover:border-[#D9E4F0] hover:bg-white">
-                Open OptiBay
-              </Link>
-              <Link href="/optizon" className="rounded-lg border border-transparent px-3 py-2 text-sm text-[#334155] transition hover:border-[#D9E4F0] hover:bg-white">
-                Open OptiZon
+              <Link href="#products" className="rounded-lg border border-transparent px-3 py-2 text-sm text-[#334155] transition hover:border-[#D9E4F0] hover:bg-white">
+                Products
               </Link>
               <Link href="/ecomviper/shopify" className="rounded-lg border border-transparent px-3 py-2 text-sm text-[#334155] transition hover:border-[#D9E4F0] hover:bg-white">
-                Open Shopify Source
+                Shopify Source
               </Link>
               <Link href="/ecomviper/hub" className="rounded-lg border border-transparent px-3 py-2 text-sm text-[#334155] transition hover:border-[#D9E4F0] hover:bg-white">
-                Open Hub
+                Hub
+              </Link>
+              <Link href="#product-intelligence" className="rounded-lg border border-transparent px-3 py-2 text-sm text-[#334155] transition hover:border-[#D9E4F0] hover:bg-white">
+                Product Intelligence
+              </Link>
+              <Link href="#feed-operations" className="rounded-lg border border-transparent px-3 py-2 text-sm text-[#334155] transition hover:border-[#D9E4F0] hover:bg-white">
+                Feed Operations
+              </Link>
+              <Link href="#drafts" className="rounded-lg border border-transparent px-3 py-2 text-sm text-[#334155] transition hover:border-[#D9E4F0] hover:bg-white">
+                Drafts
+              </Link>
+              <Link href="#settings" className="rounded-lg border border-transparent px-3 py-2 text-sm text-[#334155] transition hover:border-[#D9E4F0] hover:bg-white">
+                Settings
               </Link>
             </nav>
           </aside>
@@ -131,7 +135,14 @@ export default async function EcomViperDashboardPage() {
               </div>
               <h1 className="mt-4 text-4xl font-semibold tracking-[-0.03em] text-[#0F172A]">Marketplace Operations Workspace</h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-[#475569]">
-                Manage connections, product edits, draft validation, feed operations, and sync safety workflows across marketplaces.
+                Manage EcomViper products, Shopify source imports, draft validation, feed operations, and sync safety from one standalone brain console.
+              </p>
+              <p className="mt-2 text-sm text-[#475569]">
+                Other commerce brains are available from{" "}
+                <Link href="/brains" className="font-medium text-[#2563EB] hover:text-[#1D4ED8]">
+                  My Brains
+                </Link>
+                .
               </p>
             </section>
 
@@ -165,17 +176,47 @@ export default async function EcomViperDashboardPage() {
                         {card.actionLabel}
                       </Link>
                     )}
-                    {"secondaryHref" in card && card.secondaryHref && "secondaryLabel" in card && card.secondaryLabel ? (
-                      <Link
-                        href={card.secondaryHref}
-                        className="inline-flex rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
-                      >
-                        {card.secondaryLabel}
-                      </Link>
-                    ) : null}
                   </div>
                 </article>
               ))}
+            </section>
+
+            <section id="products" className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+              <h2 className="text-xl font-semibold text-[#0F172A]">Products</h2>
+              <p className="mt-2 text-sm text-[#475569]">
+                Source catalog imports, product readiness checks, and SKU-level signal quality for EcomViper operations.
+              </p>
+            </section>
+
+            <section
+              id="product-intelligence"
+              className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]"
+            >
+              <h2 className="text-xl font-semibold text-[#0F172A]">Product Intelligence</h2>
+              <p className="mt-2 text-sm text-[#475569]">
+                AI commerce visibility posture, attribute coverage, and recommendation confidence for product publishing decisions.
+              </p>
+            </section>
+
+            <section id="feed-operations" className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+              <h2 className="text-xl font-semibold text-[#0F172A]">Feed Operations</h2>
+              <p className="mt-2 text-sm text-[#475569]">
+                Sync safety checks, ingestion exception visibility, and feed-health workflows to keep product changes stable.
+              </p>
+            </section>
+
+            <section id="drafts" className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+              <h2 className="text-xl font-semibold text-[#0F172A]">Drafts</h2>
+              <p className="mt-2 text-sm text-[#475569]">
+                Draft readiness and validation checkpoints to ensure content quality before channel publishing.
+              </p>
+            </section>
+
+            <section id="settings" className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_18px_42px_rgba(15,23,42,0.06)]">
+              <h2 className="text-xl font-semibold text-[#0F172A]">Settings</h2>
+              <p className="mt-2 text-sm text-[#475569]">
+                Configure workspace defaults and operational guardrails for EcomViper-specific product and feed workflows.
+              </p>
             </section>
           </section>
         </div>

@@ -6,6 +6,11 @@ EcomViper is the multi-channel ecommerce operations family inside iBrains.
 
 At the parent level, EcomViper intent is to provide a shared operator workspace model for channel-specific listing workflows with guarded execution patterns.
 
+## App UX Boundary
+
+- The route `/ecomviper` is an EcomViper-only brain workspace and does not act as a launcher for OptiBay, OptiWal, or OptiZon.
+- Cross-brain navigation belongs to `/brains` where all standalone brains are listed equally.
+
 ## Parent Scope
 
 EcomViper coordinates channel work across:

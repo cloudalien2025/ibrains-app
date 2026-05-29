@@ -53,6 +53,13 @@ describe("brain console ui contract", () => {
     expect(ecomSource).toContain('data-testid="ecomviper-brain-sidebar"');
     expect(ecomSource).toContain('data-testid="ecomviper-brain-workspace"');
     expect(ecomSource).toContain("BackToBrainsLink");
+    expect(ecomSource).not.toContain("Open OptiWal");
+    expect(ecomSource).not.toContain("Open OptiBay");
+    expect(ecomSource).not.toContain("Open OptiZon");
+    expect(ecomSource).not.toContain('href="/optiwal"');
+    expect(ecomSource).not.toContain('href="/optibay"');
+    expect(ecomSource).not.toContain('href="/optizon"');
+    expect(ecomSource).toContain('href="/brains"');
 
     const ipetzoSource = readSource("app/ipetzo/page.tsx");
     expect(ipetzoSource).toContain('data-testid="ipetzo-brain-sidebar"');

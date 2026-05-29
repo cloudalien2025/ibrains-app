@@ -29,6 +29,16 @@ Last updated: 2026-05-28 (UTC)
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
 - Current recommended sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (active).
 
+## Active Sprint Log: EcomViper Commerce Brain Decoupling
+
+- Sprint: `sprint-022-decouple-ecomviper-commerce-brains` (in progress).
+- User-visible issue:
+  - `/ecomviper` still behaved like a parent launcher for OptiBay, OptiWal, and OptiZon even after back-link standardization.
+- Scope in progress:
+  - remove OptiBay/OptiWal/OptiZon launcher language and navigation from `/ecomviper` console UI.
+  - preserve standalone commerce brain routes and canonical `/brains` navigation model.
+  - preserve auth/proxy/middleware/API behavior and deprecated-route `404` behavior.
+
 ## Sprint Completion Log: Standalone Brain Routes
 
 - Sprint: `route-cleanup-standalone-brains` (legacy `/apps` removal and standalone top-level brain route migration).
