@@ -227,3 +227,12 @@ Last updated: 2026-05-28 (UTC)
   - `ConfiguredClerkProvider` must not pass `proxyUrl` from stale `NEXT_PUBLIC_CLERK_PROXY_URL` values.
   - `/brains` remains protected by Clerk middleware and shell auth, but its page render stays local-inventory-first and non-blocking on protected `/api/brains/*`.
 - Rationale: A half-enabled frontend proxy makes Clerk derive `app.ibrains.ai/__clerk` as a proxy URL while the browser/provider can still load Clerk directly, producing inconsistent host attribution and `host_invalid`/signed-in refresh failures.
+
+## D-021 Exclude /__clerk From All Proxy Middleware Matchers
+
+- Status: Accepted
+- Decision:
+  - `proxy.ts` must exclude `/__clerk/**` from all middleware matcher patterns, including the broad non-static matcher.
+  - The API matcher remains `/(api|trpc)(.*)` and must not include `__clerk`.
+  - No `/__clerk` runtime route support is provided by the app.
+- Rationale: Removing `__clerk` from only one matcher is insufficient if another broad matcher still captures `/__clerk/**`. When captured, Clerk middleware can still rewrite stale proxy-mode requests and produce `500` cascades instead of a clean `404`.
