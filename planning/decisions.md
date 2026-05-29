@@ -236,3 +236,13 @@ Last updated: 2026-05-28 (UTC)
   - The API matcher remains `/(api|trpc)(.*)` and must not include `__clerk`.
   - No `/__clerk` runtime route support is provided by the app.
 - Rationale: Removing `__clerk` from only one matcher is insufficient if another broad matcher still captures `/__clerk/**`. When captured, Clerk middleware can still rewrite stale proxy-mode requests and produce `500` cascades instead of a clean `404`.
+
+## D-022 Keep Signed-In Shell Routes Out Of Clerk Middleware Proxy Rewrites
+
+- Status: Accepted
+- Decision:
+  - Protected shell page routes (for example `/brains`, `/runs`, and standalone brain routes) must use cookie-gated middleware pass-through and not call `clerkMiddleware` request handling.
+  - Signed-out shell requests still redirect to `/sign-in` with `redirect_url` preserved.
+  - Shell auth remains fail-closed in `app/(shell)/layout.tsx` via `auth()` + verified `__session` fallback.
+  - Clerk middleware/proxy logic remains disabled for `frontendApiProxy` mode and `/__clerk` routes.
+- Rationale: In production behind reverse proxy, signed-in shell requests handled by Clerk middleware can trigger self-rewrites to `https://localhost:3001/...`, which Next.js then tries to proxy over TLS, causing `EPROTO` and user-facing `500` responses.

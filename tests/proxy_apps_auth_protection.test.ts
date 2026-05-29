@@ -66,7 +66,6 @@ describe("proxy app/auth protection", () => {
   });
 
   it("redirects unauthenticated users from /optiwal/connect to sign-in with redirect_url", async () => {
-    state.denyProtect = true;
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -80,7 +79,7 @@ describe("proxy app/auth protection", () => {
     expect(location).toContain(
       "redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Foptiwal%2Fconnect"
     );
-    expect(state.clerkProxyCalls).toBe(1);
+    expect(state.clerkProxyCalls).toBe(0);
   });
 
   it("keeps /api/ecomviper/walmart/connect/save behind auth checks", async () => {
@@ -115,7 +114,7 @@ describe("proxy app/auth protection", () => {
     expect(state.clerkProxyCalls).toBe(0);
   });
 
-  it("allows authenticated users into /optiwal/connect", async () => {
+  it("allows authenticated users into /optiwal/connect without invoking clerk middleware proxy", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -128,10 +127,26 @@ describe("proxy app/auth protection", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(state.clerkProxyCalls).toBe(1);
+    expect(state.clerkProxyCalls).toBe(0);
   });
 
-  it("redirects protected routes to sign-in when auth() throws", async () => {
+  it("keeps signed-in /brains pass-through at middleware layer to avoid self-proxy rewrites", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const response = await handler(
+      new NextRequest("https://app.ibrains.ai/brains", {
+        headers: {
+          cookie: "__session=valid_cookie",
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(state.clerkProxyCalls).toBe(0);
+  });
+
+  it("redirects protected routes to sign-in even when Clerk auth is unavailable", async () => {
     state.throwAuth = true;
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
@@ -142,7 +157,7 @@ describe("proxy app/auth protection", () => {
     const location = response.headers.get("location");
     expect(location).toContain("/sign-in");
     expect(location).toContain("redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fruns%2Frun_123");
-    expect(state.clerkProxyCalls).toBe(1);
+    expect(state.clerkProxyCalls).toBe(0);
   });
 
   it("keeps deprecated legacy routes hard-404", async () => {
