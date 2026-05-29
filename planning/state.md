@@ -226,18 +226,52 @@ Last updated: 2026-05-28 (UTC)
   - Authenticated production browser verification still requires a real signed-in user session; no test credentials were invented or exposed.
 - Recommended next sprint: resolve existing unrelated repo-wide test/lint baseline failures or continue `Walmart Sprint 008 - Product Editor score diagnostics alignment`.
 
-## Active Sprint Log: Clerk /__clerk Matcher Exclusion Follow-up
+## Sprint Completion Log: Clerk /__clerk Matcher Exclusion Follow-up
 
-- Sprint: `sprint-019-exclude-clerk-matcher` (in progress).
-- Incident context:
-  - After Sprint 018 deploy, production `GET /__clerk/v1/client` still returned `500` with `x-middleware-rewrite: https://localhost:3001/__clerk/v1/client`.
-- Corrected root cause:
-  - `proxy.ts` removed `__clerk` from `/(api|trpc|__clerk)(.*)`, but the broad non-static matcher still matched `/__clerk/**`.
-  - Because middleware still ran for `/__clerk/**`, stale Clerk proxy-mode traffic could still enter Clerk middleware rewrite paths in production.
-- Fix scope:
-  - Exclude `__clerk` from the broad matcher as well, so `/__clerk/**` bypasses middleware entirely and resolves as clean `404`.
-  - Keep Clerk topology unchanged: allowed-subdomain mode (`ibrains.ai` + `app.ibrains.ai`), no `frontendApiProxy`, no `proxyUrl`.
-  - Preserve `/brains` auth redirects, signed-out protected API `401` responses, and deprecated-route `404` policy.
+- Sprint: `sprint-019-exclude-clerk-matcher` (completed).
+- MR: `!216` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/216`).
+- Branch pipeline: `2560470792` (status: `success`).
+- MR pipeline: `2560471133` (status: `success`).
+- Default-branch deploy pipeline: `2560474244` (status: `success`).
+- Merge commit SHA: `3901260ce72f769b7e05cce936b5ca59904e959e`.
+- Deployed production SHA: `3901260ce72f769b7e05cce936b5ca59904e959e`.
+- Deployed build ID: `2560474244`.
+- Root cause:
+  - Sprint 018 removed `__clerk` from `/(api|trpc|__clerk)(.*)`, but `proxy.ts` still had a broad non-static matcher that captured `/__clerk/**`.
+  - Because middleware still ran for `/__clerk/**`, Clerk middleware could rewrite stale proxy-mode requests and trigger `500` responses.
+- Fix summary:
+  - `proxy.ts` now excludes `/__clerk/**` from the broad matcher (`(?!_next|__clerk|...)`) and keeps the API matcher as `/(api|trpc)(.*)`.
+  - Clerk topology remains direct allowed-subdomain mode (`ibrains.ai` primary + `app.ibrains.ai` allowed subdomain), with no `frontendApiProxy` and no provider `proxyUrl`.
+  - Auth and route contracts preserved: `/brains` signed-out redirect behavior, signed-out `/api/brains*` returning `401`, and deprecated routes staying hard `404`.
+- Validation summary:
+  - targeted auth/proxy regression suite passed:
+    - `tests/proxy_clerk_env_guard_contract.test.ts`
+    - `tests/clerk_auth_route_runtime.test.tsx`
+    - `tests/proxy_apps_auth_protection.test.ts`
+    - `tests/brains_api_auth_contract.test.ts`
+    - `tests/brains_index_contract.test.ts`
+  - `bash scripts/check_route_signatures.sh` passed.
+  - `npm run build` passed.
+  - `git diff --check` passed.
+  - `npm test` remains red on existing unrelated repository baseline failure families outside Sprint 019 scope.
+- Production verification summary:
+  - `/api/meta/release` reports SHA `3901260ce72f769b7e05cce936b5ca59904e959e` and build ID `2560474244`.
+  - `/__clerk/v1/client` returns `404` (no middleware localhost rewrite header present).
+  - `/sign-in` returns `200` and renders Clerk UI.
+  - `/sign-up` returns `200` and renders Clerk UI.
+  - signed-out `/brains` returns `307` to `/sign-in?redirect_url=.../brains`.
+  - signed-out `/api/brains` and `/api/brains/ecomviper/stats` return `401`.
+  - `/apps`, `/apps/studio`, `/studio`, `/siteforge`, and `/uapforge` return `404`.
+  - Signed-in browser verification still requires a real authenticated session; no credentials were invented or exposed.
+- Operational note:
+  - Users with stale proxy-mode Clerk sessions may need one-time cookie/session cleanup for:
+    - `app.ibrains.ai`
+    - `ibrains.ai`
+    - `clerk.ibrains.ai`
+- Source branch deletion:
+  - Remote: deleted by GitLab merge (`sprint-019-exclude-clerk-matcher`).
+  - Local: pending local branch cleanup during final sprint closure.
+- Recommended next sprint: resolve existing unrelated repo-wide baseline test/lint failures or continue `Walmart Sprint 008 - Product Editor score diagnostics alignment`.
 
 ## Current Operating Reminder
 
