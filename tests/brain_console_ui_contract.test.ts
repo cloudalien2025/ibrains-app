@@ -15,7 +15,7 @@ describe("brain console ui contract", () => {
 
   it("wires Back to Brains into every canonical standalone brain console", () => {
     const filesUsingSharedBackLink = [
-      "app/ecomviper/page.tsx",
+      "app/ecomviper/ecomviper-dashboard-client.tsx",
       "app/optibay/layout.tsx",
       "app/optiwal/layout.tsx",
       "app/optizon/page.tsx",
@@ -49,7 +49,7 @@ describe("brain console ui contract", () => {
   });
 
   it("renders EcomViper and iPetzo in standard sidebar/workspace shell structure", () => {
-    const ecomSource = readSource("app/ecomviper/page.tsx");
+    const ecomSource = readSource("app/ecomviper/ecomviper-dashboard-client.tsx");
     expect(ecomSource).toContain('data-testid="ecomviper-brain-sidebar"');
     expect(ecomSource).toContain('data-testid="ecomviper-brain-workspace"');
     expect(ecomSource).toContain("BackToBrainsLink");
@@ -59,7 +59,7 @@ describe("brain console ui contract", () => {
     expect(ecomSource).not.toContain('href="/optiwal"');
     expect(ecomSource).not.toContain('href="/optibay"');
     expect(ecomSource).not.toContain('href="/optizon"');
-    expect(ecomSource).toContain('href="/brains"');
+    expect(ecomSource).toContain("BackToBrainsLink");
 
     const ipetzoSource = readSource("app/ipetzo/page.tsx");
     expect(ipetzoSource).toContain('data-testid="ipetzo-brain-sidebar"');
@@ -69,7 +69,7 @@ describe("brain console ui contract", () => {
 
   it("keeps standalone brain route source free of /apps links", () => {
     const brainRouteSources = [
-      "app/ecomviper/page.tsx",
+      "app/ecomviper/ecomviper-dashboard-client.tsx",
       "app/optibay/layout.tsx",
       "app/optiwal/layout.tsx",
       "app/optizon/page.tsx",

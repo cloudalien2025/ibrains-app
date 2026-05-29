@@ -1,8 +1,19 @@
 # Shopify Product Intent
 
-Last updated: 2026-05-18 (UTC)
+Last updated: 2026-05-29 (UTC)
 
 This document describes the Shopify app as it exists today in this repository.
+
+## Sprint 006 Addendum (`/ecomviper` Shopify Inventory Foundation)
+
+- EcomViper parent route now provides a Shopify-first listings surface at `/ecomviper`.
+- Shopify is the source of truth for listings in this foundation flow.
+- Product rows open PDP editor route: `/ecomviper/products/[productId-or-handle]`.
+- Rocktomic is the first supplier intelligence source via SKU matching.
+- Rocktomic data is platform-managed; merchants should not manually upload Rocktomic files in normal workflow.
+- Image Studio is modeled as a dashboard module with documented output contracts and future GPT-image execution.
+- Buy Now Links are modeled on PDP surfaces.
+- EcomViper.com remains future public optimized PDP surface (not fully implemented in this sprint).
 
 ## 1) What This Shopify App Is Supposed To Do
 

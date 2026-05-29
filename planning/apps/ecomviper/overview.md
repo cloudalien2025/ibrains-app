@@ -1,6 +1,6 @@
 # EcomViper Overview
 
-Last updated: 2026-05-18 (UTC)
+Last updated: 2026-05-29 (UTC)
 
 EcomViper is the iBrains parent app family for multi-channel commerce operations.
 
@@ -27,6 +27,13 @@ These planning roots are active in the current repository structure.
 - Walmart: implemented command-center workspace with implementation-derived planning baseline.
 - eBay: implemented Phase 1 read-only mock-first dashboard with implementation-derived product intent baseline.
 - Amazon: planning and route surface present, broader implementation pending.
+
+## Sprint 006 Foundation Direction
+
+- `/ecomviper` is Shopify-first for this foundation sprint.
+- Parent EcomViper workspace now centers on a simple inventory/listings table and PDP editor route flow.
+- Hub is not modeled as a separate app concept in this sprint IA.
+- Rocktomic is the first dropshipping supplier intelligence source (SKU-match placeholder contract).
 
 ## Planning Navigation
 

@@ -1,6 +1,6 @@
 # Shopify App Overview
 
-Last updated: 2026-05-18 (UTC)
+Last updated: 2026-05-29 (UTC)
 
 ## Scope
 
@@ -25,7 +25,10 @@ The Shopify app under `apps/ecomviper/shopify` provides an agentic workspace bac
 
 - Sprint 001: Stabilized Shopify hydration around policy-field schema mismatch risk (`privacyPolicy` and related fields), while preserving current workspace behavior.
 - Sprint 002: Added explicit policy capability detection, cache, capability-aware policy hydration, runtime refresh, and telemetry/warning reporting.
+- Sprint 003: Completed deterministic capability extraction precedence + warning code contract hardening.
+- Sprint 004: Completed product editor review/dry-run publish workflow foundations.
+- Sprint 005: Completed guarded publish route/service foundations with allowlist, confirmation token, idempotency, and stale guards.
 
 ## Planned Next Sprint
 
-- Sprint 003: Harden deterministic capability handling and telemetry/warning contracts, with focused regression tests and no broad refactors.
+- Sprint 006: Shopify inventory foundation in `/ecomviper` with simple listings table + PDP shell routing + Rocktomic SKU-match placeholder model.

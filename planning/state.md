@@ -10,6 +10,7 @@ Last updated: 2026-05-29 (UTC)
 - Sprint 003: Completed (deterministic extraction precedence + extraction-source metadata + stable warning codes).
 - Sprint 004: Planned (typed warning/telemetry code contract).
 - Sprint 005: Completed (Shopify guarded publish execution scaffold).
+- Shopify Sprint 006: In progress (`sprint-006-shopify-inventory-foundation`, `/ecomviper` Shopify-first inventory/listings foundation + PDP optimizer shell).
 - Walmart planning sprint: Completed and merged (`walmart-product-intent` docs baseline).
 - Walmart Sprint 001: Completed and merged (`walmart-command-center-foundation` docs baseline).
 - Walmart Sprint 003: Completed and merged (`sprint-003-walmart-ai-visibility`, docs/planning AI visibility workflow foundation).
@@ -27,7 +28,7 @@ Last updated: 2026-05-29 (UTC)
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
-- Current recommended sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (active).
+- Current recommended sprint: `Shopify Sprint 006 - Inventory foundation + PDP optimizer shell` (active in current branch).
 
 ## Sprint Completion Log: EcomViper Commerce Brain Decoupling
 
