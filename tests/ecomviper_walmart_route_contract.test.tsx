@@ -141,14 +141,21 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).toContain("brain-dashboard-cards");
   });
 
-  it("renders /ecomviper marketplace cards", async () => {
+  it("renders /ecomviper as standalone workspace without cross-brain launcher cards", async () => {
     const html = renderToStaticMarkup(await EcomViperDashboardPage());
     expect(html).toContain("ecomviper-overview-page");
-    expect(html).toContain(">OptiWal<");
-    expect(html).toContain(">EcomViper Hub<");
-    expect(html).toContain(">OptiZon<");
-    expect(html).toContain(">OptiBay<");
+    expect(html).toContain(">Products<");
+    expect(html).toContain(">Product Intelligence<");
+    expect(html).toContain(">Feed Operations<");
+    expect(html).toContain(">Hub<");
     expect(html).toContain(">Shopify Source Catalog<");
+    expect(html).toContain("Other commerce brains are available from");
+    expect(html).not.toContain(">OptiWal<");
+    expect(html).not.toContain(">OptiBay<");
+    expect(html).not.toContain(">OptiZon<");
+    expect(html).not.toContain("Open OptiWal");
+    expect(html).not.toContain("Open OptiBay");
+    expect(html).not.toContain("Open OptiZon");
   });
 
   it("renders walmart dashboard shell with sidebar and metric cards", async () => {

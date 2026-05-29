@@ -4,6 +4,12 @@ Last updated: 2026-05-18 (UTC)
 
 EcomViper is the iBrains parent app family for multi-channel commerce operations.
 
+## Workspace Route Contract
+
+- `/ecomviper` is the standalone EcomViper brain console for EcomViper-specific workflows.
+- OptiBay (`/optibay`), OptiWal (`/optiwal`), and OptiZon (`/optizon`) are standalone commerce brains, not nested `/ecomviper` modules.
+- EcomViper console UX may reference other commerce brains only through `/brains` (My Brains), not direct launcher cards/links.
+
 ## Channel Planning Structure
 
 Channel-specific planning belongs under:

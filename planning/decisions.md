@@ -258,4 +258,13 @@ Last updated: 2026-05-28 (UTC)
     - left sidebar
     - right workspace/dashboard region
   - Deprecated route language (`Apps`, `Back to Apps`, `Open App`) stays excluded from standalone brain console surfaces.
+
+## D-024 Decouple EcomViper Console From OptiBay/OptiWal/OptiZon Launcher UX
+
+- Status: Accepted
+- Decision:
+  - `/ecomviper` is a standalone brain console and must not render launcher navigation/cards for `/optibay`, `/optiwal`, or `/optizon`.
+  - EcomViper may include contextual guidance to other commerce brains only through `/brains` (My Brains), not direct child-module launchers.
+  - `/optibay`, `/optiwal`, and `/optizon` remain standalone top-level brain routes with their own console shells and `← Back to Brains`.
+- Rationale: Sprint 021 standardized back links but left residual parent-child launcher UX in EcomViper, which contradicted the standalone-brain route model and confused workspace ownership.
 - Rationale: Enforces a consistent standalone brain model across authenticated routes and removes residual parent-child launcher language from legacy commerce UI shells.
