@@ -32,7 +32,50 @@ Last updated: 2026-05-29 (UTC)
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
-- Current recommended sprint: `Shopify Sprint 009 - Image Studio execution` (next planned scope after Sprint 008.2 closure).
+- Shopify Sprint 009: In progress (`sprint-009-source-grounded-product-editor`, source-grounded product intelligence + product editor redesign; local implementation and validation complete, delivery steps pending MR/pipeline/deploy closure).
+- Current recommended sprint: `Shopify Sprint 009 delivery closure` (MR/pipeline/merge/deploy/browser verification and state finalization).
+
+## Sprint Execution Log: Shopify Sprint 009 (Work In Progress)
+
+- Sprint/lane: `Shopify Sprint 009` (`sprint-009-source-grounded-product-editor`) - in progress.
+- Branch: `sprint-009-source-grounded-product-editor`.
+- Scope delivered locally:
+  - supplier abstraction boundary added (`lib/ecomviper/suppliers/supplier-intelligence.ts`) and wired into product-editor state + PDP intelligence route.
+  - Rocktomic source ingestion/config enriched for pricing/inventory/COA-aware supplier records and COA env-driven configured state.
+  - PDP intelligence model expanded for source-grounded ingredient/trust/commerce/agentic/asset/schema fields.
+  - PDP intelligence generator hardened to:
+    - keep inventory quantity non-fabricated (status-only mapping)
+    - force source-grounded ingredient/certification/inventory/pricing/COA mappings
+    - sanitize shopper-facing outputs to avoid supplier platform disclosure.
+  - Product Editor redesigned into BrainOS dense workspace:
+    - compact header + status chips
+    - left product rail
+    - center tabs (`Overview`, `Ingredients`, `Trust & Compliance`, `Commerce`, `Agentic Visibility`, `Assets`, `SEO & Schema`)
+    - right rail cards (`Commerce Intelligence`, `Shipping`, `COA`)
+    - single sidebar navigation with brain icon identity.
+- Documentation updates:
+  - `planning/design.md` updated with Sprint 009 BrainOS product-editor extension and cross-brain scope.
+  - added:
+    - `planning/apps/ecomviper/shopify/architecture.md`
+    - `planning/apps/ecomviper/shopify/pdp-intelligence.md`
+    - `planning/apps/ecomviper/shopify/agentic-visibility.md`
+    - `planning/apps/ecomviper/shopify/product-editor-architecture.md`
+    - `planning/apps/ecomviper/shopify/inventory-architecture.md`
+    - `planning/apps/ecomviper/shopify/coa-architecture.md`
+- Local validation:
+  - focused Sprint 009/008.2/006-008 suites passed (Rocktomic ingestion/matching, inventory fallback, dashboard, PDP intelligence model/compliance/generation/route, product editor route contract).
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+  - `npm test`: failed on unrelated pre-existing baseline suites outside Sprint 009 scope (CasaFlix/SiteForge/Walmart/frontdoor/homepage families), while Sprint 009-targeted suites passed.
+- Pending closure steps:
+  - commit + push
+  - MR creation URL
+  - pipeline URL/status
+  - merge commit SHA
+  - production deployed commit SHA
+  - production log inspection summary
+  - authenticated browser verification summary
+  - final closure metadata update once deployment is complete.
 
 ## Sprint Completion Log: Shopify Sprint 008.2 Production Closure
 

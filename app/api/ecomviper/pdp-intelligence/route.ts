@@ -3,7 +3,6 @@ export const runtime = "nodejs";
 import { NextRequest } from "next/server";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
-import { matchRocktomicBySkus } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
 import { getShopifyOpenAiApiKeyForUser } from "@/lib/ecomviper/shopify/openai-connection";
 import { generateShopifyPdpIntelligence } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence-generator";
 import { evaluateShopifyPdpCompliance } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence-compliance";
@@ -17,6 +16,7 @@ import {
   savePersistedShopifyPdpIntelligence,
 } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence-repository";
 import { buildShopifyProductEditorStateForUser } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
+import { matchPrimarySupplierBySkus } from "@/lib/ecomviper/suppliers/supplier-intelligence";
 
 interface PdpIntelligenceRequestBody {
   action?: unknown;
@@ -167,15 +167,17 @@ export async function POST(req: NextRequest) {
     }
 
     const skuList = product.variants.map((entry) => entry.sku.trim()).filter(Boolean);
-    const supplierMatch = matchRocktomicBySkus(skuList);
+    const supplierSnapshot = await matchPrimarySupplierBySkus(skuList).catch(() => null);
+    const supplierMatch = supplierSnapshot?.match;
     const openAiApiKey = await getShopifyOpenAiApiKeyForUser(userId);
 
     const generated = await generateShopifyPdpIntelligence({
       product,
       supplierMatch: {
-        supplier: supplierMatch.product?.supplier ?? null,
-        supplierSku: supplierMatch.matchedSku,
-        product: supplierMatch.product,
+        supplier: supplierMatch?.product?.supplier ?? null,
+        supplierSku: supplierMatch?.matchedSku ?? null,
+        product: supplierMatch?.product ?? null,
+        inventoryAvailable: supplierSnapshot?.inventoryAvailable ?? false,
       },
       existing,
       openAiApiKey,

@@ -11,15 +11,15 @@ describe("ecomviper product editor route contract", () => {
     const clientSource = fs.readFileSync(clientPath, "utf8");
 
     expect(routeSource).toContain("buildShopifyProductEditorStateForUser");
-    expect(clientSource).toContain("Shopify Product Data");
-    expect(clientSource).toContain("Supplier Intelligence");
-    expect(clientSource).toContain("Match confidence");
-    expect(clientSource).toContain("COA status");
-    expect(clientSource).toContain("AI PDP Intelligence");
-    expect(clientSource).toContain("Generate PDP Intelligence");
-    expect(clientSource).toContain("Expanded FAQ");
-    expect(clientSource).toContain("Image Studio placeholder");
-    expect(clientSource).toContain("Buy Now Links placeholder");
-    expect(clientSource).toContain("Publish Controls placeholder");
+    expect(clientSource).toContain("Products &gt;");
+    expect(clientSource).toContain("Generate Intelligence");
+    expect(clientSource).toContain("Product Rail");
+    expect(clientSource).toContain("Trust & Compliance");
+    expect(clientSource).toContain("Agentic Visibility");
+    expect(clientSource).toContain("SEO & Schema");
+    expect(clientSource).toContain("Commerce Intelligence");
+    expect(clientSource).toContain("Shipping");
+    expect(clientSource).toContain("COA");
+    expect(clientSource).toContain("data-testid=\"ecomviper-product-editor-tabs\"");
   });
 });

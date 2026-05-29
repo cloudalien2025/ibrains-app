@@ -125,8 +125,41 @@ describe("shopify PDP intelligence generation", () => {
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
     const userContent = JSON.stringify(body);
-    expect(userContent).toContain("Supplier SKU: ROC817");
-    expect(userContent).toContain("Supplier certifications: GMP Facility");
+    expect(userContent).toContain("Matched SKU: ROC817");
+    expect(userContent).toContain("Certifications: GMP Facility");
     expect(result.ai_product_summary.toLowerCase()).not.toContain("cure");
+    expect(result.ai_product_summary.toLowerCase()).not.toContain("rocktomic");
+    expect(result.inventory_status).not.toContain("3248");
+  });
+
+  it("sanitizes supplier names from shopper-facing output fields", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  ai_product_summary: "Rocktomic supplier matched this SKU.",
+                  trust_signals: ["Rocktomic certified"],
+                  agentic_selection_notes: "Use supplier matching details in PDP.",
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+
+    const result = await generateShopifyPdpIntelligence({
+      product: productFixture(),
+      supplierMatch: { supplier: "Rocktomic", supplierSku: "ROC817", product: supplierFixture() },
+      existing: null,
+      openAiApiKey: "sk-test",
+    });
+
+    expect(result.ai_product_summary.toLowerCase()).not.toContain("rocktomic");
+    expect(result.agentic_selection_notes.toLowerCase()).not.toContain("supplier matching");
   });
 });
