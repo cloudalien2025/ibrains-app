@@ -90,6 +90,7 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
                   <th className="py-2 pr-3">Reference</th>
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Version</th>
+                  <th className="py-2 pr-3">Source</th>
                   <th className="py-2 pr-3">Updated</th>
                 </tr>
               </thead>
@@ -99,6 +100,15 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
                     <td className="py-3 pr-3">{reference.label}</td>
                     <td className="py-3 pr-3">{reference.status}</td>
                     <td className="py-3 pr-3">{reference.sourceVersion || "-"}</td>
+                    <td className="py-3 pr-3">
+                      {reference.sourceUrl ? (
+                        <a href={reference.sourceUrl} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">
+                          Open source
+                        </a>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                     <td className="py-3 pr-3">{asIso(reference.sourceUpdatedAt)}</td>
                   </tr>
                 ))}
