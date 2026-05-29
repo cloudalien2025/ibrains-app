@@ -14,6 +14,7 @@ Last updated: 2026-05-29 (UTC)
 - Shopify Sprint 007: Completed and merged (`sprint-007-rocktomic-supplier-intelligence`, Rocktomic supplier intelligence engine foundation + Dropshipping/Rocktomic route shell, production deployed).
 - Shopify Sprint 008: Completed and merged (`sprint-008-ai-pdp-intelligence-engine`, AI PDP Intelligence Engine foundation for generate/edit/save/reopen in `/ecomviper` product editor, production deployed).
 - Shopify Sprint 008.1: Completed and merged (`sprint-008-1-rocktomic-source-refresh`, Rocktomic source reference refresh before Sprint 009 Image Studio scope, production deployed).
+- Shopify Sprint 008.2: Completed and merged (`sprint-008-2-brainos-rocktomic-integration-correction`, Rocktomic source-backed catalog/inventory ingestion correction + BrainOS `/ecomviper` dashboard standard + Shopify settings consolidation, production deployed).
 - Walmart planning sprint: Completed and merged (`walmart-product-intent` docs baseline).
 - Walmart Sprint 001: Completed and merged (`walmart-command-center-foundation` docs baseline).
 - Walmart Sprint 003: Completed and merged (`sprint-003-walmart-ai-visibility`, docs/planning AI visibility workflow foundation).
@@ -31,7 +32,120 @@ Last updated: 2026-05-29 (UTC)
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
-- Current recommended sprint: `Shopify Sprint 009 - Image Studio execution` (next planned scope after source refresh closure).
+- Current recommended sprint: `Shopify Sprint 009 - Image Studio execution` (next planned scope after Sprint 008.2 closure).
+
+## Sprint Completion Log: Shopify Sprint 008.2 Production Closure
+
+- Sprint/lane: `Shopify Sprint 008.2` (`sprint-008-2-brainos-rocktomic-integration-correction`) - closed.
+- Branch: `sprint-008-2-brainos-rocktomic-integration-correction`.
+- MR: `!231` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/231`).
+- MR pipeline: `2562814083` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562814083`).
+- Main/deploy pipeline: `2562820126` (status: `success`, includes `build_release` + `deploy_production`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562820126`).
+- Merge commit SHA: `cbb08ca2923160f59ed7078533e34e723cea7959`.
+- Production deployed commit SHA: `cbb08ca2923160f59ed7078533e34e723cea7959`.
+- Root-cause summary (catalog/inventory ignored):
+  - Rocktomic supplier intelligence was hardcoded to a static 6-product seed in `rocktomic-supplier-intelligence.ts`.
+  - Source references were displayed/configured but had no fetch/parse/normalize ingestion boundary.
+  - Inventory status in `/ecomviper` was derived from Shopify-only quantity logic and could not distinguish unknown/source-unavailable from out-of-stock.
+- Implementation summary:
+  - added `lib/ecomviper/dropshipping/rocktomic-source-ingestion.ts` with explicit source ingestion stages:
+    - source config resolution
+    - fetchability checks (including Google Sheets export URL conversion)
+    - CSV parsing + SKU normalization
+    - catalog and inventory record extraction
+    - per-source diagnostics (`configured`, `fetchable`, `parsed`, `recordCount`, `lastCheckedAt`, redacted `lastError`)
+  - updated `/ecomviper` inventory mapping to consume source-backed Rocktomic supplier products and inventory availability flags.
+  - inventory status model now distinguishes:
+    - `in_stock`
+    - `low_stock`
+    - `out_of_stock`
+    - `unknown`
+    - `inventory_source_unavailable`
+  - corrected fallback semantics so unknown is no longer mislabeled as out-of-stock.
+  - redesigned `/ecomviper` to BrainOS standard:
+    - compact global iBrains header
+    - one left sidebar nav
+    - no duplicate horizontal module nav
+    - compact workspace/status row
+    - table-first workspace above fold
+    - brain icon next to `EcomViper` name
+  - consolidated Shopify workspace behavior:
+    - `/ecomviper/shopify` now redirects to `/ecomviper/settings`
+    - added `/ecomviper/settings` diagnostics view with Shopify/OpenAI/Rocktomic status
+  - added design standard doc: `planning/design.md`.
+- Files changed:
+  - `app/ecomviper/page.tsx`
+  - `app/ecomviper/ecomviper-dashboard-client.tsx`
+  - `app/ecomviper/settings/page.tsx`
+  - `app/ecomviper/shopify/page.tsx`
+  - `app/ecomviper/dropshipping/rocktomic/page.tsx`
+  - `lib/ecomviper/dropshipping/rocktomic-source-ingestion.ts`
+  - `lib/ecomviper/dropshipping/rocktomic-supplier-intelligence.ts`
+  - `lib/ecomviper/shopify/shopify-inventory-foundation.ts`
+  - `lib/ecomviper/shopify/shopify-product-editor-state.ts`
+  - `planning/design.md`
+  - test updates/additions listed below.
+- Tests added/updated:
+  - added:
+    - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+    - `tests/ecomviper_inventory_status_fallback.test.ts`
+    - `tests/ecomviper_shopify_route_consolidation.test.ts`
+  - updated:
+    - `tests/ecomviper_inventory_foundation_dashboard.test.tsx`
+    - `tests/ecomviper_rocktomic_supplier_intelligence.test.ts`
+    - `tests/ecomviper_rocktomic_route_shell.test.ts`
+    - `tests/ecomviper_shopify_agentic_workspace.test.tsx`
+    - `tests/ecomviper_walmart_route_contract.test.tsx`
+- Validation summary:
+  - focused Sprint 008.2 suites passed:
+    - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+    - `tests/ecomviper_rocktomic_supplier_intelligence.test.ts`
+    - `tests/ecomviper_inventory_status_fallback.test.ts`
+    - `tests/ecomviper_inventory_foundation_dashboard.test.tsx`
+    - `tests/ecomviper_rocktomic_route_shell.test.ts`
+    - `tests/ecomviper_shopify_agentic_workspace.test.tsx`
+    - `tests/ecomviper_shopify_route_consolidation.test.ts`
+    - `tests/ecomviper_rocktomic_source_config.test.ts`
+  - Sprint 006/007/008 focused regressions passed:
+    - `tests/ecomviper_product_editor_route_contract.test.ts`
+    - `tests/ecomviper_pdp_intelligence_model.test.ts`
+    - `tests/ecomviper_pdp_intelligence_compliance.test.ts`
+    - `tests/ecomviper_pdp_intelligence_generation.test.ts`
+    - `tests/ecomviper_pdp_intelligence_route.test.ts`
+    - `tests/ecomviper_inventory_foundation_dashboard.test.tsx`
+    - `tests/ecomviper_rocktomic_supplier_intelligence.test.ts`
+    - `tests/ecomviper_rocktomic_route_shell.test.ts`
+    - `tests/ecomviper_rocktomic_source_config.test.ts`
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+  - `npm test`: failed on unrelated baseline suites outside Sprint 008.2 scope (including existing CasaFlix/SiteForge/Walmart baseline families).
+- Source branch deletion:
+  - Remote: deleted after merge.
+  - Local: deleted.
+- Final local repository state after sprint merge:
+  - branch: `main`
+  - status: clean (`git status` with no changes)
+- Production/runtime status:
+  - `GET https://app.ibrains.ai/api/meta/release` now reports `git_sha=cbb08ca2923160f59ed7078533e34e723cea7959`, `build_id=2562820126`.
+  - `GET http://127.0.0.1:3001/api/health` returned `200` with `ok: true`.
+  - `sudo systemctl is-active ibrains-app` returned `active`.
+- Log inspection summary:
+  - `journalctl -u ibrains-app` shows clean stop/start around deployment window (`2026-05-29 21:23 UTC`).
+  - app log tail shows normal `next start` startup + ready lines; observed scanner-related proxy `EPROTO` noise remains unrelated baseline traffic.
+  - nginx error log tail shows blocked scanner/dotfile/env probes (unrelated to sprint scope).
+- Browser verification status:
+  - verification date/time: `2026-05-29 21:26 UTC`.
+  - checked via headless browser:
+    - `https://app.ibrains.ai/ecomviper`
+    - `https://app.ibrains.ai/ecomviper/dropshipping/rocktomic`
+    - `https://app.ibrains.ai/ecomviper/shopify`
+  - signed-out behavior: all protected routes redirect to sign-in with preserved `redirect_url`.
+  - browser console error count: `0` during signed-out pass.
+  - authenticated visual verification of in-app table layout and source diagnostics remains follow-up for a signed-in production session.
+- Final status: closed (merged + green pipelines + production deploy + runtime/log checks + signed-out browser verification + planning closure recorded).
+- Risks/follow-ups:
+  - authenticated production UX pass still required for full signed-in layout validation (`/ecomviper`, `/ecomviper/settings`, `/ecomviper/dropshipping/rocktomic`).
+  - COA repository source remains pending until source link is provided.
 
 ## Sprint Completion Log: Shopify Sprint 008.1 Production Closure
 
