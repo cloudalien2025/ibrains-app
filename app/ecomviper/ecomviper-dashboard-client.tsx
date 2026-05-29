@@ -10,10 +10,14 @@ interface EcomViperDashboardClientProps {
   shopifyConnected: boolean;
   storeDomain: string;
   shopifyStatusLabel: string;
+  openAiStatusLabel: string;
   lastImportAt: string | null;
   productCount: number;
   sourceWarnings: string[];
   rows: EcomViperProductInventoryRow[];
+  rocktomicProductCount: number;
+  rocktomicStatusLabel: string;
+  rocktomicLastCheckedAt: string | null;
 }
 
 type SupplierFilter = "all" | "rocktomic" | "unmatched";
@@ -38,19 +42,24 @@ function scoreMatches(value: number, filter: ScoreFilter): boolean {
 
 function inventoryLabel(status: EcomViperInventoryStatus): string {
   if (status === "in_stock") return "In stock";
+  if (status === "low_stock") return "Low stock";
   if (status === "out_of_stock") return "Out of stock";
-  if (status === "mixed") return "Mixed";
-  return "Unavailable";
+  if (status === "inventory_source_unavailable") return "Inventory source unavailable";
+  return "Unknown";
 }
 
 export default function EcomViperDashboardClient({
   shopifyConnected,
   storeDomain,
   shopifyStatusLabel,
+  openAiStatusLabel,
   lastImportAt,
   productCount,
   sourceWarnings,
   rows,
+  rocktomicProductCount,
+  rocktomicStatusLabel,
+  rocktomicLastCheckedAt,
 }: EcomViperDashboardClientProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -87,62 +96,59 @@ export default function EcomViperDashboardClient({
 
   return (
     <main className="ibrains-shell min-h-screen text-[#0F172A]" data-testid="ecomviper-overview-page">
-      <div className="mx-auto max-w-[1380px] px-4 py-6 sm:px-6">
-        <div className="mb-4 flex items-center justify-between">
-          <BackToBrainsLink className="text-sm font-medium text-[#1D4ED8] hover:text-[#1E40AF] hover:underline" />
-          <div className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-white/90 px-3 py-1 text-xs text-[#475569]">
-            EcomViper Shopify Foundation
+      <div className="mx-auto max-w-[1380px] px-4 py-5 sm:px-6">
+        <header className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#D9E4F0] bg-white/95 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <BackToBrainsLink className="text-sm font-medium text-[#1D4ED8] hover:text-[#1E40AF] hover:underline" />
+            <div className="h-5 w-px bg-[#E2E8F0]" />
+            <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">iBrains BrainOS Dashboard</p>
           </div>
-        </div>
+          <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs text-[#334155]">EcomViper Operational Workspace</span>
+        </header>
 
-        <div className="grid gap-4 lg:grid-cols-[248px_minmax(0,1fr)]">
-          <aside className="rounded-2xl border border-[#D9E4F0] bg-white/90 p-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)]" data-testid="ecomviper-brain-sidebar">
+        <div className="grid gap-3 lg:grid-cols-[236px_minmax(0,1fr)]">
+          <aside className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-3" data-testid="ecomviper-brain-sidebar">
             <div className="mb-3 border-b border-[#E2E8F0] pb-3">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-[#64748B]">ECOMVIPER</p>
-              <h2 className="mt-1 text-base font-semibold text-[#0F172A]">Shopify Inventory Workspace</h2>
-              <p className="mt-1 text-xs text-[#64748B]">Shopify-first listings foundation with SKU-based supplier intelligence.</p>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#0F172A] text-xs font-semibold text-white">EV</span>
+                <h2 className="text-base font-semibold text-[#0F172A]">EcomViper</h2>
+              </div>
+              <p className="mt-1 text-xs text-[#64748B]">Shopify-first catalog operations with Rocktomic supplier intelligence.</p>
             </div>
             <nav className="grid gap-1" aria-label="EcomViper workspace navigation">
-              <Link href="/ecomviper" className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-left text-sm text-[#0F172A]">Overview</Link>
-              <a href="#ecomviper-products-panel" className={navBaseClass}>Products</a>
-              <a href="#ecomviper-products-panel" className={navBaseClass}>Product Editor / PDP Optimizer</a>
+              <a href="#ecomviper-products-panel" className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-left text-sm text-[#0F172A]">
+                Products
+              </a>
               <span className={navBaseClass}>Image Studio</span>
               <Link href="/ecomviper/dropshipping/rocktomic" className={navBaseClass}>Dropshipping</Link>
-              <Link href="/ecomviper/dropshipping/rocktomic" className="ml-4 rounded-lg border border-transparent px-3 py-2 text-left text-sm text-[#334155] hover:border-[#D9E4F0] hover:bg-[#F8FBFF]">
-                Rocktomic
-              </Link>
               <span className={navBaseClass}>Agentic Visibility</span>
-              <Link href="/ecomviper/shopify" className={navBaseClass}>Settings</Link>
+              <Link href="/ecomviper/settings" className={navBaseClass}>Settings</Link>
             </nav>
           </aside>
 
-          <section className="space-y-6" data-testid="ecomviper-brain-workspace">
-            <section className="rounded-[1.5rem] border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_44px_rgba(15,23,42,0.08)]">
-              <h1 className="text-3xl font-semibold tracking-[-0.02em] text-[#0F172A]">EcomViper Products</h1>
-              <p className="mt-2 max-w-4xl text-sm text-[#475569]">
-                Connect Shopify with your Shopify custom app credentials, import listings, and open PDP editor workflows from the product table.
-              </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2 text-sm">Shopify: {shopifyStatusLabel}</p>
-                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2 text-sm">Store: {storeDomain || "Not connected"}</p>
-                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2 text-sm">Products: {productCount}</p>
-                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2 text-sm">Last import: {asIso(lastImportAt)}</p>
+          <section className="space-y-3" data-testid="ecomviper-brain-workspace">
+            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4" data-testid="ecomviper-workspace-status-row">
+              <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-6">
+                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Workspace: {storeDomain || "Default"}</p>
+                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Shopify: {shopifyStatusLabel}</p>
+                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Rocktomic: {rocktomicStatusLabel}</p>
+                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">OpenAI: {openAiStatusLabel}</p>
+                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Products: {productCount}</p>
+                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Last sync: {asIso(lastImportAt)}</p>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                <Link href="/ecomviper/shopify" className="rounded-lg border border-[#1D4ED8] bg-[#1D4ED8] px-3 py-2 font-medium text-white">
-                  Open Shopify Connection Settings
-                </Link>
-                <Link href="/ecomviper/shopify?demo=1" className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-[#334155]">
-                  Open Demo Mode
-                </Link>
+              <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#64748B]">
+                <span>Rocktomic records: {rocktomicProductCount}</span>
+                <span>Rocktomic checked: {asIso(rocktomicLastCheckedAt)}</span>
+                <Link href="/ecomviper/settings" className="text-[#1D4ED8] hover:underline">Open settings/diagnostics</Link>
+                <Link href="/ecomviper/dropshipping/rocktomic" className="text-[#1D4ED8] hover:underline">Open Rocktomic diagnostics</Link>
               </div>
               {!shopifyConnected ? (
-                <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  Shopify live sync is pending until credentials are saved and Sync Now is run in Shopify Settings.
+                <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  Shopify live sync is pending until credentials are saved and Sync Now is run in settings.
                 </p>
               ) : null}
               {sourceWarnings.length > 0 ? (
-                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                   {sourceWarnings.join(" ")}
                 </div>
               ) : null}
@@ -150,11 +156,14 @@ export default function EcomViperDashboardClient({
 
             <section
               id="ecomviper-products-panel"
-              className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+              className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4"
               data-testid="ecomviper-products-panel"
             >
-              <h2 className="text-lg font-semibold text-[#0F172A]">Products / Listings</h2>
-              <div className="mt-4 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h1 className="text-lg font-semibold text-[#0F172A]">Products</h1>
+                <p className="text-xs text-[#64748B]">Table-first workspace</p>
+              </div>
+              <div className="grid gap-2 md:grid-cols-3 lg:grid-cols-6">
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
@@ -186,17 +195,18 @@ export default function EcomViperDashboardClient({
                 <select value={inventoryFilter} onChange={(event) => setInventoryFilter(event.target.value as InventoryFilter)} className="rounded-lg border border-[#D9E4F0] px-3 py-2 text-sm">
                   <option value="all">Inventory: all</option>
                   <option value="in_stock">In stock</option>
+                  <option value="low_stock">Low stock</option>
                   <option value="out_of_stock">Out of stock</option>
-                  <option value="mixed">Mixed</option>
-                  <option value="unavailable">Unavailable</option>
+                  <option value="unknown">Unknown</option>
+                  <option value="inventory_source_unavailable">Inventory source unavailable</option>
                 </select>
               </div>
 
-              <div className="mt-4 overflow-x-auto">
+              <div className="mt-3 overflow-x-auto">
                 <table className="min-w-full text-sm" data-testid="ecomviper-products-table">
                   <thead className="text-left text-xs uppercase tracking-[0.1em] text-[#64748B]">
                     <tr>
-                      <th className="py-2 pr-3">Product image</th>
+                      <th className="py-2 pr-3">Image</th>
                       <th className="py-2 pr-3">Product name</th>
                       <th className="py-2 pr-3">SKU</th>
                       <th className="py-2 pr-3">Vendor</th>
@@ -259,25 +269,6 @@ export default function EcomViperDashboardClient({
                   </tbody>
                 </table>
               </div>
-            </section>
-
-            <section className="grid gap-4 md:grid-cols-2">
-              <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5">
-                <h3 className="text-base font-semibold text-[#0F172A]">Product Editor / PDP Optimizer</h3>
-                <p className="mt-2 text-sm text-[#475569]">Product rows open PDP editor routes with Shopify context, supplier intelligence, optimization placeholders, and publish controls.</p>
-              </article>
-              <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5">
-                <h3 className="text-base font-semibold text-[#0F172A]">Image Studio</h3>
-                <p className="mt-2 text-sm text-[#475569]">Module shell is active. Future output rules are documented for 2048x2048 WebP product images and SKU-named 300 DPI label JPG exports.</p>
-              </article>
-              <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5">
-                <h3 className="text-base font-semibold text-[#0F172A]">Dropshipping / Rocktomic</h3>
-                <p className="mt-2 text-sm text-[#475569]">SKU matching is platform-managed. Merchants do not manually upload Rocktomic files in normal workflow.</p>
-              </article>
-              <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5">
-                <h3 className="text-base font-semibold text-[#0F172A]">Agentic Visibility + Settings</h3>
-                <p className="mt-2 text-sm text-[#475569]">Agentic discoverability and EcomViper.com publication remain approval-gated future modules; settings stay in Shopify connection surfaces.</p>
-              </article>
             </section>
           </section>
         </div>

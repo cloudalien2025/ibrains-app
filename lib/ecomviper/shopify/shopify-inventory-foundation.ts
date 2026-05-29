@@ -1,7 +1,15 @@
-import type { ShopifyProductRecord } from "@/lib/ecomviper/shopify/shopify-types";
+import type { RocktomicSupplierProduct } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
 import { matchRocktomicBySkus, type RocktomicMatchStatus } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
+import type { ShopifyProductRecord } from "@/lib/ecomviper/shopify/shopify-types";
 
-export type EcomViperInventoryStatus = "in_stock" | "out_of_stock" | "mixed" | "unavailable";
+export type EcomViperInventoryStatus =
+  | "in_stock"
+  | "low_stock"
+  | "out_of_stock"
+  | "unknown"
+  | "inventory_source_unavailable";
+
+export type EcomViperInventorySource = "rocktomic" | "shopify" | "unknown" | "inventory_source_unavailable";
 
 export interface EcomViperProductInventoryRow {
   id: string;
@@ -21,6 +29,12 @@ export interface EcomViperProductInventoryRow {
   publishedToEcomViper: boolean;
   lastUpdated: string;
   inventoryStatus: EcomViperInventoryStatus;
+  inventorySource: EcomViperInventorySource;
+}
+
+interface ToInventoryRowsOptions {
+  supplierProducts?: RocktomicSupplierProduct[];
+  rocktomicInventoryAvailable?: boolean;
 }
 
 function safeText(value: string | null | undefined, fallback = "-"): string {
@@ -44,17 +58,17 @@ function collectSkus(product: ShopifyProductRecord): string[] {
   return product.variants.map((variant) => variant.sku.trim()).filter(Boolean);
 }
 
-function computeInventoryStatus(product: ShopifyProductRecord): EcomViperInventoryStatus {
+function computeShopifyInventoryStatus(product: ShopifyProductRecord): EcomViperInventoryStatus {
   const quantities = product.variants
     .map((variant) => variant.inventoryQuantity)
     .filter((quantity): quantity is number => typeof quantity === "number" && Number.isFinite(quantity));
 
-  if (!quantities.length) return "unavailable";
-  const inStockCount = quantities.filter((quantity) => quantity > 0).length;
+  if (!quantities.length) return "unknown";
 
+  const inStockCount = quantities.filter((quantity) => quantity > 0).length;
   if (inStockCount === 0) return "out_of_stock";
   if (inStockCount === quantities.length) return "in_stock";
-  return "mixed";
+  return "low_stock";
 }
 
 function computeAiPdpScore(product: ShopifyProductRecord): number {
@@ -73,11 +87,55 @@ function computeAiPdpScore(product: ShopifyProductRecord): number {
   return Math.round((passed / checks.length) * 100);
 }
 
-export function toEcomViperProductInventoryRows(products: ShopifyProductRecord[]): EcomViperProductInventoryRow[] {
+function resolveInventory(
+  product: ShopifyProductRecord,
+  options: { supplierProduct: RocktomicSupplierProduct | null; rocktomicInventoryAvailable: boolean }
+): { status: EcomViperInventoryStatus; source: EcomViperInventorySource } {
+  if (options.supplierProduct) {
+    if (options.supplierProduct.inventoryStatus !== "unknown") {
+      return {
+        status: options.supplierProduct.inventoryStatus,
+        source: "rocktomic",
+      };
+    }
+
+    if (!options.rocktomicInventoryAvailable) {
+      return {
+        status: "inventory_source_unavailable",
+        source: "inventory_source_unavailable",
+      };
+    }
+  }
+
+  const shopifyStatus = computeShopifyInventoryStatus(product);
+  if (shopifyStatus === "unknown") {
+    return {
+      status: options.rocktomicInventoryAvailable ? "unknown" : "inventory_source_unavailable",
+      source: options.rocktomicInventoryAvailable ? "unknown" : "inventory_source_unavailable",
+    };
+  }
+
+  return {
+    status: shopifyStatus,
+    source: "shopify",
+  };
+}
+
+export function toEcomViperProductInventoryRows(
+  products: ShopifyProductRecord[],
+  options?: ToInventoryRowsOptions
+): EcomViperProductInventoryRow[] {
+  const supplierProducts = options?.supplierProducts;
+  const rocktomicInventoryAvailable = options?.rocktomicInventoryAvailable ?? false;
+
   return products.map((product) => {
     const skus = collectSkus(product);
-    const rocktomicMatch = matchRocktomicBySkus(skus);
+    const rocktomicMatch = matchRocktomicBySkus(skus, supplierProducts);
     const handleOrId = product.handle.trim() || product.id.trim();
+    const inventory = resolveInventory(product, {
+      supplierProduct: rocktomicMatch.product,
+      rocktomicInventoryAvailable,
+    });
 
     return {
       id: product.id,
@@ -96,7 +154,8 @@ export function toEcomViperProductInventoryRows(products: ShopifyProductRecord[]
       aiPdpScore: computeAiPdpScore(product),
       publishedToEcomViper: false,
       lastUpdated: product.updatedAt,
-      inventoryStatus: computeInventoryStatus(product),
+      inventoryStatus: inventory.status,
+      inventorySource: inventory.source,
     };
   });
 }

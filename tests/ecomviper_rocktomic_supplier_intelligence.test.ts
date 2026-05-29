@@ -16,19 +16,17 @@ describe("rocktomic supplier intelligence", () => {
     expect(normalizeRocktomicSku("")).toBe("");
   });
 
-  it("exposes baseline Rocktomic SKU catalog", () => {
-    expect(getRocktomicCatalogSkus()).toEqual(
-      expect.arrayContaining(["ROC817", "ROC949", "ROC937", "ROC2251", "ROC918", "ROC920"])
-    );
+  it("exposes fallback Rocktomic SKU catalog including ROC948", () => {
+    expect(getRocktomicCatalogSkus()).toEqual(expect.arrayContaining(["ROC817", "ROC949", "ROC920", "ROC948"]));
   });
 
   it("returns exact SKU lookup match with confidence", () => {
-    const result = lookupRocktomicSupplierProductBySku(" roc-817 ");
+    const result = lookupRocktomicSupplierProductBySku(" roc-948 ");
     expect(result.status).toBe("rocktomic");
-    expect(result.normalizedSku).toBe("ROC817");
+    expect(result.normalizedSku).toBe("ROC948");
     expect(result.matchConfidence).toBe(1);
     expect(result.matchReason).toBe("exact_supplier_sku_match");
-    expect(result.product?.productName).toBe("Sleep Formula");
+    expect(result.product?.productName).toBe("Premium Nitric Oxide Gummies");
   });
 
   it("returns unmatched lookup state for unknown SKU", () => {
@@ -40,10 +38,10 @@ describe("rocktomic supplier intelligence", () => {
   });
 
   it("matches supplier intelligence by SKU", () => {
-    const result = matchRocktomicBySkus(["abc", "roc817"]);
+    const result = matchRocktomicBySkus(["abc", "roc948"]);
     expect(result.status).toBe("rocktomic");
-    expect(result.matchedSku).toBe("ROC817");
-    expect(result.product?.productName).toBe("Sleep Formula");
+    expect(result.matchedSku).toBe("ROC948");
+    expect(result.product?.productName).toBe("Premium Nitric Oxide Gummies");
     expect(result.matchConfidence).toBe(1);
     expect(result.matchReason).toBe("exact_supplier_sku_match");
   });
@@ -78,7 +76,7 @@ describe("rocktomic supplier intelligence", () => {
     expect(product.sourceUpdatedAt).toBeTruthy();
   });
 
-  it("maps Shopify products to inventory rows with PDP route + match status", () => {
+  it("maps Shopify products to inventory rows using source-backed supplier products", () => {
     const product: ShopifyProductRecord = {
       id: "gid://shopify/Product/123",
       storeDomain: "example.myshopify.com",
@@ -104,7 +102,7 @@ describe("rocktomic supplier intelligence", () => {
           id: "gid://shopify/ProductVariant/1",
           productId: "gid://shopify/Product/123",
           title: "Default",
-          sku: "ROC817",
+          sku: "ROC948",
           barcode: "",
           price: 19.99,
           compareAtPrice: null,
@@ -117,13 +115,16 @@ describe("rocktomic supplier intelligence", () => {
       ],
     };
 
-    const rows = toEcomViperProductInventoryRows([product]);
+    const rows = toEcomViperProductInventoryRows([product], {
+      supplierProducts: listRocktomicSupplierProducts(),
+      rocktomicInventoryAvailable: true,
+    });
     expect(rows[0].productEditorHref).toBe("/ecomviper/products/magnesium-gummies");
     expect(rows[0].supplierMatch).toBe("rocktomic");
-    expect(rows[0].supplierMatchedSku).toBe("ROC817");
+    expect(rows[0].supplierMatchedSku).toBe("ROC948");
     expect(rows[0].supplierMatchConfidence).toBe(1);
     expect(rows[0].supplierMatchReason).toBe("exact_supplier_sku_match");
-    expect(rows[0].supplierProductName).toBe("Sleep Formula");
+    expect(rows[0].supplierProductName).toBe("Premium Nitric Oxide Gummies");
     expect(rows[0].shopifyStatus).toBe("active");
   });
 });

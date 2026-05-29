@@ -1,8 +1,10 @@
 import EcomViperDashboardClient from "@/app/ecomviper/ecomviper-dashboard-client";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import { getRocktomicSourceIngestionSnapshot } from "@/lib/ecomviper/dropshipping/rocktomic-source-ingestion";
 import { toEcomViperProductInventoryRows } from "@/lib/ecomviper/shopify/shopify-inventory-foundation";
 import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopify-connection";
 import { getShopifyImportStateForUser, listShopifyProductsForUser } from "@/lib/ecomviper/shopify/shopify-import";
+import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify/openai-connection";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +22,15 @@ export default async function EcomViperDashboardPage() {
   let shopifyConnected = false;
   let storeDomain = "";
   let shopifyStatusLabel = "Not connected";
+  let openAiStatusLabel = "Not connected";
   let lastImportAt: string | null = null;
   let rows = [] as ReturnType<typeof toEcomViperProductInventoryRows>;
   const sourceWarnings: string[] = [];
+
+  const rocktomicSnapshot = await getRocktomicSourceIngestionSnapshot().catch((error) => {
+    sourceWarnings.push(error instanceof Error ? error.message : "Could not load Rocktomic source diagnostics.");
+    return null;
+  });
 
   if (userId) {
     try {
@@ -42,8 +50,18 @@ export default async function EcomViperDashboardPage() {
     }
 
     try {
+      const openAiStatus = await getShopifyOpenAiConnectionStatusForUser(userId);
+      openAiStatusLabel = openAiStatus.connected ? "Connected" : "Not connected";
+    } catch {
+      openAiStatusLabel = "Not connected";
+    }
+
+    try {
       const products = await listShopifyProductsForUser(userId);
-      rows = toEcomViperProductInventoryRows(products);
+      rows = toEcomViperProductInventoryRows(products, {
+        supplierProducts: rocktomicSnapshot?.products,
+        rocktomicInventoryAvailable: rocktomicSnapshot?.inventoryAvailable ?? false,
+      });
     } catch (error) {
       sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify products.");
     }
@@ -58,6 +76,16 @@ export default async function EcomViperDashboardPage() {
       productCount={rows.length}
       sourceWarnings={sourceWarnings}
       rows={rows}
+      rocktomicProductCount={rocktomicSnapshot?.productCount ?? 0}
+      rocktomicStatusLabel={
+        rocktomicSnapshot
+          ? rocktomicSnapshot.usedSeedFallback
+            ? "Using fallback seed"
+            : "Live source parsed"
+          : "Unavailable"
+      }
+      rocktomicLastCheckedAt={rocktomicSnapshot?.lastCheckedAt ?? null}
+      openAiStatusLabel={openAiStatusLabel}
     />
   );
 }
