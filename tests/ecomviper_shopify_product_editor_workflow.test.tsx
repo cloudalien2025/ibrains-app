@@ -105,6 +105,7 @@ function createInitialState(openAiConnected: boolean): ShopifyProductEditorIniti
     openAiStatusLabel: openAiConnected ? "Connected" : "Not connected",
     lastSyncedAt: "2026-05-15T00:00:00.000Z",
     warnings: [],
+    pdpIntelligence: null,
   };
 }
 

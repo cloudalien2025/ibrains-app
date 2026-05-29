@@ -12,6 +12,7 @@ Last updated: 2026-05-29 (UTC)
 - Sprint 005: Completed (Shopify guarded publish execution scaffold).
 - Shopify Sprint 006: Completed and merged (`sprint-006-shopify-inventory-foundation`, Shopify-first `/ecomviper` inventory/listings foundation + PDP optimizer shell, production deployed).
 - Shopify Sprint 007: Completed and merged (`sprint-007-rocktomic-supplier-intelligence`, Rocktomic supplier intelligence engine foundation + Dropshipping/Rocktomic route shell, production deployed).
+- Shopify Sprint 008: In progress (`sprint-008-ai-pdp-intelligence-engine`, AI PDP Intelligence Engine foundation for generate/edit/save/reopen in `/ecomviper` product editor).
 - Walmart planning sprint: Completed and merged (`walmart-product-intent` docs baseline).
 - Walmart Sprint 001: Completed and merged (`walmart-command-center-foundation` docs baseline).
 - Walmart Sprint 003: Completed and merged (`sprint-003-walmart-ai-visibility`, docs/planning AI visibility workflow foundation).
@@ -29,7 +30,28 @@ Last updated: 2026-05-29 (UTC)
 - eBay product-intent sprint: Completed (`ebay-product-intent`, MR `!183`, pipeline `2532820975` success, merged to `main`).
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
-- Current recommended sprint: `Walmart Sprint 008 - Product Editor score diagnostics alignment` (continue active scope).
+- Current recommended sprint: `Shopify Sprint 008 - AI PDP Intelligence Engine foundation` (complete merge + deployment closure flow).
+
+## Active Sprint Log: Shopify Sprint 008 AI PDP Intelligence Engine
+
+- Sprint: `sprint-008-ai-pdp-intelligence-engine` (in progress).
+- Scope:
+  - typed PDP intelligence model + FAQ/schema-ready fields
+  - server-side generation route using Shopify + Rocktomic context
+  - save/reopen persistence for signed-in user workspace scope
+  - deterministic compliance phrase-risk review metadata
+- Validation snapshot (in-progress):
+  - focused Sprint 008 tests passing locally:
+    - `tests/ecomviper_pdp_intelligence_model.test.ts`
+    - `tests/ecomviper_pdp_intelligence_compliance.test.ts`
+    - `tests/ecomviper_pdp_intelligence_generation.test.ts`
+    - `tests/ecomviper_pdp_intelligence_route.test.ts`
+  - Sprint 006/007 regression checks passing locally:
+    - `tests/ecomviper_product_editor_route_contract.test.ts`
+    - `tests/ecomviper_inventory_foundation_dashboard.test.tsx`
+    - `tests/ecomviper_rocktomic_supplier_intelligence.test.ts`
+    - `tests/ecomviper_rocktomic_route_shell.test.ts`
+    - `tests/ecomviper_rocktomic_source_config.test.ts`
 
 ## Sprint Completion Log: Shopify Sprint 007 Production Closure
 

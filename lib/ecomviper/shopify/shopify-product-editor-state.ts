@@ -4,6 +4,7 @@ import { buildShopifyAgenticDemoWorkspaceState } from "@/lib/ecomviper/shopify/s
 import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopify-connection";
 import { hydrateShopifyLiveWorkspaceForUser } from "@/lib/ecomviper/shopify/shopify-live-hydrator";
 import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify/openai-connection";
+import { matchRocktomicBySkus } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
 import {
   buildCurrentShopifyListingDocket,
   buildEditableShopifyDraft,
@@ -11,6 +12,8 @@ import {
   type ShopifyEditableDraftDocket,
   type ShopifyOptimizedProposalDocket,
 } from "@/lib/ecomviper/shopify/shopify-product-docket";
+import type { ShopifyPdpIntelligenceRecord } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence";
+import { getPersistedShopifyPdpIntelligenceForProduct } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence-repository";
 import {
   sourceLabel,
   sourceToHydrationMode,
@@ -50,6 +53,7 @@ export interface ShopifyProductEditorInitialState {
   openAiStatusLabel: string;
   lastSyncedAt: string | null;
   warnings: string[];
+  pdpIntelligence: ShopifyPdpIntelligenceRecord | null;
 }
 
 function asString(value: unknown): string {
@@ -270,6 +274,7 @@ export async function buildShopifyProductEditorStateForUser(
       openAiStatusLabel,
       lastSyncedAt: resolved.lastSyncedAt,
       warnings: resolved.warnings,
+      pdpIntelligence: null,
     };
   }
 
@@ -279,6 +284,22 @@ export async function buildShopifyProductEditorStateForUser(
     hydrationMode: resolved.hydrationMode,
     lastSyncedAt: resolved.lastSyncedAt,
   });
+
+  let pdpIntelligence: ShopifyPdpIntelligenceRecord | null = null;
+  if (options.userId) {
+    try {
+      pdpIntelligence = await getPersistedShopifyPdpIntelligenceForProduct({
+        userId: options.userId,
+        shopifyProductId: currentShopifyListing.productId,
+        productHandle: currentShopifyListing.handle || null,
+      });
+    } catch {
+      pdpIntelligence = null;
+    }
+  }
+
+  const skus = currentShopifyListing.variants.map((entry) => entry.sku.trim()).filter(Boolean);
+  const supplierMatch = matchRocktomicBySkus(skus);
 
   return {
     productReference: reference,
@@ -294,6 +315,13 @@ export async function buildShopifyProductEditorStateForUser(
     openAiStatusLabel,
     lastSyncedAt: resolved.lastSyncedAt,
     warnings: resolved.warnings,
+    pdpIntelligence:
+      pdpIntelligence && supplierMatch.product
+        ? {
+            ...pdpIntelligence,
+            supplier: supplierMatch.product.supplier,
+            supplier_sku: supplierMatch.product.sku,
+          }
+        : pdpIntelligence,
   };
 }
-

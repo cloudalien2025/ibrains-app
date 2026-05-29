@@ -4,6 +4,18 @@ Last updated: 2026-05-29 (UTC)
 
 This document describes the Shopify app as it exists today in this repository.
 
+## Sprint 008 Addendum (AI PDP Intelligence Engine Foundation)
+
+- `/ecomviper/products/[productId-or-handle]` now supports AI PDP intelligence generation/edit/save/reopen.
+- PDP intelligence generation is server-side only and combines:
+  - Shopify product/listing facts (source of truth)
+  - Rocktomic supplier intelligence when SKU match exists
+  - existing saved intelligence when present
+- Compliance guardrails include deterministic risky phrase detection, risk level, and safer rewrite notes.
+- FAQ entries now support schema-ready fields (`question`, `answer`, `category`, `schema_eligible`, `compliance_status`).
+- When OpenAI credentials are missing for the signed-in user/environment, generation returns an explicit unavailable state and does not break editor workflow.
+- Image Studio remains deferred for execution (placeholder only) until Sprint 009+.
+
 ## Sprint 007 Addendum (Rocktomic Supplier Intelligence Engine Foundation)
 
 - Rocktomic is the first platform-managed supplier intelligence source for `/ecomviper`.

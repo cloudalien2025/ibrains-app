@@ -41,6 +41,14 @@ These planning roots are active in the current repository structure.
 - `/ecomviper` PDP/editor now consumes Rocktomic SKU-match confidence/reason and supplier fact/status fields.
 - Dropshipping -> Rocktomic route is now a dedicated platform-intelligence shell (source status + SKU lookup).
 
+## Sprint 008 Foundation Direction
+
+- `/ecomviper/products/[productId-or-handle]` now includes an AI PDP Intelligence workspace.
+- PDP intelligence generation uses Shopify listing facts plus Rocktomic supplier facts when SKU matches.
+- Generated intelligence is editable, saved server-side, and reloaded on reopen for the same signed-in user.
+- OpenAI generation runs server-side only and degrades safely to `generation_unavailable` when credentials are missing.
+- Image Studio remains a placeholder and is deferred to Sprint 009+.
+
 ## Planning Navigation
 
 For family-level direction, start with:
