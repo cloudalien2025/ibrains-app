@@ -37,18 +37,11 @@ describe("brains index contract", () => {
     }
   });
 
-  it("brains index copy uses My Brains language and excludes legacy labels", () => {
+  it("redirects /brains to /ecomviper during hotfix to avoid blank launcher shells", () => {
     const brainsPagePath = path.join(process.cwd(), "app", "(shell)", "brains", "page.tsx");
     const source = fs.readFileSync(brainsPagePath, "utf8");
 
-    expect(source).toContain("My Brains");
-    expect(source).toContain("Open each standalone brain workspace");
-    expect(source).not.toContain("/apps");
-    expect(source).not.toContain("Open App");
-    expect(source).not.toContain("Back to Apps");
-    expect(source).not.toContain("SiteForge");
-    expect(source).not.toContain("UAPForge");
-    expect(source).not.toContain("Studio");
+    expect(source).toContain('redirect("/ecomviper")');
   });
 
   it("does not server-render fetch protected /api/brains endpoints", () => {
