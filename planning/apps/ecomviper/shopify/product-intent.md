@@ -4,6 +4,16 @@ Last updated: 2026-05-29 (UTC)
 
 This document describes the Shopify app as it exists today in this repository.
 
+## Sprint 007 Addendum (Rocktomic Supplier Intelligence Engine Foundation)
+
+- Rocktomic is the first platform-managed supplier intelligence source for `/ecomviper`.
+- Shopify remains the merchant listings source of truth; Rocktomic augments PDP/editor intelligence by SKU.
+- Merchants do not upload Rocktomic files in normal workflow.
+- Rocktomic source references (catalog/templates/policy and pending feeds) are modeled server-side.
+- Product editor Supplier Intelligence now renders match confidence/reason and richer supplier fact/status fields.
+- Dropshipping -> Rocktomic route now exposes source status, product count, catalog reference status, and deterministic SKU lookup.
+- AI PDP generation remains deferred to Sprint 008+.
+
 ## Sprint 006 Addendum (`/ecomviper` Shopify Inventory Foundation)
 
 - EcomViper parent route now provides a Shopify-first listings surface at `/ecomviper`.

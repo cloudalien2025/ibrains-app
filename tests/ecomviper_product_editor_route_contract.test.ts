@@ -13,6 +13,8 @@ describe("ecomviper product editor route contract", () => {
     expect(routeSource).toContain("buildShopifyProductEditorStateForUser");
     expect(clientSource).toContain("Shopify Product Data");
     expect(clientSource).toContain("Supplier Intelligence");
+    expect(clientSource).toContain("Match confidence");
+    expect(clientSource).toContain("COA status");
     expect(clientSource).toContain("AI PDP Optimizer");
     expect(clientSource).toContain("Image Studio");
     expect(clientSource).toContain("Buy Now Links");

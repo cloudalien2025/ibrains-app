@@ -82,6 +82,9 @@ export default function EcomViperDashboardClient({
     });
   }, [inventoryFilter, publishedFilter, rows, scoreFilter, search, shopifyStatusFilter, supplierFilter]);
 
+  const navBaseClass =
+    "rounded-lg border border-transparent px-3 py-2 text-left text-sm text-[#334155] hover:border-[#D9E4F0] hover:bg-[#F8FBFF]";
+
   return (
     <main className="ibrains-shell min-h-screen text-[#0F172A]" data-testid="ecomviper-overview-page">
       <div className="mx-auto max-w-[1380px] px-4 py-6 sm:px-6">
@@ -100,14 +103,16 @@ export default function EcomViperDashboardClient({
               <p className="mt-1 text-xs text-[#64748B]">Shopify-first listings foundation with SKU-based supplier intelligence.</p>
             </div>
             <nav className="grid gap-1" aria-label="EcomViper workspace navigation">
-              <button type="button" className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-left text-sm text-[#0F172A]">Overview</button>
-              <button type="button" className="rounded-lg border border-transparent px-3 py-2 text-left text-sm text-[#334155]">Products</button>
-              <button type="button" className="rounded-lg border border-transparent px-3 py-2 text-left text-sm text-[#334155]">Product Editor / PDP Optimizer</button>
-              <button type="button" className="rounded-lg border border-transparent px-3 py-2 text-left text-sm text-[#334155]">Image Studio</button>
-              <button type="button" className="rounded-lg border border-transparent px-3 py-2 text-left text-sm text-[#334155]">Dropshipping</button>
-              <button type="button" className="ml-4 rounded-lg border border-transparent px-3 py-2 text-left text-sm text-[#334155]">Rocktomic</button>
-              <button type="button" className="rounded-lg border border-transparent px-3 py-2 text-left text-sm text-[#334155]">Agentic Visibility</button>
-              <button type="button" className="rounded-lg border border-transparent px-3 py-2 text-left text-sm text-[#334155]">Settings</button>
+              <Link href="/ecomviper" className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-left text-sm text-[#0F172A]">Overview</Link>
+              <a href="#ecomviper-products-panel" className={navBaseClass}>Products</a>
+              <a href="#ecomviper-products-panel" className={navBaseClass}>Product Editor / PDP Optimizer</a>
+              <span className={navBaseClass}>Image Studio</span>
+              <Link href="/ecomviper/dropshipping/rocktomic" className={navBaseClass}>Dropshipping</Link>
+              <Link href="/ecomviper/dropshipping/rocktomic" className="ml-4 rounded-lg border border-transparent px-3 py-2 text-left text-sm text-[#334155] hover:border-[#D9E4F0] hover:bg-[#F8FBFF]">
+                Rocktomic
+              </Link>
+              <span className={navBaseClass}>Agentic Visibility</span>
+              <Link href="/ecomviper/shopify" className={navBaseClass}>Settings</Link>
             </nav>
           </aside>
 
@@ -143,7 +148,11 @@ export default function EcomViperDashboardClient({
               ) : null}
             </section>
 
-            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]" data-testid="ecomviper-products-panel">
+            <section
+              id="ecomviper-products-panel"
+              className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+              data-testid="ecomviper-products-panel"
+            >
               <h2 className="text-lg font-semibold text-[#0F172A]">Products / Listings</h2>
               <div className="mt-4 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
                 <input
@@ -229,7 +238,11 @@ export default function EcomViperDashboardClient({
                         <td className="py-3 pr-3">{row.vendor}</td>
                         <td className="py-3 pr-3">{row.productType}</td>
                         <td className="py-3 pr-3">{row.shopifyStatus}</td>
-                        <td className="py-3 pr-3">{row.supplierMatch === "rocktomic" ? `Rocktomic (${row.supplierMatchedSku})` : "Unmatched"}</td>
+                        <td className="py-3 pr-3">
+                          {row.supplierMatch === "rocktomic"
+                            ? `Rocktomic (${row.supplierMatchedSku}) · ${Math.round(row.supplierMatchConfidence * 100)}%`
+                            : "Unmatched"}
+                        </td>
                         <td className="py-3 pr-3">{row.aiPdpScore}</td>
                         <td className="py-3 pr-3">{row.publishedToEcomViper ? "Yes" : "No"}</td>
                         <td className="py-3 pr-3">{inventoryLabel(row.inventoryStatus)}</td>

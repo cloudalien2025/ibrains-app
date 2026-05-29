@@ -14,6 +14,9 @@ export interface EcomViperProductInventoryRow {
   shopifyStatus: string;
   supplierMatch: RocktomicMatchStatus;
   supplierMatchedSku: string | null;
+  supplierMatchConfidence: number;
+  supplierMatchReason: string;
+  supplierProductName: string | null;
   aiPdpScore: number;
   publishedToEcomViper: boolean;
   lastUpdated: string;
@@ -87,6 +90,9 @@ export function toEcomViperProductInventoryRows(products: ShopifyProductRecord[]
       shopifyStatus: normalizeShopifyStatus(product.status),
       supplierMatch: rocktomicMatch.status,
       supplierMatchedSku: rocktomicMatch.matchedSku,
+      supplierMatchConfidence: rocktomicMatch.matchConfidence,
+      supplierMatchReason: rocktomicMatch.matchReason,
+      supplierProductName: rocktomicMatch.product?.productName ?? null,
       aiPdpScore: computeAiPdpScore(product),
       publishedToEcomViper: false,
       lastUpdated: product.updatedAt,
