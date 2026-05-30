@@ -33,7 +33,60 @@ Last updated: 2026-05-29 (UTC)
 - eBay Sprint 001: In progress (`sprint-001-ebay-command-center-foundation`, command-center planning foundation + lightweight app-shell alignment).
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
 - Shopify Sprint 009: Completed and merged (`sprint-009-source-grounded-product-editor`, source-grounded product intelligence + Product Editor redesign, production deployed).
-- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Sprint 009 closure).
+- Shopify Hotfix Sprint 009.1: Completed and merged (`hotfix-009-1-brains-auth-redirect`, production auth redirect stall fix for `/brains` blank page, production deployed).
+- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.1 closure).
+
+## Sprint Completion Log: Shopify Hotfix Sprint 009.1 Production Closure
+
+- Sprint/lane: `Shopify Hotfix Sprint 009.1` (`hotfix-009-1-brains-auth-redirect`) - closed.
+- Branch: `hotfix-009-1-brains-auth-redirect`.
+- MR: `!234` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/234`).
+- MR pipeline: `2562998801` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2562998801`).
+- Main/deploy pipeline: `2563001199` (status: `success`, includes `build_release` + `deploy_production`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2563001199`).
+- Root cause:
+  - `/brains` post-auth landing route was still configured as Clerk fallback but the launcher render path could intermittently stall into a blank shell during production auth handoff.
+  - Result: users could complete sign-in and land on `/brains` with no actionable UI.
+- Chosen route behavior:
+  - implemented a production-safe server redirect at `/brains` to `/ecomviper` to eliminate blank launcher stalls before Sprint 010.
+  - preserved existing protected-route auth behavior (`/brains` remains auth-gated, signed-out users still redirect to sign-in with preserved `redirect_url`).
+- Files changed:
+  - `app/(shell)/brains/page.tsx`
+  - `tests/brains_index_contract.test.ts`
+  - `tests/brains_route_redirect.test.ts`
+- Tests added/updated:
+  - added: `tests/brains_route_redirect.test.ts`
+  - updated: `tests/brains_index_contract.test.ts`
+- Validation summary:
+  - focused hotfix route/auth/dashboard suites passed:
+    - `tests/brains_index_contract.test.ts`
+    - `tests/brains_route_redirect.test.ts`
+    - `tests/proxy_apps_auth_protection.test.ts`
+    - `tests/proxy_trusted_ingest_bypass.test.ts`
+    - `tests/shell_layout_auth_fail_closed.test.tsx`
+    - `tests/ecomviper_shopify_route_consolidation.test.ts`
+    - `tests/ecomviper_inventory_foundation_dashboard.test.tsx`
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+  - `npm test`: failed on unrelated pre-existing baseline suites outside hotfix scope (CasaFlix/SiteForge/Walmart/frontdoor baseline families); hotfix-focused suites passed.
+- Merge commit SHA: `4d13d7250c7cda4968d96c64b49b745efa7c9f57`.
+- Production deployed commit SHA: `4d13d7250c7cda4968d96c64b49b745efa7c9f57`.
+- Production/runtime status:
+  - `GET https://app.ibrains.ai/api/meta/release` reports `git_sha=4d13d7250c7cda4968d96c64b49b745efa7c9f57`, `build_id=2563001199`.
+  - `GET https://app.ibrains.ai/api/health` returned `200` with `ok: true`.
+  - `systemctl is-active ibrains-app` returned `active`.
+- Log inspection summary:
+  - `journalctl -u ibrains-app` shows clean restart aligned with deploy window (`2026-05-30 00:04 UTC`).
+  - app log tail shows normal `next start` startup and ready output.
+  - nginx error log tail shows no new hotfix-specific runtime/auth faults.
+- Browser verification status:
+  - signed-out checks (`2026-05-29 23:53 UTC`):
+    - `https://app.ibrains.ai/brains` -> `307` to sign-in with preserved `redirect_url`.
+    - `https://app.ibrains.ai/ecomviper` -> `307` to sign-in with preserved `redirect_url`.
+    - `https://app.ibrains.ai/ecomviper/products/does-not-exist` -> `307` to sign-in with preserved `redirect_url`.
+  - authenticated browser verification remains follow-up for a signed-in session.
+- Final status: closed (MR merged + green MR/main pipelines + production deploy + runtime/log checks + signed-out browser verification + closure metadata recorded).
+- Risks/follow-ups:
+  - `/brains` launcher remains temporarily redirected to `/ecomviper`; restore a fully rendered BrainOS launcher in Sprint 010+ after deeper auth/launcher hardening.
 
 ## Sprint Completion Log: Shopify Sprint 009 Production Closure
 
