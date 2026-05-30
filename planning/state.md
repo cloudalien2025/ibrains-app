@@ -47,6 +47,110 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Stabilization Sprint 009.6: In progress (`stabilization-009-6-supplier-data-pipeline-normalized-sku-intelligence`, normalized supplier sync pipeline + SKU intelligence persistence hardening).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Emergency Auth Runtime Recovery`, then resume `Shopify Sprint 011 planning`.
 
+## Hotfix Closure Update: Shopify Hotfix 009.7 Catalog Sync + Internal Auth Cleanup (`2026-05-30 UTC`)
+
+- Sprint/lane:
+  - `hotfix-009-7-catalog-pdf-sync-auth-cleanup`
+  - follow-up `hotfix-009-7-catalog-pdf-sync-time-budget`
+- Root causes addressed:
+  1. `catalog_pdf` sync failed because default binary cap (`8MB`) blocked the configured `13,890,530` byte catalog PDF.
+  2. `/api/ecomviper/supplier-sources/sync` internal bearer token path was still gated in proxy by JWT-shaped `__session` cookie checks for all `/api/ecomviper/*`.
+  3. first-cap fix exposed a second issue: full text-layer extraction on large PDFs could exceed upstream timeout budgets (`504`) before route completion.
+- Fixes shipped:
+  - `lib/ecomviper/dropshipping/rocktomic-source-ingestion.ts`
+    - added trusted-source binary cap override:
+      - default binary cap remains `8MB`.
+      - trusted Rocktomic catalog PDF source cap raised to `32MB`.
+    - added bounded extraction guards:
+      - raw fallback string scan capped and line count capped.
+      - full text-layer extraction skipped for oversized PDFs (`>12MB`) while preserving link extraction + explicit diagnostics.
+  - `proxy.ts`
+    - added exact internal-token bypass for `POST /api/ecomviper/supplier-sources/sync` only.
+    - no bypass for other `/api/ecomviper/*` routes.
+  - tests:
+    - `tests/ecomviper_rocktomic_source_ingestion_payload_caps.test.ts`
+    - `tests/ecomviper_supplier_sync_route_auth.test.ts`
+    - updated `tests/proxy_apps_auth_protection.test.ts`
+  - docs:
+    - `planning/apps/ecomviper/shopify/supplier-ingestion-architecture.md`
+    - `planning/apps/ecomviper/shopify/production-safety.md`
+- GitLab delivery chain:
+  - MR `!259` (merged): `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/259`
+    - merge SHA: `01e3671f6b9f1329b88f08d618bc1636db35c55e`
+    - branch pipeline `2564383830`: success
+    - main pipeline `2564386857`: success
+  - MR `!260` (merged): `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/260`
+    - merge SHA: `55380e29213acebcaaf20706f21c0bf583103bd4`
+    - branch pipeline `2564399174`: success
+    - main pipeline `2564400990`: failed (`deploy_production`) due local production `main` divergence.
+  - MR `!261` (merged): `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/261`
+    - merge SHA: `a4c1f6592f13e33ca0de36ba5326bfad8b37f4eb`
+    - branch pipeline `2564410120`: success
+    - main/deploy pipeline `2564411869`: success (final production deploy).
+- Production deployment recovery note:
+  - fixed failed deploy-family condition by backing up divergent local commit (`backup/main-diverged-92f7057`) and realigning production `main` to `origin/main`, then continued through green GitLab deploy pipeline.
+- Final deployed release verification:
+  - `/api/meta/release`:
+    - `git_sha=a4c1f6592f13e33ca0de36ba5326bfad8b37f4eb`
+    - `build_id=2564411869`
+    - `deployed_at=2026-05-30T21:08:00Z`
+    - `release_metadata_complete=true`
+- Production source sync (token-only internal auth path):
+  - command: `ECOMVIPER_SYNC_USER_ID=__global__ npm run ecomviper:sync-supplier-sources`
+  - run start/end: `2026-05-30T21:13:29Z` -> `2026-05-30T21:13:32Z` (~`3s`)
+  - persisted sync run id: `2`
+  - run status: `synced`
+  - run attempted/completed: `2026-05-30T21:13:30Z`
+  - sync response duration: `1961ms`
+  - parsed counts:
+    - products parsed: `145`
+    - pricing parsed: `145`
+    - inventory parsed: `153`
+    - assets parsed: `147`
+  - normalized persisted counts:
+    - products: `145`
+    - pricing: `145`
+    - inventory: `145`
+    - assets: `145`
+  - source statuses:
+    - `catalog_pdf`: `synced`, `fetchable=true`, `parsed=true`, `recordCount=147`
+    - `msrp_profit_margins_report`: `synced`, `recordCount=145`
+    - `plds_catalog`: `synced`, `recordCount=145`
+    - `inventory_report`: `synced`, `recordCount=153`
+    - `label_mockup_templates`: `synced`, `recordCount=0`
+    - `order_refund_policy`: `synced`, `recordCount=0`
+    - `coa_repository`: `never_synced` / pending source
+  - latest run error field: `Source pending.` (COA repository pending reference), not payload cap failure.
+- Membership tiers detected:
+  - `Basic Plan $97/mo`
+  - `Launch Plan $157/mo`
+  - `Non Member Pricing`
+  - `Scale Plan $497/mo`
+  - `"Standard & VIP Lifetime Memberships"`
+  - `VIP PLUS Membership & Premium Pricing Membership`
+- Inventory status distribution:
+  - `in_stock: 118`
+  - `low_stock: 4`
+  - `out_of_stock: 22`
+  - `unknown: 1`
+- SKU verification:
+  - `ROC948`: normalized product/pricing/inventory/assets present.
+  - `ROC949`: normalized product/pricing/inventory/assets present.
+- Route/runtime safety after final deploy + sync:
+  - `/api/health`: `200` in `0.090244s`
+  - `/api/meta/release`: `200` in `0.063385s`
+  - `/brains`: `307` in `0.056842s`
+  - `/ecomviper`: `307` in `0.080963s`
+  - `/ecomviper/settings`: `307` in `0.057274s`
+  - `/ecomviper/dropshipping/rocktomic`: `307` in `0.062124s`
+  - `scripts/production_smoke_check.sh app.ibrains.ai`: passed.
+  - service status: `active`.
+  - socket states on `:3001` after cooldown: no sustained `CLOSE-WAIT` growth observed.
+- Remaining operational blockers before full closure of signed-in verification requirements:
+  - desktop signed-in Product Editor and Generate Intelligence browser verification not executable from this non-interactive CLI environment.
+  - mobile signed-in browser verification not executable from this environment.
+  - these checks still require manual authenticated browser execution and recording.
+
 ## Active Sprint Note: Shopify Stabilization Sprint 011 (In Progress)
 
 - Sprint/lane: `Shopify Stabilization Sprint 011` (`stabilization-ecomviper-performance-architecture-audit`) - in progress.
