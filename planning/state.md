@@ -37,12 +37,12 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 009.2: Completed and merged (`hotfix-009-2-ibrains-dashboard-navigation`, restored `/brains` launcher and removed user-facing BrainOS branding, production deployed).
 - Shopify Hotfix Sprint 009.3: Completed and merged (`hotfix-009-3-catalog-field-extraction-coa-mapping`, deterministic catalog field extraction + COA hyperlink mapping for Product Editor, production deployed).
 - Shopify Hotfix Sprint 009.4: Completed and merged (`hotfix-009-4-universal-catalog-pricing-engine`, universal catalog extraction + membership pricing engine, production deployed).
-- Shopify Hotfix Sprint 009.5: In progress (`hotfix-009-5-production-504-proxy-timeout`, production 504 timeout diagnosis + middleware/public-route proxy loop fix).
-- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.4 closure).
+- Shopify Hotfix Sprint 009.5: Completed and merged (`hotfix-009-5-production-504-proxy-timeout`, production 504 timeout diagnosis + middleware/public-route proxy loop fix, production proxy timeout guard shipped).
+- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.5 closure).
 
-## Sprint Execution Log: Shopify Hotfix Sprint 009.5 (In Progress)
+## Sprint Completion Log: Shopify Hotfix Sprint 009.5 Production Closure
 
-- Sprint/lane: `Shopify Hotfix Sprint 009.5` (`hotfix-009-5-production-504-proxy-timeout`) - in progress.
+- Sprint/lane: `Shopify Hotfix Sprint 009.5` (`hotfix-009-5-production-504-proxy-timeout`) - closed.
 - Initial incident timestamp: `2026-05-30 03:31 UTC` (first observed broad `504` in `app.ibrains.ai` nginx logs).
 - Production diagnostics run:
   - `curl -I --max-time 10 http://127.0.0.1:3001/brains`
@@ -64,9 +64,21 @@ Last updated: 2026-05-30 (UTC)
   - A single `robots.txt` hit can create runaway local self-connections on `127.0.0.1:3001`, spike `next-server` CPU, and saturate sockets, producing broad 504s for unrelated routes.
 - Operational mitigation applied:
   - forced service recovery with `systemctl kill -s SIGKILL ibrains-app` + `systemctl start ibrains-app` after graceful stop hung in `deactivating (final-sigterm)`.
-- Code fix in progress:
+- Chosen fix:
   - `proxy.ts` now short-circuits non-protected routes (`if (!isProtectedRoute(req)) return NextResponse.next();`) before `clerkProxy` fallback.
+  - explicit public passthrough routing now includes `/robots.txt`, `/sitemap.xml`, and `/llms.txt`.
   - added regression test ensuring `/robots.txt` stays public and does not invoke Clerk proxy middleware.
+- MR: `!242` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/242`).
+- MR pipeline: `2563658926` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2563658926`).
+- Merge commit SHA: `56f75772de4a0cff4c667381d72b8c6fb3df5d9e`.
+- Branch deletion status:
+  - remote: deleted on merge (`hotfix-009-5-production-504-proxy-timeout` no longer present on `origin`).
+  - local: deleted via `git branch -d hotfix-009-5-production-504-proxy-timeout`.
+- Final local branch/status:
+  - `git switch main`
+  - `git pull`
+  - final status `## main...origin/main` (clean).
+- Recommended next sprint: `Shopify Sprint 010 planning`.
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 009.4 Production Closure
 
