@@ -1,4 +1,4 @@
-# Inventory Architecture (Sprint 009)
+# Inventory Architecture (Sprint 009.4)
 
 Last updated: 2026-05-29 (UTC)
 
@@ -16,6 +16,7 @@ Last updated: 2026-05-29 (UTC)
 2. If supplier inventory is unknown but source is available, fallback to Shopify-derived stock status.
 3. If supplier inventory source is unavailable and Shopify signal is insufficient, return `source_unavailable`.
 4. Never synthesize quantity counts from status-only supplier reports.
+5. Supplier inventory report is qualitative only (`IN STOCK`, `LOW STOCK`, `OUT OF STOCK`); do not infer unit quantities.
 
 ## Customer-Facing Labels
 

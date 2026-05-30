@@ -21,12 +21,30 @@ endobj
 2 0 obj
 <</Type/Annot/Subtype/Link/A<</S/URI/URI(https://rocktomicplatform.blob.core.windows.net/client-resources/templates.html)>>>>
 endobj
+(ROC949 Premium Magnesium Glycinate Gummies)
+(Supplement Facts: Serving Size: 1 gummy; Servings Per Container: 60; Active Ingredients: Magnesium \\(as Magnesium Glycinate\\); Amount Per Serving: 30mg; Other Ingredients: Glucose syrup)
+(Serving Size: 1 gummy)
+(Servings Per Container: 60)
+(Active Ingredients: Magnesium \\(as Magnesium Glycinate\\))
+(Amount Per Serving: 30mg)
+(Other Ingredients: Glucose syrup, sugar)
+(Ingredient Highlights: Magnesium glycinate)
+(Key Product Features: Premium magnesium glycinate gummies)
+(Dietary Attributes: Vegan, Non-GMO)
+(Manufacturing Claims: Made in USA)
 %%EOF`;
 
 const PDF_WITHOUT_ROC949_LINK = `%PDF-1.4
 1 0 obj
 <</Type/Annot/Subtype/Link/A<</S/URI/URI(https://rocktomicplatform.blob.core.windows.net/client-resources/templates.html)>>>>
 endobj
+(ROC949 Premium Magnesium Glycinate Gummies)
+(Supplement Facts: Serving Size: 1 gummy; Servings Per Container: 60; Active Ingredients: Magnesium \\(as Magnesium Glycinate\\); Amount Per Serving: 30mg; Other Ingredients: Glucose syrup)
+(Serving Size: 1 gummy)
+(Servings Per Container: 60)
+(Active Ingredients: Magnesium \\(as Magnesium Glycinate\\))
+(Amount Per Serving: 30mg)
+(Other Ingredients: Glucose syrup, sugar)
 %%EOF`;
 
 afterEach(() => {

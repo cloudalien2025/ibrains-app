@@ -1,4 +1,4 @@
-# PDP Intelligence (Sprint 009.3)
+# PDP Intelligence (Sprint 009.4)
 
 Last updated: 2026-05-30 (UTC)
 
@@ -45,3 +45,15 @@ Generation now consumes pre-mapped supplier fields from ingestion:
 - deterministic source diagnostics (`coa_link_status`, `coa_link_error`)
 
 No generated output may fabricate ingredient/certification/COA claims when these inputs are unknown or unavailable.
+
+## Deterministic Inputs (Hotfix 009.4)
+
+Generation now also consumes selected membership-tier pricing context:
+
+- `pricing.wholesaleCost` (selected tier)
+- `pricing.membershipTier`
+- `pricing.pricingStatusLabel`
+- Shopify `price` / `compare_at_price`
+- derived `estimated_profit` and `margin_percent` when inputs are present
+
+If selected tier or cost source is unavailable, generation must preserve `unknown`/source-unavailable semantics and must not invent values.
