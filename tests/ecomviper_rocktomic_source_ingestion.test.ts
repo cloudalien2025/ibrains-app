@@ -220,4 +220,50 @@ describe("rocktomic source ingestion", () => {
     expect(second.productCount).toBeGreaterThan(0);
     expect(catalogCsvFetchCount).toBe(1);
   });
+
+  it("returns immediate seed snapshot in cache-only mode when no cache exists", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const snapshot = await getRocktomicSourceIngestionSnapshot({
+      allowRefresh: false,
+      triggerBackgroundRefresh: false,
+    });
+
+    expect(snapshot.usedSeedFallback).toBe(true);
+    expect(snapshot.cacheState).toBe("seed_fallback");
+    expect(snapshot.refreshState).toBe("idle");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("caps oversized source payloads and surfaces safe diagnostics", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === "HEAD") {
+          return new Response(null, { status: 200 });
+        }
+        if (url.includes("15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU")) {
+          return new Response(CATALOG_CSV, {
+            status: 200,
+            headers: { "content-length": String(6 * 1024 * 1024) },
+          });
+        }
+        if (url.includes("1oOjqXsaCAjSOkA1lXrasNtUVtrsxvyxcFcolD8n6YXY")) {
+          return new Response(INVENTORY_CSV, { status: 200 });
+        }
+        if (url.includes("Supplement-&-Apparel-Catalog.pdf")) {
+          return new Response(PDF_WITH_ROC949_COA, { status: 200 });
+        }
+        return new Response("", { status: 200 });
+      })
+    );
+
+    const snapshot = await getRocktomicSourceIngestionSnapshot({ forceRefresh: true });
+    const catalogSource = snapshot.sourceDiagnostics.find((source) => source.id === "msrp_profit_margins_report");
+
+    expect(catalogSource?.parsed).toBe(false);
+    expect(catalogSource?.lastError?.toLowerCase()).toContain("payload too large");
+    expect(snapshot.usedSeedFallback).toBe(true);
+  });
 });

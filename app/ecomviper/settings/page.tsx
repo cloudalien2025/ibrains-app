@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
-import { getRocktomicSourceIngestionSnapshot } from "@/lib/ecomviper/dropshipping/rocktomic-source-ingestion";
+import {
+  getRocktomicSourceIngestionSnapshot,
+  type RocktomicSourceIngestionSnapshot,
+} from "@/lib/ecomviper/dropshipping/rocktomic-source-ingestion";
 import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopify-connection";
 import { getShopifyImportStateForUser } from "@/lib/ecomviper/shopify/shopify-import";
 import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify/openai-connection";
@@ -27,15 +30,28 @@ export default async function EcomViperSettingsPage() {
     userId = null;
   }
 
-  const rocktomic = await getRocktomicSourceIngestionSnapshot({ userId });
-  const selectedMembershipTier = userId
-    ? await getSupplierMembershipTierSelectionForUser(userId).catch(() => null)
-    : null;
-
   let shopifyConnected = false;
   let shopifyStore = "Not connected";
   let lastImportAt: string | null = null;
   let openAiLabel = "Not connected";
+  let rocktomic: RocktomicSourceIngestionSnapshot = {
+    supplier: "Rocktomic" as const,
+    products: [],
+    productCount: 0,
+    catalogSkuCount: 0,
+    catalogExtractedSkuCount: 0,
+    inventorySkuCount: 0,
+    inventoryAvailable: false,
+    usedSeedFallback: true,
+    membershipTiersDetected: [] as string[],
+    sourceDiagnostics: [],
+    lastCheckedAt: "",
+    cacheState: "seed_fallback" as const,
+    refreshState: "idle" as const,
+  };
+  const selectedMembershipTier = userId
+    ? await getSupplierMembershipTierSelectionForUser(userId).catch(() => null)
+    : null;
 
   if (userId) {
     const [shopifyStatus, importState, openAiStatus] = await Promise.allSettled([
@@ -55,6 +71,17 @@ export default async function EcomViperSettingsPage() {
 
     if (openAiStatus.status === "fulfilled") {
       openAiLabel = openAiStatus.value.connected ? "Connected" : "Not connected";
+    }
+
+    if (shopifyConnected) {
+      const snapshot = await getRocktomicSourceIngestionSnapshot({
+        userId,
+        allowRefresh: false,
+        triggerBackgroundRefresh: false,
+      }).catch(() => null);
+      if (snapshot) {
+        rocktomic = snapshot;
+      }
     }
   }
 
@@ -92,6 +119,9 @@ export default async function EcomViperSettingsPage() {
           <h2 className="text-base font-semibold text-[#0F172A]">Rocktomic Source Diagnostics</h2>
           <p className="mt-1 text-sm text-[#475569]">
             Product records: {rocktomic.productCount} · Inventory records: {rocktomic.inventorySkuCount} · Last checked: {asIso(rocktomic.lastCheckedAt)}
+          </p>
+          <p className="mt-1 text-xs text-[#64748B]">
+            Cache: {rocktomic.cacheState || "unknown"} · Refresh: {rocktomic.refreshState || "idle"}
           </p>
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full text-sm">

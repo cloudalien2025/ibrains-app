@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   requireSignedInUser: vi.fn(),
   buildShopifyProductEditorStateForUser: vi.fn(),
   getShopifyOpenAiApiKeyForUser: vi.fn(),
+  matchPrimarySupplierBySkus: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/requireSignedInUser", () => ({
@@ -17,6 +18,10 @@ vi.mock("@/lib/ecomviper/shopify/shopify-product-editor-state", () => ({
 
 vi.mock("@/lib/ecomviper/shopify/openai-connection", () => ({
   getShopifyOpenAiApiKeyForUser: mocks.getShopifyOpenAiApiKeyForUser,
+}));
+
+vi.mock("@/lib/ecomviper/suppliers/supplier-intelligence", () => ({
+  matchPrimarySupplierBySkus: mocks.matchPrimarySupplierBySkus,
 }));
 
 function listingFixture() {
@@ -57,6 +62,21 @@ describe("ecomviper PDP intelligence route", () => {
       currentShopifyListing: listingFixture(),
     });
     mocks.getShopifyOpenAiApiKeyForUser.mockResolvedValue(null);
+    mocks.matchPrimarySupplierBySkus.mockResolvedValue({
+      platform: "rocktomic",
+      supplierName: "Rocktomic",
+      match: {
+        status: "rocktomic",
+        skuInput: "ROC817",
+        normalizedSku: "ROC817",
+        matchedSku: "ROC817",
+        matchReason: "exact_sku",
+        matchConfidence: 1,
+        product: null,
+      },
+      inventoryAvailable: false,
+      lastCheckedAt: "2026-05-30T00:00:00.000Z",
+    });
   });
 
   it("returns 401 for unauthorized requests", async () => {
@@ -167,5 +187,10 @@ describe("ecomviper PDP intelligence route", () => {
     expect(response.status).toBe(200);
     expect(payload.generationUnavailable).toBe(true);
     expect(payload.intelligence?.generation_status).toBe("generation_unavailable");
+    expect(mocks.matchPrimarySupplierBySkus).toHaveBeenCalledWith(["ROC817"], {
+      userId: "user_a",
+      allowRefresh: false,
+      triggerBackgroundRefresh: false,
+    });
   });
 });

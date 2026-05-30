@@ -14,6 +14,8 @@ import { getSupplierMembershipTierSelectionForUser } from "@/lib/ecomviper/setti
 
 const ROCKTOMIC_INGESTION_TTL_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 12_000;
+const MAX_TEXT_PAYLOAD_BYTES = 4 * 1024 * 1024;
+const MAX_BINARY_PAYLOAD_BYTES = 8 * 1024 * 1024;
 
 interface CsvTable {
   rows: string[][];
@@ -90,6 +92,8 @@ export interface RocktomicSourceIngestionSnapshot {
   membershipTiersDetected: string[];
   sourceDiagnostics: RocktomicSourceIngestionDiagnostic[];
   lastCheckedAt: string;
+  cacheState?: "fresh" | "stale" | "seed_fallback";
+  refreshState?: "idle" | "refreshing";
 }
 
 let cache = new Map<string, { expiresAt: number; snapshot: RocktomicSourceIngestionSnapshot }>();
@@ -127,6 +131,9 @@ function toTierLabel(header: string): string {
 }
 
 function redactError(error: unknown): string {
+  if (error instanceof Error && /abort/i.test(`${error.name} ${error.message}`)) {
+    return `Request timed out after ${FETCH_TIMEOUT_MS}ms`;
+  }
   const text = (error instanceof Error ? error.message : String(error || "Unknown error"))
     .replace(/(token|secret|key|password)=([^&\s]+)/gi, "$1=[redacted]")
     .trim();
@@ -674,6 +681,66 @@ function buildProduct(input: {
   };
 }
 
+function parseContentLength(header: string | null): number | null {
+  if (!header) return null;
+  const parsed = Number.parseInt(header, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function assertPayloadLimit(input: { sizeBytes: number; maxBytes: number; sourceUrl: string }): void {
+  if (input.sizeBytes <= input.maxBytes) return;
+  throw new Error(
+    `Payload too large (${input.sizeBytes} bytes) for ${input.sourceUrl}; max allowed is ${input.maxBytes} bytes.`
+  );
+}
+
+function withRuntimeSnapshotState(
+  snapshot: RocktomicSourceIngestionSnapshot,
+  state: { cacheState: "fresh" | "stale" | "seed_fallback"; refreshState: "idle" | "refreshing" }
+): RocktomicSourceIngestionSnapshot {
+  return {
+    ...snapshot,
+    cacheState: state.cacheState,
+    refreshState: state.refreshState,
+  };
+}
+
+function buildSeedFallbackSnapshot(input: {
+  config: ReturnType<typeof getRocktomicSourceConfigSnapshot>;
+  lastCheckedAt: string;
+  selectedMembershipTier: string | null;
+  refreshScheduled: boolean;
+  reason: string;
+}): RocktomicSourceIngestionSnapshot {
+  const products = listRocktomicSupplierProducts();
+  return {
+    supplier: "Rocktomic",
+    products,
+    productCount: products.length,
+    catalogSkuCount: 0,
+    catalogExtractedSkuCount: 0,
+    inventorySkuCount: 0,
+    inventoryAvailable: false,
+    usedSeedFallback: true,
+    membershipTiersDetected: input.selectedMembershipTier ? [input.selectedMembershipTier] : [],
+    sourceDiagnostics: input.config.references.map((reference) => ({
+      id: reference.id,
+      label: reference.label,
+      configured: reference.status === "configured" && Boolean(reference.sourceUrl),
+      fetchable: false,
+      parsed: false,
+      recordCount: 0,
+      lastCheckedAt: input.lastCheckedAt,
+      lastError: input.reason,
+      sourceUrl: reference.sourceUrl,
+      fetchUrl: null,
+    })),
+    lastCheckedAt: input.lastCheckedAt,
+    cacheState: "seed_fallback",
+    refreshState: input.refreshScheduled ? "refreshing" : "idle",
+  };
+}
+
 async function fetchWithTimeout(url: string): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -686,7 +753,21 @@ async function fetchWithTimeout(url: string): Promise<string> {
       },
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.text();
+    const contentLength = parseContentLength(response.headers.get("content-length"));
+    if (contentLength != null) {
+      assertPayloadLimit({
+        sizeBytes: contentLength,
+        maxBytes: MAX_TEXT_PAYLOAD_BYTES,
+        sourceUrl: url,
+      });
+    }
+    const bytes = await response.arrayBuffer();
+    assertPayloadLimit({
+      sizeBytes: bytes.byteLength,
+      maxBytes: MAX_TEXT_PAYLOAD_BYTES,
+      sourceUrl: url,
+    });
+    return new TextDecoder("utf-8").decode(bytes);
   } finally {
     clearTimeout(timeout);
   }
@@ -704,7 +785,21 @@ async function fetchBinaryWithTimeout(url: string): Promise<ArrayBuffer> {
       },
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.arrayBuffer();
+    const contentLength = parseContentLength(response.headers.get("content-length"));
+    if (contentLength != null) {
+      assertPayloadLimit({
+        sizeBytes: contentLength,
+        maxBytes: MAX_BINARY_PAYLOAD_BYTES,
+        sourceUrl: url,
+      });
+    }
+    const bytes = await response.arrayBuffer();
+    assertPayloadLimit({
+      sizeBytes: bytes.byteLength,
+      maxBytes: MAX_BINARY_PAYLOAD_BYTES,
+      sourceUrl: url,
+    });
+    return bytes;
   } finally {
     clearTimeout(timeout);
   }
@@ -726,7 +821,12 @@ async function checkUrlFetchable(url: string): Promise<void> {
 }
 
 export async function getRocktomicSourceIngestionSnapshot(
-  options?: { forceRefresh?: boolean; userId?: string | null }
+  options?: {
+    forceRefresh?: boolean;
+    userId?: string | null;
+    allowRefresh?: boolean;
+    triggerBackgroundRefresh?: boolean;
+  }
 ): Promise<RocktomicSourceIngestionSnapshot> {
   const selectedMembershipTier = options?.userId
     ? await getSupplierMembershipTierSelectionForUser(options.userId).catch(() => null)
@@ -734,6 +834,8 @@ export async function getRocktomicSourceIngestionSnapshot(
   const selectedMembershipTierKey = selectedMembershipTier
     ? normalizeTierKey(selectedMembershipTier)
     : "";
+  const allowRefresh = options?.allowRefresh ?? true;
+  const triggerBackgroundRefresh = options?.triggerBackgroundRefresh ?? true;
   const cacheKey = selectedMembershipTierKey || "__default__";
   const createSnapshotPromise = async (): Promise<RocktomicSourceIngestionSnapshot> => {
     const now = Date.now();
@@ -962,11 +1064,15 @@ export async function getRocktomicSourceIngestionSnapshot(
   const existing = cache.get(cacheKey);
   if (!options?.forceRefresh && existing) {
     if (existing.expiresAt > now) {
-      return existing.snapshot;
+      const refreshInFlight = inFlightByCacheKey.has(cacheKey);
+      return withRuntimeSnapshotState(existing.snapshot, {
+        cacheState: "fresh",
+        refreshState: refreshInFlight ? "refreshing" : "idle",
+      });
     }
 
     const staleRefreshInFlight = inFlightByCacheKey.get(cacheKey);
-    if (!staleRefreshInFlight) {
+    if (allowRefresh && !staleRefreshInFlight) {
       const backgroundRefresh = createSnapshotPromise();
       inFlightByCacheKey.set(cacheKey, backgroundRefresh);
       backgroundRefresh
@@ -976,12 +1082,42 @@ export async function getRocktomicSourceIngestionSnapshot(
         });
     }
 
-    return existing.snapshot;
+    return withRuntimeSnapshotState(existing.snapshot, {
+      cacheState: "stale",
+      refreshState: inFlightByCacheKey.has(cacheKey) ? "refreshing" : "idle",
+    });
+  }
+
+  if (!options?.forceRefresh && !allowRefresh) {
+    const refreshInFlight = inFlightByCacheKey.get(cacheKey);
+    const shouldStartBackgroundRefresh = triggerBackgroundRefresh && !refreshInFlight;
+    if (shouldStartBackgroundRefresh) {
+      const backgroundRefresh = createSnapshotPromise();
+      inFlightByCacheKey.set(cacheKey, backgroundRefresh);
+      backgroundRefresh
+        .catch(() => undefined)
+        .finally(() => {
+          inFlightByCacheKey.delete(cacheKey);
+        });
+    }
+    return buildSeedFallbackSnapshot({
+      config: getRocktomicSourceConfigSnapshot(),
+      lastCheckedAt: new Date(now).toISOString(),
+      selectedMembershipTier,
+      refreshScheduled: shouldStartBackgroundRefresh || Boolean(refreshInFlight),
+      reason: shouldStartBackgroundRefresh
+        ? "Source refresh scheduled in background."
+        : "Source refresh deferred for request safety.",
+    });
   }
 
   const inFlight = inFlightByCacheKey.get(cacheKey);
   if (inFlight) {
-    return inFlight;
+    const snapshot = await inFlight;
+    return withRuntimeSnapshotState(snapshot, {
+      cacheState: "fresh",
+      refreshState: "refreshing",
+    });
   }
 
   const snapshotPromise = createSnapshotPromise();

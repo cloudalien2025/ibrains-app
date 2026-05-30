@@ -339,6 +339,8 @@ export async function buildShopifyProductEditorStateForUser(
   const skus = currentShopifyListing.variants.map((entry) => entry.sku.trim()).filter(Boolean);
   const supplierSnapshot = await matchPrimarySupplierBySkus(skus, {
     userId: options.userId,
+    allowRefresh: false,
+    triggerBackgroundRefresh: false,
   }).catch(() => null);
   const supplierMatch = supplierSnapshot?.match;
   const supplierProductRaw = supplierMatch?.product ?? null;
