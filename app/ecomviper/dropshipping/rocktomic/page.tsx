@@ -16,7 +16,10 @@ function asIso(value: string | null): string {
 }
 
 export default async function RocktomicDropshippingPage({ searchParams }: RocktomicDropshippingPageProps) {
-  const snapshot = await getRocktomicSourceIngestionSnapshot();
+  const snapshot = await getRocktomicSourceIngestionSnapshot({
+    allowRefresh: false,
+    triggerBackgroundRefresh: false,
+  });
   const params = await searchParams;
   const sku = (params.sku || "").trim();
   const lookup = sku ? lookupRocktomicSupplierProductBySku(sku, snapshot.products) : null;
@@ -49,6 +52,8 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
             <p className="text-sm text-[#475569]">Inventory availability: {snapshot.inventoryAvailable ? "Available" : "Unavailable"}</p>
             <p className="text-sm text-[#475569]">Fallback mode: {snapshot.usedSeedFallback ? "Enabled" : "Disabled"}</p>
             <p className="text-sm text-[#475569]">Last source check: {asIso(snapshot.lastCheckedAt)}</p>
+            <p className="text-sm text-[#475569]">Cache state: {snapshot.cacheState || "unknown"}</p>
+            <p className="text-sm text-[#475569]">Refresh state: {snapshot.refreshState || "idle"}</p>
           </article>
 
           <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5">

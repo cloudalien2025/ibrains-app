@@ -178,4 +178,18 @@ describe("shopify PDP intelligence generation", () => {
     expect(result.ai_product_summary.toLowerCase()).not.toContain("rocktomic");
     expect(result.agentic_selection_notes.toLowerCase()).not.toContain("supplier matching");
   });
+
+  it("returns failed status with timeout-safe message when OpenAI request times out", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new DOMException("request timed out", "AbortError"));
+
+    const result = await generateShopifyPdpIntelligence({
+      product: productFixture(),
+      supplierMatch: { supplier: "Rocktomic", supplierSku: "ROC817", product: supplierFixture() },
+      existing: null,
+      openAiApiKey: "sk-test",
+    });
+
+    expect(result.generation_status).toBe("failed");
+    expect(result.compliance_notes.join(" ").toLowerCase()).toContain("timed out");
+  });
 });

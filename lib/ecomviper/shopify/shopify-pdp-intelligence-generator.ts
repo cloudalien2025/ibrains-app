@@ -11,6 +11,13 @@ import type { ShopifyCurrentListingDocket } from "@/lib/ecomviper/shopify/shopif
 import type { RocktomicSupplierProduct } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
 
 const OPENAI_MODEL = process.env.ECOMVIPER_PDP_OPENAI_MODEL?.trim() || "gpt-4.1-mini";
+const OPENAI_TIMEOUT_MS = (() => {
+  const parsed = Number.parseInt(process.env.ECOMVIPER_PDP_OPENAI_TIMEOUT_MS || "12000", 10);
+  return Number.isFinite(parsed) && parsed >= 1_000 ? parsed : 12_000;
+})();
+const MAX_FACT_LINE_LENGTH = 300;
+const MAX_FACT_BLOCK_CHARS = 4_500;
+const MAX_OPENAI_COMPLETION_TOKENS = 1_200;
 
 interface GenerateOptions {
   product: ShopifyCurrentListingDocket;
@@ -50,6 +57,24 @@ function toSafeDescription(value: string): string {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (!normalized) return "";
   return normalized.slice(0, 360);
+}
+
+function toBoundedFactLine(input: string): string {
+  return input.replace(/\s+/g, " ").trim().slice(0, MAX_FACT_LINE_LENGTH);
+}
+
+function trimFactsToBudget(facts: string[]): string[] {
+  const accepted: string[] = [];
+  let used = 0;
+  for (const fact of facts) {
+    const next = toBoundedFactLine(fact);
+    if (!next) continue;
+    const candidateLength = next.length + 1;
+    if (used + candidateLength > MAX_FACT_BLOCK_CHARS) break;
+    accepted.push(next);
+    used += candidateLength;
+  }
+  return accepted;
 }
 
 function computeShopifyInventoryStatus(product: ShopifyCurrentListingDocket): "in_stock" | "low_stock" | "out_of_stock" | "unknown" {
@@ -333,32 +358,47 @@ async function requestOpenAiGeneration(options: GenerateOptions): Promise<Record
     supplier?.manufacturingClaims?.length ? `Manufacturing claims: ${supplier.manufacturingClaims.join(", ")}` : "",
   ].filter(Boolean);
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${options.openAiApiKey}`,
-    },
-    cache: "no-store",
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content:
-            "You generate shopper-facing ecommerce JSON copy only. Never mention internal suppliers, supplier matching, platform source names, or source URLs. Never invent ingredients, certifications, testing claims, inventory claims, pricing claims, or compliance claims.",
-        },
-        {
-          role: "user",
-          content:
-            "Return JSON keys only: ai_product_summary, best_for, not_best_for, use_cases, key_features, highlights, faq, buyer_intent_mapping, entity_mapping, semantic_coverage, agentic_selection_notes, referral_readiness, faqs, compliance_notes. Keep all claims grounded to provided facts.\n\nFacts:\n" +
-            facts.join("\n"),
-        },
-      ],
-    }),
-  });
+  const factLines = trimFactsToBudget(facts);
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${options.openAiApiKey}`,
+      },
+      cache: "no-store",
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: OPENAI_MODEL,
+        temperature: 0.2,
+        max_tokens: MAX_OPENAI_COMPLETION_TOKENS,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You generate shopper-facing ecommerce JSON copy only. Never mention internal suppliers, supplier matching, platform source names, or source URLs. Never invent ingredients, certifications, testing claims, inventory claims, pricing claims, or compliance claims.",
+          },
+          {
+            role: "user",
+            content:
+              "Return JSON keys only: ai_product_summary, best_for, not_best_for, use_cases, key_features, highlights, faq, buyer_intent_mapping, entity_mapping, semantic_coverage, agentic_selection_notes, referral_readiness, faqs, compliance_notes. Keep all claims grounded to provided facts.\n\nFacts:\n" +
+              factLines.join("\n"),
+          },
+        ],
+      }),
+    });
+  } catch (error) {
+    if (error instanceof Error && /abort/i.test(`${error.name} ${error.message}`)) {
+      throw new Error(`OpenAI request timed out after ${OPENAI_TIMEOUT_MS}ms.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 
   if (!response.ok) {
     throw new Error(`OpenAI generation failed with HTTP ${response.status}.`);

@@ -43,7 +43,50 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 009.8: Completed and merged (`hotfix-009-8-ecomviper-saturation-guard`, `/ecomviper` unauthenticated saturation guard + Rocktomic ingestion single-flight + protected-route malformed-session hardening, production deployed).
 - Shopify Sprint 010: Completed and merged (`sprint-010-ecomviper-regression-hardening`, `/ecomviper` load-path optimization + CI verify guardrail expansion).
 - Shopify Hotfix Sprint 010.1: Completed and merged (`hotfix-010-1-ecomviper-saturation-swr`, Rocktomic stale-while-revalidate cache + duplicate-source fetch dedupe + disconnected-workspace ingestion skip, production deployed).
+- Shopify Stabilization Sprint 011: In progress (`stabilization-ecomviper-performance-architecture-audit`, end-to-end performance/architecture/production-safety audit and hardening).
 - Current recommended sprint: `Shopify Sprint 011 planning` (next scoped execution after Sprint 010 closure).
+
+## Active Sprint Note: Shopify Stabilization Sprint 011 (In Progress)
+
+- Sprint/lane: `Shopify Stabilization Sprint 011` (`stabilization-ecomviper-performance-architecture-audit`) - in progress.
+- Start date: `2026-05-30 (UTC)`.
+- Objective:
+  - harden EcomViper routes against blocking supplier ingestion,
+  - enforce ingestion payload/timeout safety limits,
+  - ensure Product Editor + PDP generation stay cache-only for supplier lookups,
+  - verify auth/tenant/release safety contracts.
+- Code hardening completed so far:
+  - `lib/ecomviper/dropshipping/rocktomic-source-ingestion.ts`:
+    - added strict payload ceilings for text/binary source fetches,
+    - added cache-only mode with seed fallback snapshot behavior,
+    - added runtime cache/refresh diagnostics (`cacheState`, `refreshState`).
+  - `app/ecomviper/settings/page.tsx`:
+    - Shopify status loads before supplier snapshot,
+    - no supplier ingestion when Shopify disconnected,
+    - cache-only supplier diagnostics mode.
+  - `app/ecomviper/dropshipping/rocktomic/page.tsx`:
+    - cache-only diagnostics mode and explicit cache/refresh visibility.
+  - `lib/ecomviper/shopify/shopify-product-editor-state.ts`:
+    - supplier abstraction lookup set to cache-only/no-background-refresh.
+  - `app/api/ecomviper/pdp-intelligence/route.ts`:
+    - supplier abstraction lookup set to cache-only/no-background-refresh.
+  - `lib/ecomviper/shopify/shopify-pdp-intelligence-generator.ts`:
+    - OpenAI request timeout added,
+    - bounded fact context and completion token budget added.
+- New/updated docs:
+  - `planning/apps/ecomviper/shopify/performance-architecture.md`
+  - `planning/apps/ecomviper/shopify/supplier-ingestion-architecture.md`
+  - `planning/apps/ecomviper/shopify/production-safety.md`
+- Focused validation completed:
+  - `tests/ecomviper_dashboard_auth_guard.test.tsx`
+  - `tests/ecomviper_settings_route_safety.test.tsx`
+  - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+  - `tests/ecomviper_pdp_intelligence_route.test.ts`
+  - `tests/ecomviper_pdp_intelligence_generation.test.ts`
+  - `tests/brains_route_redirect.test.ts`
+  - `tests/ecomviper_shopify_route_consolidation.test.ts`
+- Production observation during audit (`2026-05-30 UTC`):
+  - bounded `curl --max-time 10` probes for `/api/health`, `/brains`, `/ecomviper`, `/ecomviper/settings`, `/ecomviper/dropshipping/rocktomic`, `/api/meta/release` all timed out (`code=000`, `~10s`), indicating current broad origin unavailability.
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 010.1 EcomViper Saturation SWR Guard
 
