@@ -52,6 +52,7 @@ describe("proxy app/auth protection", () => {
     state.denyProtect = false;
     state.throwAuth = false;
     delete process.env.E2E_MOCK_GRAPH;
+    delete process.env.ECOMVIPER_SYNC_INTERNAL_TOKEN;
   });
 
   it("/sign-in and /sign-up stay public without Clerk proxy passthrough", async () => {
@@ -142,6 +143,79 @@ describe("proxy app/auth protection", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(state.clerkProxyCalls).toBe(0);
+  });
+
+  it("allows internal-token sync requests without requiring a session cookie", async () => {
+    process.env.ECOMVIPER_SYNC_INTERNAL_TOKEN = "sync_internal_test_token";
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const response = await handler(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/supplier-sources/sync", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sync_internal_test_token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ userId: "__global__" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(state.clerkProxyCalls).toBe(0);
+  });
+
+  it("rejects invalid internal-token sync requests without opening route access", async () => {
+    process.env.ECOMVIPER_SYNC_INTERNAL_TOKEN = "sync_internal_test_token";
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const invalidTokenResponse = await handler(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/supplier-sources/sync", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer wrong_token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ userId: "__global__" }),
+      })
+    );
+
+    const missingTokenResponse = await handler(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/supplier-sources/sync", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ userId: "__global__" }),
+      })
+    );
+
+    expect(invalidTokenResponse.status).toBe(307);
+    expect(invalidTokenResponse.headers.get("location")).toContain("/sign-in");
+    expect(missingTokenResponse.status).toBe(307);
+    expect(missingTokenResponse.headers.get("location")).toContain("/sign-in");
+    expect(state.clerkProxyCalls).toBe(0);
+  });
+
+  it("does not bypass auth for other /api/ecomviper routes even with internal token header", async () => {
+    process.env.ECOMVIPER_SYNC_INTERNAL_TOKEN = "sync_internal_test_token";
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const response = await handler(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/connect/save", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer sync_internal_test_token",
+          "content-type": "application/json",
+        },
+      })
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toContain("/sign-in");
     expect(state.clerkProxyCalls).toBe(0);
   });
 

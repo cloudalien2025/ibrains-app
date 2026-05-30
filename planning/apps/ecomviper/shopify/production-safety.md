@@ -82,6 +82,7 @@ Manual sync trigger options:
 2. Authenticated API: `POST /api/ecomviper/supplier-sources/sync`
 3. Internal token script:
    - `ECOMVIPER_SYNC_INTERNAL_TOKEN=... ECOMVIPER_SYNC_USER_ID=... bash scripts/ecomviper_sync_supplier_sources.sh`
+   - Internal token call to `POST /api/ecomviper/supplier-sources/sync` no longer requires a JWT-shaped `__session` cookie.
 
 Validation after sync:
 

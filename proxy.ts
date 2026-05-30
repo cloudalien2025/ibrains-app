@@ -123,6 +123,21 @@ function hasLikelyJwtSessionCookie(req: NextRequest): boolean {
   return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
 }
 
+function getBearerToken(req: NextRequest): string {
+  const raw = req.headers.get("authorization") || "";
+  const matched = raw.match(/^Bearer\s+(.+)$/i);
+  return matched?.[1]?.trim() || "";
+}
+
+function isTrustedInternalSupplierSyncRequest(req: NextRequest): boolean {
+  if (req.method !== "POST") return false;
+  if (req.nextUrl.pathname !== "/api/ecomviper/supplier-sources/sync") return false;
+  const configured = process.env.ECOMVIPER_SYNC_INTERNAL_TOKEN?.trim() || "";
+  if (!configured) return false;
+  const bearer = getBearerToken(req);
+  return bearer.length > 0 && bearer === configured;
+}
+
 function isEcomviperApiRoute(req: NextRequest): boolean {
   return req.nextUrl.pathname.startsWith("/api/ecomviper");
 }
@@ -211,6 +226,7 @@ export default e2eMockGraph
       const directoryIqCorsResponse = maybeHandleDirectoryIqCors(req);
       if (directoryIqCorsResponse) return directoryIqCorsResponse;
       if (isSiteforgeApiRoute(req)) return NextResponse.next();
+      if (isTrustedInternalSupplierSyncRequest(req)) return NextResponse.next();
       if (isEcomviperApiRoute(req)) {
         if (!hasLikelyJwtSessionCookie(req)) {
           return buildSignInRedirect(req);
