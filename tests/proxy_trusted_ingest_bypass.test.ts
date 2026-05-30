@@ -5,9 +5,18 @@ const mocks = vi.hoisted(() => ({
   clerkProxyHandler: vi.fn(() => Response.json({ ok: true }, { status: 200 })),
 }));
 
+function toPathRegex(pattern: string): RegExp {
+  const prefix = pattern.replace("(.*)", "");
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped}(?:$|/)`);
+}
+
 vi.mock("@clerk/nextjs/server", () => ({
   clerkMiddleware: vi.fn(() => mocks.clerkProxyHandler),
-  createRouteMatcher: vi.fn(() => () => false),
+  createRouteMatcher: vi.fn((patterns: string[]) => {
+    const regexes = patterns.map(toPathRegex);
+    return (req: NextRequest) => regexes.some((regex) => regex.test(req.nextUrl.pathname));
+  }),
 }));
 
 describe("proxy trusted service bypass", () => {
@@ -88,11 +97,12 @@ describe("proxy trusted service bypass", () => {
     });
 
     const res = await handler(req);
-    expect(res.status).toBe(200);
-    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/sign-in");
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
-  it("redirects unauthenticated Studio app requests without invoking Clerk middleware", async () => {
+  it("redirects unauthenticated /brains requests without invoking Clerk middleware", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -101,8 +111,9 @@ describe("proxy trusted service bypass", () => {
     });
 
     const res = await handler(req);
-    expect(res.status).toBe(200);
-    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/sign-in");
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
   it("bypasses Clerk middleware on Studio API routes so they do not self-proxy", async () => {
@@ -234,7 +245,7 @@ describe("proxy trusted service bypass", () => {
     expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
-  it("keeps Clerk middleware for run-status requests without service key", async () => {
+  it("keeps run-status requests without service key out of Clerk middleware", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -244,7 +255,7 @@ describe("proxy trusted service bypass", () => {
 
     const res = await handler(req);
     expect(res.status).toBe(200);
-    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
   it("returns 404 for deprecated legacy app routes without invoking Clerk middleware", async () => {

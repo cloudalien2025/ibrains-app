@@ -56,6 +56,9 @@ function isPublicClerkPassthroughRoute(req: NextRequest): boolean {
   const pathname = req.nextUrl.pathname;
   return (
     pathname === "/" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/llms.txt" ||
     pathname === "/sign-in" ||
     pathname.startsWith("/sign-in/") ||
     pathname === "/sign-up" ||
@@ -225,6 +228,7 @@ export default e2eMockGraph
       if (isTrustedIngestServiceRequest(req)) return NextResponse.next();
       if (isTrustedRetrieveServiceRequest(req)) return NextResponse.next();
       if (isTrustedRunStatusServiceRequest(req)) return NextResponse.next();
+      if (!isProtectedRoute(req)) return NextResponse.next();
       try {
         return await clerkProxy(req, event);
       } catch {

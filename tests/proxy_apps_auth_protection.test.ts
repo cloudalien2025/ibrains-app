@@ -65,6 +65,16 @@ describe("proxy app/auth protection", () => {
     expect(state.clerkProxyCalls).toBe(0);
   });
 
+  it("/robots.txt stays public without Clerk proxy passthrough", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const response = await handler(new NextRequest("https://app.ibrains.ai/robots.txt"));
+
+    expect(response.status).toBe(200);
+    expect(state.clerkProxyCalls).toBe(0);
+  });
+
   it("redirects unauthenticated users from /optiwal/connect to sign-in with redirect_url", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;

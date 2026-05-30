@@ -37,7 +37,36 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 009.2: Completed and merged (`hotfix-009-2-ibrains-dashboard-navigation`, restored `/brains` launcher and removed user-facing BrainOS branding, production deployed).
 - Shopify Hotfix Sprint 009.3: Completed and merged (`hotfix-009-3-catalog-field-extraction-coa-mapping`, deterministic catalog field extraction + COA hyperlink mapping for Product Editor, production deployed).
 - Shopify Hotfix Sprint 009.4: Completed and merged (`hotfix-009-4-universal-catalog-pricing-engine`, universal catalog extraction + membership pricing engine, production deployed).
+- Shopify Hotfix Sprint 009.5: In progress (`hotfix-009-5-production-504-proxy-timeout`, production 504 timeout diagnosis + middleware/public-route proxy loop fix).
 - Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.4 closure).
+
+## Sprint Execution Log: Shopify Hotfix Sprint 009.5 (In Progress)
+
+- Sprint/lane: `Shopify Hotfix Sprint 009.5` (`hotfix-009-5-production-504-proxy-timeout`) - in progress.
+- Initial incident timestamp: `2026-05-30 03:31 UTC` (first observed broad `504` in `app.ibrains.ai` nginx logs).
+- Production diagnostics run:
+  - `curl -I --max-time 10 http://127.0.0.1:3001/brains`
+  - `curl -I --max-time 10 http://127.0.0.1:3001/ecomviper`
+  - `curl --max-time 10 http://127.0.0.1:3001/api/health`
+  - `curl --max-time 10 http://127.0.0.1:3001/api/meta/release`
+  - `grep -R "localhost:3001\|127.0.0.1:3001\|https://localhost" -n /etc/nginx/sites-enabled /etc/nginx/conf.d`
+  - `journalctl -u ibrains-app --since "30 minutes ago" --no-pager`
+  - `tail -n 200 /var/log/ibrains-app/app.log`
+  - `tail -n 200 /var/log/nginx/error.log`
+  - `tail -n 200 /var/log/nginx/app.ibrains.ai.error.log`
+  - `tail -n 200 /var/log/nginx/app.ibrains.ai.access.log`
+  - `ss -tanp '( sport = :3001 )'`
+  - `systemctl status ibrains-app --no-pager -l`
+- Root cause (confirmed):
+  - nginx upstream scheme/host is correct (`proxy_pass http://127.0.0.1:3001;`).
+  - `/brains`, `/ecomviper`, `/api/health`, and `/api/meta/release` all timed out when the incident was active.
+  - Trigger path reproduced locally on production host: `GET /robots.txt` hangs and logs `Failed to proxy https://localhost:3001/robots.txt ... EPROTO ... wrong version number`.
+  - A single `robots.txt` hit can create runaway local self-connections on `127.0.0.1:3001`, spike `next-server` CPU, and saturate sockets, producing broad 504s for unrelated routes.
+- Operational mitigation applied:
+  - forced service recovery with `systemctl kill -s SIGKILL ibrains-app` + `systemctl start ibrains-app` after graceful stop hung in `deactivating (final-sigterm)`.
+- Code fix in progress:
+  - `proxy.ts` now short-circuits non-protected routes (`if (!isProtectedRoute(req)) return NextResponse.next();`) before `clerkProxy` fallback.
+  - added regression test ensuring `/robots.txt` stays public and does not invoke Clerk proxy middleware.
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 009.4 Production Closure
 
