@@ -71,6 +71,11 @@ Hotfix 009.2 naming and launcher alignment:
 - `/brains` renders the iBrains Dashboard launcher with app cards and icon + name + description + open action.
 - Merchant-facing EcomViper dashboard copy should stay supplier-neutral in primary UI (for example `Supplier Feed`, `Supplier Records`, `Open supplier diagnostics`).
 
+Hotfix 009.4 commerce/settings extension:
+- EcomViper Settings includes supplier membership-tier selection for pricing calculations.
+- Product Editor Commerce and right-rail cards surface selected tier context and pricing status.
+- Unknown pricing must remain explicit when tier/cost source is unavailable.
+
 ## Non-Goals
 
 - This standard does not define brand color palettes for every brain.

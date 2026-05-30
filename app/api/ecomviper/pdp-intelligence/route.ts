@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
     }
 
     const skuList = product.variants.map((entry) => entry.sku.trim()).filter(Boolean);
-    const supplierSnapshot = await matchPrimarySupplierBySkus(skuList).catch(() => null);
+    const supplierSnapshot = await matchPrimarySupplierBySkus(skuList, { userId }).catch(() => null);
     const supplierMatch = supplierSnapshot?.match;
     const openAiApiKey = await getShopifyOpenAiApiKeyForUser(userId);
 

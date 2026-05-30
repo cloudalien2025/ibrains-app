@@ -10,6 +10,7 @@ import {
   type RocktomicInventoryStatus,
   type RocktomicSupplierProduct,
 } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
+import { getSupplierMembershipTierSelectionForUser } from "@/lib/ecomviper/settings/supplier-membership";
 
 const ROCKTOMIC_INGESTION_TTL_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 12_000;
@@ -28,6 +29,11 @@ interface CatalogRow {
   wholesaleCost: number | null;
   msrp: number | null;
   estimatedProfit: number | null;
+  membershipTierCosts: Record<string, number>;
+  membershipTiersDetected: string[];
+  selectedMembershipTier: string | null;
+  selectedMembershipSourceColumn: string | null;
+  pricingStatusLabel: string;
 }
 
 interface InventoryRow {
@@ -38,6 +44,9 @@ interface InventoryRow {
 
 interface CatalogPdfSkuFields {
   sku: string;
+  extractionStatus: "extracted" | "partial" | "failed";
+  extractionErrors: string[];
+  sourcePage: number | null;
   supplementFactsPanel: string | null;
   activeIngredients: string[];
   amountPerServing: string | null;
@@ -55,22 +64,6 @@ interface CatalogPdfSkuFields {
   coaLinkError: string | null;
   sourceDiagnostics: string[];
 }
-
-const ROC949_CATALOG_FIELD_MODEL: Omit<CatalogPdfSkuFields, "coaUrl" | "labelTemplateUrl" | "mockupUrl" | "coaLinkStatus" | "coaLinkError" | "sourceDiagnostics"> = {
-  sku: "ROC949",
-  supplementFactsPanel:
-    "Serving Size: 1 gummy | Servings Per Container: 60 | Calories: 10 | Total Carbohydrates: 2g | Total Sugars: 2g | Added Sugars: 2g | Sodium: 5mg | Magnesium (as Magnesium Glycinate): 30mg",
-  activeIngredients: ["Magnesium (as Magnesium Glycinate)"],
-  amountPerServing: "Magnesium (as Magnesium Glycinate) 30mg",
-  otherIngredients:
-    "Glucose syrup, sugar, phosphoric acid, pectin, sodium citrate, natural flavor (grape), colors added, purple carrot juice concentrate, sucralose",
-  servingSize: "1 gummy",
-  servingsPerContainer: "60",
-  ingredientHighlights: ["Magnesium glycinate", "Sleep support", "Nervous system support"],
-  keyProductFeatures: ["Premium magnesium glycinate gummies", "60 gummies per container", "Daily wellness support format"],
-  dietaryAttributes: ["Vegan", "Non-GMO", "Gluten-Free"],
-  manufacturingClaims: ["Made in USA", "GMP Facility"],
-};
 
 export interface RocktomicSourceIngestionDiagnostic {
   id: RocktomicSourceReference["id"];
@@ -90,14 +83,16 @@ export interface RocktomicSourceIngestionSnapshot {
   products: RocktomicSupplierProduct[];
   productCount: number;
   catalogSkuCount: number;
+  catalogExtractedSkuCount: number;
   inventorySkuCount: number;
   inventoryAvailable: boolean;
   usedSeedFallback: boolean;
+  membershipTiersDetected: string[];
   sourceDiagnostics: RocktomicSourceIngestionDiagnostic[];
   lastCheckedAt: string;
 }
 
-let cache: { expiresAt: number; snapshot: RocktomicSourceIngestionSnapshot } | null = null;
+let cache = new Map<string, { expiresAt: number; snapshot: RocktomicSourceIngestionSnapshot }>();
 
 function normalizeHeader(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -112,6 +107,22 @@ function parseMoney(input: string): number | null {
   if (!normalized) return null;
   const parsed = Number.parseFloat(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeTierKey(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function toTierLabel(header: string): string {
+  const normalized = header.replace(/\s+/g, " ").trim();
+  if (!normalized) return "Unknown Tier";
+  return normalized.replace(/\s*\(t[0-9]+\)\s*$/i, "");
 }
 
 function redactError(error: unknown): string {
@@ -213,10 +224,13 @@ function findColumnIndex(headers: string[], matcher: (header: string) => boolean
   return headers.findIndex((header) => matcher(normalizeHeader(header)));
 }
 
-function parseCatalogCsv(text: string): CatalogRow[] {
+function parseCatalogCsv(
+  text: string,
+  options?: { selectedMembershipTierKey?: string | null }
+): { rows: CatalogRow[]; membershipTiersDetected: string[] } {
   const { rows } = parseCsv(text);
   const headerIndex = findHeaderIndex(rows, ["sku", "category", "product"]);
-  if (headerIndex < 0) return [];
+  if (headerIndex < 0) return { rows: [], membershipTiersDetected: [] };
 
   const headers = rows[headerIndex] ?? [];
   const skuIndex = findColumnIndex(headers, (header) => header.includes("sku"));
@@ -229,7 +243,33 @@ function parseCatalogCsv(text: string): CatalogRow[] {
   const msrpIndex = findColumnIndex(headers, (header) => header.includes("msrp"));
   const estimatedProfitIndex = findColumnIndex(headers, (header) => header.includes("estimatedprofit"));
 
-  if (skuIndex < 0 || productNameIndex < 0 || categoryIndex < 0) return [];
+  if (skuIndex < 0 || productNameIndex < 0 || categoryIndex < 0) return { rows: [], membershipTiersDetected: [] };
+
+  const membershipTierColumns = headers
+    .map((header, index) => ({
+      index,
+      rawHeader: header,
+      normalized: normalizeHeader(header),
+      label: toTierLabel(header),
+    }))
+    .filter((entry) => {
+      if (entry.index === skuIndex || entry.index === categoryIndex || entry.index === productNameIndex) return false;
+      if (entry.index === labelSizeIndex || entry.index === containerSizeIndex || entry.index === productWeightIndex) return false;
+      if (entry.normalized.includes("msrp") || entry.normalized.includes("estimatedprofit")) return false;
+      return (
+        entry.normalized.includes("costperunit") ||
+        entry.normalized.includes("nonmemberpricing") ||
+        entry.normalized.includes("membership") ||
+        /\(t[0-9]+\)/i.test(entry.rawHeader)
+      );
+    });
+
+  const membershipTiersDetected = Array.from(new Set(membershipTierColumns.map((entry) => entry.label)));
+  const selectedTierKey = normalizeTierKey(options?.selectedMembershipTierKey || "");
+  const selectedTierColumn =
+    membershipTierColumns.find((entry) => normalizeTierKey(entry.label) === selectedTierKey) ??
+    membershipTierColumns[0] ??
+    null;
 
   const bySku = new Map<string, CatalogRow>();
   for (let index = headerIndex + 1; index < rows.length; index += 1) {
@@ -241,6 +281,31 @@ function parseCatalogCsv(text: string): CatalogRow[] {
     const category = normalizeCell(row[categoryIndex] || "") || "Uncategorized";
     if (!productName) continue;
 
+    const membershipTierCosts = membershipTierColumns.reduce<Record<string, number>>((accumulator, tier) => {
+      const value = parseMoney(row[tier.index] || "");
+      if (value != null) {
+        accumulator[tier.label] = value;
+      }
+      return accumulator;
+    }, {});
+
+    const selectedMembershipTier = selectedTierColumn?.label ?? null;
+    const selectedMembershipSourceColumn = selectedTierColumn?.rawHeader ?? null;
+    const selectedWholesaleCost = selectedTierColumn
+      ? parseMoney(row[selectedTierColumn.index] || "")
+      : wholesaleIndex >= 0
+        ? parseMoney(row[wholesaleIndex] || "")
+        : null;
+
+    const pricingStatusLabel =
+      selectedMembershipTier && selectedWholesaleCost == null
+        ? "source_unavailable_for_selected_membership_tier"
+        : selectedMembershipTier
+          ? "tier_pricing_mapped"
+          : selectedWholesaleCost != null
+            ? "default_pricing_mapped"
+            : "pricing_source_unavailable";
+
     bySku.set(sku, {
       sku,
       productName,
@@ -248,13 +313,18 @@ function parseCatalogCsv(text: string): CatalogRow[] {
       labelSize: labelSizeIndex >= 0 ? normalizeCell(row[labelSizeIndex] || "") || null : null,
       containerSize: containerSizeIndex >= 0 ? normalizeCell(row[containerSizeIndex] || "") || null : null,
       productWeight: productWeightIndex >= 0 ? normalizeCell(row[productWeightIndex] || "") || null : null,
-      wholesaleCost: wholesaleIndex >= 0 ? parseMoney(row[wholesaleIndex] || "") : null,
+      wholesaleCost: selectedWholesaleCost,
       msrp: msrpIndex >= 0 ? parseMoney(row[msrpIndex] || "") : null,
       estimatedProfit: estimatedProfitIndex >= 0 ? parseMoney(row[estimatedProfitIndex] || "") : null,
+      membershipTierCosts,
+      membershipTiersDetected,
+      selectedMembershipTier,
+      selectedMembershipSourceColumn,
+      pricingStatusLabel,
     });
   }
 
-  return Array.from(bySku.values());
+  return { rows: Array.from(bySku.values()), membershipTiersDetected };
 }
 
 function parseInventoryCsv(text: string): InventoryRow[] {
@@ -295,32 +365,208 @@ function parsePdfUriLinks(text: string): string[] {
   return Array.from(new Set(urls));
 }
 
-function mapCatalogPdfFieldsBySku(pdfBytes: ArrayBuffer): Map<string, CatalogPdfSkuFields> {
-  const content = Buffer.from(pdfBytes).toString("latin1");
+function decodePdfString(input: string): string {
+  return input
+    .replace(/\\\(/g, "(")
+    .replace(/\\\)/g, ")")
+    .replace(/\\\\/g, "\\")
+    .replace(/\r\n/g, " ")
+    .replace(/\r/g, " ")
+    .replace(/\n/g, " ");
+}
+
+function extractPdfTextContent(content: string): string[] {
+  const lines: string[] = [];
+  const streamPattern = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+
+  for (const match of content.matchAll(streamPattern)) {
+    const streamBytes = Buffer.from(match[1] || "", "latin1");
+    let decoded = "";
+    try {
+      decoded = require("node:zlib").inflateSync(streamBytes).toString("latin1");
+    } catch {
+      continue;
+    }
+
+    const tjPattern = /\[((?:[^\]\\]|\\.|\\\])*)\]\s*TJ/g;
+    for (const tj of decoded.matchAll(tjPattern)) {
+      const inner = tj[1] || "";
+      const textSegments = Array.from(inner.matchAll(/\(([^\\)]*(?:\\.[^\\)]*)*)\)/g)).map((segment) =>
+        decodePdfString(segment[1] || "")
+      );
+      if (textSegments.length) lines.push(textSegments.join(""));
+    }
+
+    const tjPatternSingle = /\(([^\\)]*(?:\\.[^\\)]*)*)\)\s*Tj/g;
+    for (const tj of decoded.matchAll(tjPatternSingle)) {
+      lines.push(decodePdfString(tj[1] || ""));
+    }
+  }
+
+  const rawPattern = /\(([^\\)]*(?:\\.[^\\)]*)*)\)/g;
+  for (const match of content.matchAll(rawPattern)) {
+    const decoded = decodePdfString(match[1] || "");
+    if (decoded.length < 3) continue;
+    if (!/[a-z0-9]/i.test(decoded)) continue;
+    lines.push(decoded);
+  }
+
+  const normalized = lines
+    .join("\n")
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .split(/\r?\n/g)
+    .map((entry) => normalizeCell(entry))
+    .filter((entry) => entry.length > 1);
+
+  return Array.from(new Set(normalized));
+}
+
+function extractLineValue(block: string, label: string): string | null {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matcher = new RegExp(`${escaped}\\s*[:\\-]?\\s*([^\\n\\r|]{1,260})`, "i");
+  const match = block.match(matcher);
+  if (!match?.[1]) return null;
+  const value = normalizeCell(match[1]).replace(/^[\u2022\-–]\s*/, "");
+  return value || null;
+}
+
+function listDelimitedValues(input: string | null): string[] {
+  if (!input) return [];
+  return input
+    .split(/[,;|]/g)
+    .map((entry) => normalizeCell(entry))
+    .filter(Boolean);
+}
+
+function firstDelimitedValue(input: string | null): string | null {
+  if (!input) return null;
+  const value = input.split(/[;|]/g)[0] || "";
+  const normalized = normalizeCell(value);
+  return normalized || null;
+}
+
+function collectSkuBlock(lines: string[], sku: string, productName: string | null): { block: string; textAnchorFound: boolean } {
+  const lowerSku = sku.toLowerCase();
+  const productNameLower = (productName || "").toLowerCase();
+  let anchorIndex = lines.findIndex((line) => line.toLowerCase().includes(lowerSku));
+  if (anchorIndex < 0 && productNameLower) {
+    anchorIndex = lines.findIndex((line) => line.toLowerCase().includes(productNameLower));
+  }
+  if (anchorIndex < 0) {
+    return { block: "", textAnchorFound: false };
+  }
+
+  const start = Math.max(0, anchorIndex - 12);
+  const end = Math.min(lines.length, anchorIndex + 56);
+  const block = lines.slice(start, end).join("\n");
+  return { block, textAnchorFound: true };
+}
+
+function mapCatalogPdfFieldsBySku(input: {
+  pdfBytes: ArrayBuffer;
+  catalogRowsBySku: Map<string, CatalogRow>;
+}): Map<string, CatalogPdfSkuFields> {
+  const content = Buffer.from(input.pdfBytes).toString("latin1");
   const links = parsePdfUriLinks(content);
+  const extractedLines = extractPdfTextContent(content);
+  const normalizedText = extractedLines.join("\n");
   const templateLink = links.find((entry) => entry.toLowerCase().includes("templates.html")) || null;
 
-  const bySku = new Map<string, CatalogPdfSkuFields>();
-  const sku = ROC949_CATALOG_FIELD_MODEL.sku;
-  const skuLinks = links.filter((entry) => entry.toUpperCase().includes(sku));
-  const coaUrl = skuLinks.find((entry) => /\.pdf(?:\?|$)/i.test(entry)) || null;
+  const coaBySku = new Map<string, string>();
+  for (const link of links) {
+    const skuMatch = link.toUpperCase().match(/ROC[0-9A-Z]+/);
+    if (!skuMatch?.[0]) continue;
+    const sku = normalizeRocktomicSku(skuMatch[0]);
+    if (/\.pdf(?:\?|$)/i.test(link)) {
+      coaBySku.set(sku, link);
+    }
+  }
 
-  bySku.set(sku, {
-    ...ROC949_CATALOG_FIELD_MODEL,
-    coaUrl,
-    labelTemplateUrl: templateLink,
-    mockupUrl: templateLink,
-    coaLinkStatus: coaUrl ? "extracted" : "extraction_failed",
-    coaLinkError: coaUrl ? null : "PDF hyperlink not found for matched SKU row",
-    sourceDiagnostics: [
-      "catalog_pdf_field_model: deterministic_sku_block_v1",
-      `catalog_pdf_links_detected: ${links.length}`,
-      `coa_link_status: ${coaUrl ? "extracted" : "extraction_failed"}`,
-      coaUrl ? "coa_link_error: none" : "coa_link_error: PDF hyperlink not found for matched SKU row",
-    ],
-  });
+  const extractedSkus = new Set<string>();
+  const skuTextMatches = normalizedText.toUpperCase().match(/ROC[0-9A-Z]{3,8}/g) || [];
+  skuTextMatches.forEach((entry) => extractedSkus.add(normalizeRocktomicSku(entry)));
+  Array.from(coaBySku.keys()).forEach((entry) => extractedSkus.add(entry));
+  Array.from(input.catalogRowsBySku.keys()).forEach((entry) => extractedSkus.add(entry));
 
-  return bySku;
+  const records = new Map<string, CatalogPdfSkuFields>();
+  for (const sku of extractedSkus) {
+    const catalogRow = input.catalogRowsBySku.get(sku);
+    const blockResult = collectSkuBlock(extractedLines, sku, catalogRow?.productName || null);
+    const block = blockResult.block;
+
+    const supplementFactsPanel = extractLineValue(block, "Supplement Facts");
+    const servingSize = firstDelimitedValue(extractLineValue(block, "Serving Size"));
+    const servingsPerContainer = firstDelimitedValue(extractLineValue(block, "Servings Per Container"));
+    const amountPerServing = extractLineValue(block, "Amount Per Serving");
+    const otherIngredients = extractLineValue(block, "Other Ingredients");
+    const activeIngredients = listDelimitedValues(extractLineValue(block, "Active Ingredients"));
+    const ingredientHighlights = listDelimitedValues(extractLineValue(block, "Ingredient Highlights"));
+    const keyProductFeatures = listDelimitedValues(extractLineValue(block, "Key Product Features"));
+    const dietaryAttributes = listDelimitedValues(extractLineValue(block, "Dietary Attributes"));
+    const manufacturingClaims = listDelimitedValues(extractLineValue(block, "Manufacturing Claims"));
+
+    const coaUrl = coaBySku.get(sku) || null;
+    const extractionErrors: string[] = [];
+    if (!coaUrl) extractionErrors.push("PDF hyperlink not found for matched SKU row");
+    if (!supplementFactsPanel) extractionErrors.push("Supplement Facts panel not extracted from PDF text layer");
+    if (!servingSize) extractionErrors.push("Serving Size not extracted from PDF text layer");
+    if (!servingsPerContainer) extractionErrors.push("Servings Per Container not extracted from PDF text layer");
+
+    const extractedFieldsCount = [
+      supplementFactsPanel,
+      servingSize,
+      servingsPerContainer,
+      amountPerServing,
+      otherIngredients,
+      activeIngredients.length > 0 ? "activeIngredients" : "",
+      ingredientHighlights.length > 0 ? "ingredientHighlights" : "",
+      keyProductFeatures.length > 0 ? "keyProductFeatures" : "",
+      dietaryAttributes.length > 0 ? "dietaryAttributes" : "",
+      manufacturingClaims.length > 0 ? "manufacturingClaims" : "",
+      coaUrl,
+      templateLink,
+    ].filter(Boolean).length;
+
+    const extractionStatus: CatalogPdfSkuFields["extractionStatus"] =
+      extractedFieldsCount >= 8 ? "extracted" : extractedFieldsCount > 0 ? "partial" : "failed";
+
+    const coaLinkStatus: CatalogPdfSkuFields["coaLinkStatus"] = coaUrl ? "extracted" : "extraction_failed";
+    const coaLinkError = coaUrl ? null : "PDF hyperlink not found for matched SKU row";
+
+    records.set(sku, {
+      sku,
+      extractionStatus,
+      extractionErrors,
+      sourcePage: null,
+      supplementFactsPanel,
+      activeIngredients,
+      amountPerServing,
+      otherIngredients,
+      servingSize,
+      servingsPerContainer,
+      ingredientHighlights,
+      keyProductFeatures,
+      dietaryAttributes,
+      manufacturingClaims,
+      coaUrl,
+      labelTemplateUrl: templateLink,
+      mockupUrl: templateLink,
+      coaLinkStatus,
+      coaLinkError,
+      sourceDiagnostics: [
+        "catalog_pdf_extraction_engine: universal_v1",
+        `catalog_pdf_links_detected: ${links.length}`,
+        `catalog_pdf_text_anchor: ${blockResult.textAnchorFound ? "found" : "not_found"}`,
+        `catalog_extraction_status: ${extractionStatus}`,
+        `coa_link_status: ${coaLinkStatus}`,
+        `coa_link_error: ${coaLinkError || "none"}`,
+      ],
+    });
+  }
+
+  return records;
 }
 
 function toMarginPercent(wholesaleCost: number | null, msrp: number | null): number | null {
@@ -359,7 +605,15 @@ function buildProduct(input: {
     productFeatures: pdfFields?.keyProductFeatures ?? [],
     otherIngredients: pdfFields?.otherIngredients ?? null,
     allergenDietaryAttributes: pdfFields?.dietaryAttributes ?? [],
-    sourceDiagnostics: pdfFields?.sourceDiagnostics ?? [],
+    sourceDiagnostics: pdfFields
+      ? [
+          ...pdfFields.sourceDiagnostics,
+          `catalog_source_page: ${pdfFields.sourcePage != null ? pdfFields.sourcePage : "unknown"}`,
+          ...(pdfFields.extractionErrors.length
+            ? pdfFields.extractionErrors.map((entry) => `catalog_extraction_error: ${entry}`)
+            : []),
+        ]
+      : [],
     coaLinkStatus: pdfFields?.coaLinkStatus ?? "not_present",
     coaLinkError: pdfFields?.coaLinkError ?? null,
     coa: {
@@ -390,7 +644,19 @@ function buildProduct(input: {
       estimatedProfit: input.catalogRow.estimatedProfit,
       marginPercent: toMarginPercent(input.catalogRow.wholesaleCost, input.catalogRow.msrp),
       currency: "USD",
-      sourceStatus: input.catalogRow.wholesaleCost != null ? "available" : "unknown",
+      sourceStatus:
+        input.catalogRow.wholesaleCost != null
+          ? "available"
+          : input.catalogRow.selectedMembershipTier
+            ? "source_unavailable"
+            : "unknown",
+      membershipTier: input.catalogRow.selectedMembershipTier,
+      membershipTiersDetected: input.catalogRow.membershipTiersDetected,
+      membershipTierCosts: input.catalogRow.membershipTierCosts,
+      sourceSheet: "PLDS/MSRP",
+      sourceColumn: input.catalogRow.selectedMembershipSourceColumn,
+      lastCheckedAt: input.lastSyncedAt,
+      pricingStatusLabel: input.catalogRow.pricingStatusLabel,
     },
     shipping: {
       shipsFrom: "US",
@@ -459,11 +725,19 @@ async function checkUrlFetchable(url: string): Promise<void> {
 }
 
 export async function getRocktomicSourceIngestionSnapshot(
-  options?: { forceRefresh?: boolean }
+  options?: { forceRefresh?: boolean; userId?: string | null }
 ): Promise<RocktomicSourceIngestionSnapshot> {
+  const selectedMembershipTier = options?.userId
+    ? await getSupplierMembershipTierSelectionForUser(options.userId).catch(() => null)
+    : null;
+  const selectedMembershipTierKey = selectedMembershipTier
+    ? normalizeTierKey(selectedMembershipTier)
+    : "";
+  const cacheKey = selectedMembershipTierKey || "__default__";
   const now = Date.now();
-  if (!options?.forceRefresh && cache && cache.expiresAt > now) {
-    return cache.snapshot;
+  const existing = cache.get(cacheKey);
+  if (!options?.forceRefresh && existing && existing.expiresAt > now) {
+    return existing.snapshot;
   }
 
   const config = getRocktomicSourceConfigSnapshot();
@@ -473,6 +747,13 @@ export async function getRocktomicSourceIngestionSnapshot(
   const catalogRowsBySku = new Map<string, CatalogRow>();
   const inventoryBySku = new Map<string, InventoryRow>();
   const catalogPdfFieldsBySku = new Map<string, CatalogPdfSkuFields>();
+  const membershipTiersDetected = new Set<string>();
+  let pendingCatalogPdf:
+    | {
+        referenceId: RocktomicSourceReference["id"];
+        pdfBytes: ArrayBuffer;
+      }
+    | null = null;
 
   for (const reference of config.references) {
     const diagnostic: RocktomicSourceIngestionDiagnostic = {
@@ -509,7 +790,11 @@ export async function getRocktomicSourceIngestionSnapshot(
           if (!rows.length) diagnostic.lastError = "No inventory rows parsed from source CSV.";
           rows.forEach((row) => inventoryBySku.set(row.sku, row));
         } else if (reference.id === "msrp_profit_margins_report" || reference.id === "plds_catalog") {
-          const rows = parseCatalogCsv(csvBody);
+          const parsedCatalog = parseCatalogCsv(csvBody, {
+            selectedMembershipTierKey,
+          });
+          const rows = parsedCatalog.rows;
+          parsedCatalog.membershipTiersDetected.forEach((tier) => membershipTiersDetected.add(tier));
           diagnostic.parsed = rows.length > 0;
           diagnostic.recordCount = rows.length;
           if (!rows.length) diagnostic.lastError = "No catalog rows parsed from source CSV.";
@@ -522,11 +807,12 @@ export async function getRocktomicSourceIngestionSnapshot(
         diagnostic.fetchUrl = reference.sourceUrl;
         const pdfBytes = await fetchBinaryWithTimeout(reference.sourceUrl);
         diagnostic.fetchable = true;
-        const parsed = mapCatalogPdfFieldsBySku(pdfBytes);
-        parsed.forEach((value, sku) => catalogPdfFieldsBySku.set(sku, value));
-        diagnostic.parsed = parsed.size > 0;
-        diagnostic.recordCount = parsed.size;
-        if (!parsed.size) diagnostic.lastError = "No deterministic catalog SKU blocks parsed from PDF.";
+        pendingCatalogPdf = {
+          referenceId: reference.id,
+          pdfBytes,
+        };
+        diagnostic.parsed = false;
+        diagnostic.recordCount = 0;
       } else {
         await checkUrlFetchable(reference.sourceUrl);
         diagnostic.fetchable = true;
@@ -538,6 +824,20 @@ export async function getRocktomicSourceIngestionSnapshot(
     }
 
     sourceDiagnostics.push(diagnostic);
+  }
+
+  if (pendingCatalogPdf) {
+    const parsed = mapCatalogPdfFieldsBySku({
+      pdfBytes: pendingCatalogPdf.pdfBytes,
+      catalogRowsBySku,
+    });
+    parsed.forEach((value, sku) => catalogPdfFieldsBySku.set(sku, value));
+    const catalogPdfDiagnostic = sourceDiagnostics.find((entry) => entry.id === pendingCatalogPdf?.referenceId);
+    if (catalogPdfDiagnostic) {
+      catalogPdfDiagnostic.parsed = parsed.size > 0;
+      catalogPdfDiagnostic.recordCount = parsed.size;
+      catalogPdfDiagnostic.lastError = parsed.size > 0 ? null : "No deterministic catalog SKU blocks parsed from PDF.";
+    }
   }
 
   const inventoryAvailable = sourceDiagnostics.some((source) => source.id === "inventory_report" && source.parsed);
@@ -620,9 +920,11 @@ export async function getRocktomicSourceIngestionSnapshot(
     products,
     productCount: products.length,
     catalogSkuCount: catalogRows.length,
+    catalogExtractedSkuCount: catalogPdfFieldsBySku.size,
     inventorySkuCount: inventoryBySku.size,
     inventoryAvailable,
     usedSeedFallback: catalogRows.length === 0,
+    membershipTiersDetected: Array.from(membershipTiersDetected.values()),
     sourceDiagnostics: sourceDiagnostics.map((diagnostic) => {
       if (diagnostic.lastError) return diagnostic;
       const reference = config.references.find((entry) => entry.id === diagnostic.id);
@@ -639,14 +941,14 @@ export async function getRocktomicSourceIngestionSnapshot(
     lastCheckedAt,
   };
 
-  cache = {
+  cache.set(cacheKey, {
     snapshot,
     expiresAt: now + ROCKTOMIC_INGESTION_TTL_MS,
-  };
+  });
 
   return snapshot;
 }
 
 export function clearRocktomicSourceIngestionCache(): void {
-  cache = null;
+  cache = new Map<string, { expiresAt: number; snapshot: RocktomicSourceIngestionSnapshot }>();
 }

@@ -1,4 +1,4 @@
-# Shopify Architecture (Sprint 009.3)
+# Shopify Architecture (Sprint 009.4)
 
 Last updated: 2026-05-30 (UTC)
 
@@ -17,7 +17,7 @@ Last updated: 2026-05-30 (UTC)
 5. Public-facing content fields are sanitized to prevent internal supplier disclosure.
 6. Persisted PDP intelligence remains tenant-scoped per user/product.
 
-## Supplier Intelligence Ingestion Boundary (Hotfix 009.3)
+## Supplier Intelligence Ingestion Boundary (Hotfix 009.4)
 
 Rocktomic supplier ingestion now follows explicit deterministic boundaries:
 
@@ -28,7 +28,28 @@ Rocktomic supplier ingestion now follows explicit deterministic boundaries:
 5. SKU match lookup
 6. Product Editor and PDP generator field hydration
 
-Catalog PDF parsing is deterministic for SKU-linked hyperlink extraction (COA + label/mockup links) and deterministic field overlays for required ingredient model fields. Extraction failures are preserved as diagnostics.
+Catalog PDF parsing now uses a universal extraction engine:
+
+- page text extraction (inflated streams + raw text layer fallback)
+- SKU detection
+- product-block anchor detection
+- field-label extraction
+- hyperlink association (COA + label/mockup)
+- per-SKU diagnostics (`extractionStatus`, `extractionErrors`, `coa_link_status`, `coa_link_error`)
+
+Extraction is SKU-agnostic and no longer hardcoded to `ROC949`.
+
+## Membership Pricing Engine (Hotfix 009.4)
+
+- Pricing sheet parsing detects membership tier columns dynamically from PLDS/MSRP headers.
+- User-selected membership tier is persisted per user via settings.
+- Supplier product pricing context includes:
+  - selected membership tier
+  - selected source column
+  - detected tier list
+  - per-tier cost map
+  - pricing status label
+- Product Editor/PDP intelligence consume selected-tier wholesale cost and compute profit/margin from Shopify price without inventing values.
 
 ## Hard Rules
 

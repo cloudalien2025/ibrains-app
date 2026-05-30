@@ -67,6 +67,14 @@ function chipTone(ok: boolean): string {
     : "border-amber-200 bg-amber-50 text-amber-800";
 }
 
+function availabilityFromInventoryStatus(status: string): string {
+  if (status === "in_stock") return "Available";
+  if (status === "low_stock") return "Limited Availability";
+  if (status === "out_of_stock") return "Currently Unavailable";
+  if (status === "source_unavailable") return "Inventory Status Unavailable";
+  return "Availability Unknown";
+}
+
 export default function EcomViperProductEditorClient({ initialState }: { initialState: ShopifyProductEditorInitialState }) {
   const product = initialState.currentShopifyListing;
 
@@ -121,7 +129,9 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
             ? supplierProduct.manufacturingClaims
             : [],
       inventory_status: seeded.inventory_status || supplierProduct?.inventoryStatus || "unknown",
-      availability_status: seeded.availability_status || "Availability Unknown",
+      availability_status:
+        seeded.availability_status ||
+        availabilityFromInventoryStatus(seeded.inventory_status || supplierProduct?.inventoryStatus || "unknown"),
       coa_status: seeded.coa_status || supplierProduct?.coa?.status || "unknown",
       coa_link: seeded.coa_link || supplierProduct?.coa?.url || "",
       coa_testing_categories:
@@ -137,7 +147,16 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
       wholesale_cost: seeded.wholesale_cost ?? supplierProduct?.pricing?.wholesaleCost ?? null,
       msrp: seeded.msrp ?? supplierProduct?.pricing?.msrp ?? null,
       estimated_profit: seeded.estimated_profit ?? supplierProduct?.pricing?.estimatedProfit ?? null,
-      margin_percent: seeded.margin_percent ?? supplierProduct?.pricing?.marginPercent ?? null,
+      margin_percent:
+        seeded.margin_percent ??
+        supplierProduct?.pricing?.marginPercent ??
+        (seeded.price != null && (seeded.wholesale_cost ?? supplierProduct?.pricing?.wholesaleCost) != null && seeded.price > 0
+          ? Number(
+              ((((seeded.price ?? 0) - (seeded.wholesale_cost ?? supplierProduct?.pricing?.wholesaleCost ?? 0)) /
+                (seeded.price ?? 1)) *
+                100).toFixed(2)
+            )
+          : null),
       currency: seeded.currency || supplierProduct?.pricing?.currency || "USD",
       supplement_facts: seeded.supplement_facts || supplierProduct?.supplementFacts?.value || "",
       ingredients:
@@ -169,6 +188,8 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
               `Inventory source: ${initialState.supplierContext.inventoryAvailable ? "Available" : "Unavailable"}`,
               `coa_link_status: ${supplierProduct?.coaLinkStatus || "not_present"}`,
               `coa_link_error: ${supplierProduct?.coaLinkError || "none"}`,
+              `membership_tier_selected: ${supplierProduct?.pricing?.membershipTier || "none"}`,
+              `pricing_status: ${supplierProduct?.pricing?.pricingStatusLabel || "unknown"}`,
               ...(supplierProduct?.sourceDiagnostics || []),
             ],
     };
@@ -181,6 +202,10 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
   const [activeTab, setActiveTab] = useState<EditorTab>("overview");
 
   const productReference = initialState.productReference || product.handle || product.productId;
+  const selectedMembershipTier = supplierProduct?.pricing?.membershipTier || null;
+  const pricingStatusLabel = supplierProduct?.pricing?.pricingStatusLabel || "unknown";
+  const hasSelectedTierWholesale =
+    Boolean(selectedMembershipTier) && typeof supplierProduct?.pricing?.wholesaleCost === "number";
 
   async function postAction(action: "generate" | "save", nextRecord?: ShopifyPdpIntelligenceRecord) {
     const payload =
@@ -438,12 +463,23 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 <label className="grid gap-1 text-sm">Estimated Profit
                   <input value={record.estimated_profit ?? ""} onChange={(e) => setRecord((s) => ({ ...s, estimated_profit: e.target.value ? Number(e.target.value) : null }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
+                <label className="grid gap-1 text-sm">Selected Membership Tier
+                  <input value={selectedMembershipTier || "Not selected"} readOnly className="rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-[#475569]" />
+                </label>
+                <label className="grid gap-1 text-sm">Pricing Status
+                  <input value={pricingStatusLabel} readOnly className="rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-[#475569]" />
+                </label>
                 <label className="grid gap-1 text-sm">Inventory Status
                   <input value={record.inventory_status} onChange={(e) => setRecord((s) => ({ ...s, inventory_status: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
                 <label className="grid gap-1 text-sm">Availability Status
                   <input value={record.availability_status} onChange={(e) => setRecord((s) => ({ ...s, availability_status: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
+                {!selectedMembershipTier ? (
+                  <p className="text-sm text-[#475569] md:col-span-2">
+                    Select membership tier in Settings to calculate cost and profit.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -578,9 +614,14 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 <p>MSRP: {asMoney(record.msrp, record.currency)}</p>
                 <p>Margin: {record.margin_percent != null ? `${record.margin_percent}%` : "Unknown"}</p>
                 <p>Estimated Profit: {asMoney(record.estimated_profit, record.currency)}</p>
+                <p>Selected Membership Tier: {selectedMembershipTier || "Not selected"}</p>
+                <p>Pricing Status: {pricingStatusLabel}</p>
                 <p>Inventory: {record.inventory_status || "unknown"}</p>
                 <p>Availability: {record.availability_status || "Availability Unknown"}</p>
                 <p>Last Inventory Sync: {asIso(initialState.supplierContext.lastSupplierCheckAt)}</p>
+                {!hasSelectedTierWholesale ? (
+                  <p>Select membership tier in Settings to calculate cost and profit.</p>
+                ) : null}
               </div>
             </section>
 

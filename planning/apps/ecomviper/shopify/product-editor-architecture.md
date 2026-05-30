@@ -1,4 +1,4 @@
-# Product Editor Architecture (Sprint 009.3)
+# Product Editor Architecture (Sprint 009.4)
 
 Last updated: 2026-05-30 (UTC)
 
@@ -32,6 +32,17 @@ Unknown is allowed only when the source lacks the field or deterministic extract
   - `coa_link_status: extraction_failed`
   - `coa_link_error: PDF hyperlink not found for matched SKU row`
 - UI must not silently collapse extraction failures to generic "Not available".
+
+## Commerce Tier Context (Hotfix 009.4)
+
+- Commerce tab and right rail must show selected membership tier context.
+- If no tier is selected, show explicit prompt: `Select membership tier in Settings to calculate cost and profit.`
+- Commerce values are source-grounded:
+  - wholesale cost from selected membership tier column
+  - MSRP from pricing sheet when available
+  - Shopify price/compare-at from Shopify
+  - estimated profit and margin derived from Shopify price and selected-tier cost
+- Do not render fabricated costs or inferred quantity values.
 
 ## Interaction Model
 

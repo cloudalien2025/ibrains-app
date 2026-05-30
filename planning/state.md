@@ -36,7 +36,8 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 009.1: Completed and merged (`hotfix-009-1-brains-auth-redirect`, production auth redirect stall fix for `/brains` blank page, production deployed).
 - Shopify Hotfix Sprint 009.2: Completed and merged (`hotfix-009-2-ibrains-dashboard-navigation`, restored `/brains` launcher and removed user-facing BrainOS branding, production deployed).
 - Shopify Hotfix Sprint 009.3: Completed and merged (`hotfix-009-3-catalog-field-extraction-coa-mapping`, deterministic catalog field extraction + COA hyperlink mapping for Product Editor, production deployed).
-- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.3 closure).
+- Shopify Hotfix Sprint 009.4: In progress (`hotfix-009-4-universal-catalog-pricing-engine`, universal catalog extraction + membership pricing engine).
+- Current recommended sprint: `Shopify Hotfix Sprint 009.4 completion` (MR/pipeline/deploy/browser verification closure pending).
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 009.3 Production Closure
 

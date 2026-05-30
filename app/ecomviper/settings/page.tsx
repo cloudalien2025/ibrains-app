@@ -4,6 +4,8 @@ import { getRocktomicSourceIngestionSnapshot } from "@/lib/ecomviper/dropshippin
 import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopify-connection";
 import { getShopifyImportStateForUser } from "@/lib/ecomviper/shopify/shopify-import";
 import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify/openai-connection";
+import { getSupplierMembershipTierSelectionForUser } from "@/lib/ecomviper/settings/supplier-membership";
+import SupplierMembershipTierForm from "@/app/ecomviper/settings/supplier-membership-tier-form";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +27,10 @@ export default async function EcomViperSettingsPage() {
     userId = null;
   }
 
-  const rocktomic = await getRocktomicSourceIngestionSnapshot();
+  const rocktomic = await getRocktomicSourceIngestionSnapshot({ userId });
+  const selectedMembershipTier = userId
+    ? await getSupplierMembershipTierSelectionForUser(userId).catch(() => null)
+    : null;
 
   let shopifyConnected = false;
   let shopifyStore = "Not connected";
@@ -77,6 +82,11 @@ export default async function EcomViperSettingsPage() {
             <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Last Shopify sync: {asIso(lastImportAt)}</p>
           </div>
         </section>
+
+        <SupplierMembershipTierForm
+          detectedTiers={rocktomic.membershipTiersDetected}
+          initialTier={selectedMembershipTier}
+        />
 
         <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
           <h2 className="text-base font-semibold text-[#0F172A]">Rocktomic Source Diagnostics</h2>

@@ -27,7 +27,7 @@ export default async function EcomViperDashboardPage() {
   let rows = [] as ReturnType<typeof toEcomViperProductInventoryRows>;
   const sourceWarnings: string[] = [];
 
-  const rocktomicSnapshot = await getRocktomicSourceIngestionSnapshot().catch((error) => {
+  const rocktomicSnapshot = await getRocktomicSourceIngestionSnapshot({ userId }).catch((error) => {
     sourceWarnings.push(error instanceof Error ? error.message : "Could not load supplier source diagnostics.");
     return null;
   });

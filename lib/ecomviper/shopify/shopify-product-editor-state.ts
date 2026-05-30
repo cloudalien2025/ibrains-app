@@ -156,6 +156,11 @@ function computeShopifyInventoryStatus(product: ShopifyProductRecord): "in_stock
   return "low_stock";
 }
 
+function firstVariantPrice(product: ShopifyProductRecord): number | null {
+  const priced = product.variants.find((variant) => typeof variant.price === "number" && Number.isFinite(variant.price));
+  return priced?.price ?? null;
+}
+
 async function resolveProduct(
   options: BuildProductEditorStateOptions
 ): Promise<ResolvedProduct> {
@@ -332,9 +337,44 @@ export async function buildShopifyProductEditorStateForUser(
   }
 
   const skus = currentShopifyListing.variants.map((entry) => entry.sku.trim()).filter(Boolean);
-  const supplierSnapshot = await matchPrimarySupplierBySkus(skus).catch(() => null);
+  const supplierSnapshot = await matchPrimarySupplierBySkus(skus, {
+    userId: options.userId,
+  }).catch(() => null);
   const supplierMatch = supplierSnapshot?.match;
-  const supplierProduct = supplierMatch?.product ?? null;
+  const supplierProductRaw = supplierMatch?.product ?? null;
+  const shopifyPrice = firstVariantPrice(resolved.product);
+  const rawPricing = supplierProductRaw?.pricing;
+  const supplierProduct = supplierProductRaw
+    ? {
+        ...supplierProductRaw,
+        pricing: {
+          wholesaleCost: rawPricing?.wholesaleCost ?? null,
+          msrp: rawPricing?.msrp ?? null,
+          estimatedProfit:
+            rawPricing?.wholesaleCost != null && shopifyPrice != null
+              ? Number((shopifyPrice - rawPricing.wholesaleCost).toFixed(2))
+              : null,
+          marginPercent:
+            rawPricing?.wholesaleCost != null && shopifyPrice != null && shopifyPrice > 0
+              ? Number((((shopifyPrice - rawPricing.wholesaleCost) / shopifyPrice) * 100).toFixed(2))
+              : null,
+          currency: rawPricing?.currency ?? "USD",
+          sourceStatus: rawPricing?.sourceStatus ?? "unknown",
+          membershipTier: rawPricing?.membershipTier ?? null,
+          membershipTiersDetected: rawPricing?.membershipTiersDetected ?? [],
+          membershipTierCosts: rawPricing?.membershipTierCosts ?? {},
+          sourceSheet: rawPricing?.sourceSheet ?? null,
+          sourceColumn: rawPricing?.sourceColumn ?? null,
+          lastCheckedAt: rawPricing?.lastCheckedAt ?? null,
+          pricingStatusLabel:
+            !rawPricing?.membershipTier
+              ? "membership_tier_not_selected"
+              : rawPricing?.wholesaleCost == null
+                ? "source_unavailable_for_selected_membership_tier"
+                : rawPricing?.pricingStatusLabel || "tier_pricing_mapped",
+        },
+      }
+    : null;
   const inventoryAvailable = supplierSnapshot?.inventoryAvailable ?? false;
   const shopifyInventoryStatus = computeShopifyInventoryStatus(resolved.product);
   const supplierInventoryStatus =

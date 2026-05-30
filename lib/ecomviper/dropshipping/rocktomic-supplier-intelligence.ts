@@ -70,6 +70,13 @@ export interface RocktomicSupplierProduct {
     marginPercent: number | null;
     currency: string | null;
     sourceStatus: "available" | "unknown" | "source_unavailable";
+    membershipTier?: string | null;
+    membershipTiersDetected?: string[];
+    membershipTierCosts?: Record<string, number>;
+    sourceSheet?: string | null;
+    sourceColumn?: string | null;
+    lastCheckedAt?: string | null;
+    pricingStatusLabel?: string | null;
   };
   shipping?: {
     shipsFrom: string | null;

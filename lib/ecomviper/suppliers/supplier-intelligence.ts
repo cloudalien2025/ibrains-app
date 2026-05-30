@@ -36,11 +36,14 @@ export async function getPrimarySupplierCatalogSnapshot(): Promise<SupplierCatal
   };
 }
 
-export async function matchPrimarySupplierBySkus(skus: string[]): Promise<SupplierSkuMatchResult> {
-  const snapshot = await getPrimarySupplierCatalogSnapshot();
+export async function matchPrimarySupplierBySkus(
+  skus: string[],
+  options?: { userId?: string | null }
+): Promise<SupplierSkuMatchResult> {
+  const snapshot = await getRocktomicSourceIngestionSnapshot({ userId: options?.userId ?? null });
   return {
-    platform: snapshot.platform,
-    supplierName: snapshot.supplierName,
+    platform: "rocktomic",
+    supplierName: "Rocktomic",
     match: matchRocktomicBySkus(skus, snapshot.products),
     inventoryAvailable: snapshot.inventoryAvailable,
     lastCheckedAt: snapshot.lastCheckedAt,
