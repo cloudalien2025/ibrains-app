@@ -38,7 +38,36 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 009.3: Completed and merged (`hotfix-009-3-catalog-field-extraction-coa-mapping`, deterministic catalog field extraction + COA hyperlink mapping for Product Editor, production deployed).
 - Shopify Hotfix Sprint 009.4: Completed and merged (`hotfix-009-4-universal-catalog-pricing-engine`, universal catalog extraction + membership pricing engine, production deployed).
 - Shopify Hotfix Sprint 009.5: Completed and merged (`hotfix-009-5-production-504-proxy-timeout`, production 504 timeout diagnosis + middleware/public-route proxy loop fix, production proxy timeout guard shipped).
-- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.5 closure).
+- Shopify Hotfix Sprint 009.6: Completed and merged (`hotfix-009-6-brains-open-brain-navigation`, launcher CTA navigation reliability fix for `/brains` Open Brain buttons).
+- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.6 closure).
+
+## Sprint Completion Log: Shopify Hotfix Sprint 009.6 Launcher Navigation Closure
+
+- Sprint/lane: `Shopify Hotfix Sprint 009.6` (`hotfix-009-6-brains-open-brain-navigation`) - closed.
+- Root cause:
+  - `/brains` launcher cards used client-side Link navigation for `Open Brain`.
+  - under degraded client transition/runtime conditions, clicks could appear no-op for operators.
+- Chosen fix:
+  - switched launcher CTA rendering in `components/brain-dock/BrainDockCard.tsx` from `next/link` to native anchor navigation.
+  - preserved canonical target route resolution through existing `brainRoute(...)` mapping.
+- Files changed:
+  - `components/brain-dock/BrainDockCard.tsx`
+- Validation summary:
+  - passed focused launcher suites:
+    - `tests/brains_index_contract.test.ts`
+    - `tests/brains_table_hydration_resilience.test.tsx`
+    - `tests/brain_views_contract.test.ts`
+- MR: `!243` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/243`).
+- MR pipeline: `2563809033` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2563809033`).
+- Merge commit SHA: `1568e2d0a3e5c20fa645ccde30304e14add8bd42`.
+- Branch deletion status:
+  - remote: deleted on merge (`hotfix-009-6-brains-open-brain-navigation` no longer present on `origin`).
+  - local: deleted via `git branch -d hotfix-009-6-brains-open-brain-navigation`.
+- Final local branch/status:
+  - `git switch main`
+  - `git pull`
+  - final status `## main...origin/main` (clean) before state closure update branch.
+- Recommended next sprint: `Shopify Sprint 010 planning`.
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 009.5 Production Closure
 
