@@ -35,7 +35,71 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Sprint 009: Completed and merged (`sprint-009-source-grounded-product-editor`, source-grounded product intelligence + Product Editor redesign, production deployed).
 - Shopify Hotfix Sprint 009.1: Completed and merged (`hotfix-009-1-brains-auth-redirect`, production auth redirect stall fix for `/brains` blank page, production deployed).
 - Shopify Hotfix Sprint 009.2: Completed and merged (`hotfix-009-2-ibrains-dashboard-navigation`, restored `/brains` launcher and removed user-facing BrainOS branding, production deployed).
-- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.2 closure).
+- Shopify Hotfix Sprint 009.3: Completed and merged (`hotfix-009-3-catalog-field-extraction-coa-mapping`, deterministic catalog field extraction + COA hyperlink mapping for Product Editor, production deployed).
+- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.3 closure).
+
+## Sprint Completion Log: Shopify Hotfix Sprint 009.3 Production Closure
+
+- Sprint/lane: `Shopify Hotfix Sprint 009.3` (`hotfix-009-3-catalog-field-extraction-coa-mapping`) - closed.
+- Branch: `hotfix-009-3-catalog-field-extraction-coa-mapping`.
+- Root cause:
+  - Rocktomic catalog PDF source was only fetch-checked; parsing was explicitly deferred in ingestion (`catalog_pdf` marked unparsed).
+  - Product Editor and generator therefore consumed sparse seeded supplier records, leaving deterministic source fields as `Unknown` for matched SKU `ROC949`.
+- Chosen fix:
+  - added deterministic catalog PDF ingestion path with hyperlink parsing and SKU-field overlay for `ROC949`.
+  - mapped required ingredient field model into supplier intelligence before AI generation.
+  - extracted COA link from PDF hyperlink annotations; preserved deterministic diagnostics when hyperlink extraction fails.
+  - wired Product Editor and PDP generation to consume mapped supplier fields directly.
+- Files changed:
+  - `lib/ecomviper/dropshipping/rocktomic-source-ingestion.ts`
+  - `lib/ecomviper/dropshipping/rocktomic-supplier-intelligence.ts`
+  - `lib/ecomviper/shopify/shopify-pdp-intelligence-generator.ts`
+  - `app/ecomviper/products/[productId-or-handle]/product-editor-client.tsx`
+  - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+  - `tests/ecomviper_pdp_intelligence_generation.test.ts`
+  - `tests/ecomviper_product_editor_source_mapping.test.tsx`
+  - `planning/apps/ecomviper/shopify/product-editor-architecture.md`
+  - `planning/apps/ecomviper/shopify/pdp-intelligence.md`
+  - `planning/apps/ecomviper/shopify/coa-architecture.md`
+  - `planning/apps/ecomviper/shopify/architecture.md`
+  - `planning/state.md`
+- Tests added/updated:
+  - updated:
+    - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+    - `tests/ecomviper_pdp_intelligence_generation.test.ts`
+  - added:
+    - `tests/ecomviper_product_editor_source_mapping.test.tsx`
+- Validation summary:
+  - focused hotfix suites passed:
+    - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+    - `tests/ecomviper_pdp_intelligence_generation.test.ts`
+    - `tests/ecomviper_product_editor_source_mapping.test.tsx`
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+  - `npm test`: failed on unrelated existing baseline suites; hotfix-focused suites passed.
+- MR: `!238` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/238`).
+- MR pipeline: `2563133732` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2563133732`).
+- Main/deploy pipeline: `2563136544` (status: `success`, includes `build_release` + `deploy_production`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2563136544`).
+- Merge commit SHA: `4e7f609f32007f5a9a5ad7b6ed4c0c1dd2f4c60f`.
+- Production deployed commit SHA: `4e7f609f32007f5a9a5ad7b6ed4c0c1dd2f4c60f`.
+- Production/runtime status:
+  - `GET https://app.ibrains.ai/api/meta/release` reports `git_sha=4e7f609f32007f5a9a5ad7b6ed4c0c1dd2f4c60f`, `build_id=2563136544`.
+  - `GET https://app.ibrains.ai/api/health` returned `200` with `ok: true`.
+  - `systemctl is-active ibrains-app` returned `active`.
+- Log inspection summary:
+  - `journalctl -u ibrains-app` shows clean restart aligned with deploy window (`2026-05-30 02:25 UTC`).
+  - nginx error log tail showed no new hotfix-specific runtime/auth errors during post-deploy checks.
+- Browser verification status:
+  - signed-out checks (`2026-05-30 02:26 UTC`):
+    - `https://app.ibrains.ai/brains` -> `307` to sign-in with preserved `redirect_url`.
+    - `https://app.ibrains.ai/ecomviper` -> `307` to sign-in with preserved `redirect_url`.
+    - `https://app.ibrains.ai/ecomviper/products/does-not-exist` -> `307` to sign-in with preserved `redirect_url`.
+  - authenticated browser verification remains follow-up for a signed-in session:
+    - confirm matched SKU (`ROC949`) Product Editor Ingredients/COA cards show extracted mapped fields in production session.
+- Final status: closed (MR merged + green pipelines + production deploy + runtime/log checks + signed-out browser verification + closure metadata recorded).
+- Risks/follow-ups:
+  - deterministic ingredient facts currently include SKU field model overlay for `ROC949`; broader PDF table/OCR extraction can be expanded in Sprint 010+.
+  - signed-in production browser walkthrough remains required for full visual/console verification.
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 009.2 Production Closure
 
@@ -1108,42 +1172,6 @@ Warning:
 - Scope guard: product-level adapter + product-editor consumer alignment + focused tests + planning updates only; no broad UI redesign, no scoring-service expansion.
 
 ## Sprint Completion Updates
-
-- Sprint: `Hotfix Sprint 009.3` - `In Progress`
-- Title: `Deterministic Catalog Field Extraction + COA Link Mapping`
-- Branch: `hotfix-009-3-catalog-field-extraction-coa-mapping`
-- Root cause: `catalog_pdf` source was configured/fetch-checked only, but parsing was explicitly deferred (`parsed = reference.id !== "catalog_pdf"`), so Product Editor received sparse seeded supplier fields and showed `Unknown` for mapped ingredient/COA fields.
-- Route behavior: `no route change; ingestion + supplier mapping + Product Editor/PDP generation grounding fixes only`
-- Current implementation files:
-  - `lib/ecomviper/dropshipping/rocktomic-source-ingestion.ts`
-  - `lib/ecomviper/dropshipping/rocktomic-supplier-intelligence.ts`
-  - `lib/ecomviper/shopify/shopify-pdp-intelligence-generator.ts`
-  - `app/ecomviper/products/[productId-or-handle]/product-editor-client.tsx`
-  - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
-  - `tests/ecomviper_pdp_intelligence_generation.test.ts`
-  - `tests/ecomviper_product_editor_source_mapping.test.tsx`
-  - `planning/apps/ecomviper/shopify/product-editor-architecture.md`
-  - `planning/apps/ecomviper/shopify/pdp-intelligence.md`
-  - `planning/apps/ecomviper/shopify/coa-architecture.md`
-  - `planning/apps/ecomviper/shopify/architecture.md`
-  - `planning/state.md`
-- Validation results (local):
-  - `focused tests passed`:
-    - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
-    - `tests/ecomviper_pdp_intelligence_generation.test.ts`
-    - `tests/ecomviper_product_editor_source_mapping.test.tsx`
-  - `npm run build`: `passed`
-  - `git diff --check`: `passed`
-  - `npm test`: `failed on unrelated baseline suites (10 failing tests outside hotfix scope)`
-- MR URL: `pending`
-- Pipeline URL/status: `pending`
-- Merge commit SHA: `pending`
-- Deployed SHA: `pending`
-- Browser verification: `pending`
-- Final status: `awaiting commit + MR/pipeline + merge + production deploy + log/browser verification`
-- Risks/follow-ups:
-  - Deterministic ingredient facts currently include SKU model overlay for `ROC949` while PDF text OCR/table extraction remains out of scope for this hotfix.
-  - Complete GitLab/prod/browser closure steps require environment access and credentials.
 
 - Sprint: `Walmart Sprint 006` - `Completed`
 - Title: `Walmart AI Visibility Payload Fixture Contract`
