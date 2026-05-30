@@ -39,7 +39,43 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 009.4: Completed and merged (`hotfix-009-4-universal-catalog-pricing-engine`, universal catalog extraction + membership pricing engine, production deployed).
 - Shopify Hotfix Sprint 009.5: Completed and merged (`hotfix-009-5-production-504-proxy-timeout`, production 504 timeout diagnosis + middleware/public-route proxy loop fix, production proxy timeout guard shipped).
 - Shopify Hotfix Sprint 009.6: Completed and merged (`hotfix-009-6-brains-open-brain-navigation`, launcher CTA navigation reliability fix for `/brains` Open Brain buttons).
-- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.6 closure).
+- Shopify Hotfix Sprint 009.7: Completed and merged (`hotfix-009-7-frontdoor-auth-saturation-guard`, frontdoor anonymous auth saturation guard + production recovery deployment).
+- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.7 closure).
+
+## Sprint Completion Log: Shopify Hotfix Sprint 009.7 Frontdoor Auth Saturation Guard
+
+- Sprint/lane: `Shopify Hotfix Sprint 009.7` (`hotfix-009-7-frontdoor-auth-saturation-guard`) - closed.
+- Root cause:
+  - public frontdoor auth state resolution attempted Clerk auth calls even for anonymous homepage requests.
+  - during degraded external auth/runtime conditions, this path could amplify origin saturation and contribute to broad `504` behavior.
+- Chosen fix:
+  - short-circuited frontdoor auth state to `signed-out` when no `__session` cookie is present.
+  - resolved signed-in frontdoor state from verified Clerk session cookie claims first, with Clerk auth as fallback only when needed.
+  - reduced unnecessary Clerk dependency pressure for anonymous frontdoor traffic.
+- Files changed:
+  - `lib/auth/frontdoorAuthState.ts`
+  - `tests/frontdoor_auth_state.test.ts`
+- Validation summary:
+  - `npm test -- tests/frontdoor_auth_state.test.ts tests/frontdoor_header_actions_auth_state.test.ts tests/frontdoor_public_route_auth_isolation.test.ts`
+  - `npm test -- tests/clerk_env_contract_shared_logic.test.ts tests/clerk_layout_env_contract.test.ts tests/frontdoor_layout_chain_contract.test.ts tests/frontdoor_public_route_auth_isolation.test.ts tests/clerk_auth_routes_contract.test.ts tests/clerk_auth_route_runtime.test.tsx tests/proxy_clerk_env_guard_contract.test.ts tests/gitlab_deploy_pipeline_contract.test.ts`
+  - `npm run build`
+- MR: `!245` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/245`).
+- MR pipeline: `2563902446` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2563902446`).
+- Main/deploy pipeline: `2563909034` (status: `success`, includes `deploy_production`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2563909034`).
+- Merge commit SHA: `26f191b776d298214612ffa50437449791b41a71`.
+- Production/runtime status:
+  - `GET https://app.ibrains.ai/` returned `200` (`2026-05-30 13:24 UTC`).
+  - `GET https://app.ibrains.ai/sign-in` returned `200` (`2026-05-30 13:24 UTC`).
+  - `GET https://app.ibrains.ai/api/meta/release` returned `200` with `git_sha=26f191b776d298214612ffa50437449791b41a71`, `build_id=2563909034`.
+  - `GET https://app.ibrains.ai/api/health` returned `200` with `ok: true`, `upstream_ok: true`.
+- Branch deletion status:
+  - remote: deleted on merge (`hotfix-009-7-frontdoor-auth-saturation-guard` no longer present on `origin`).
+  - local: deleted via `git branch -d hotfix-009-7-frontdoor-auth-saturation-guard`.
+- Final local branch/status:
+  - `git switch main`
+  - `git pull`
+  - final status `## main...origin/main` (clean) before state closure update branch.
+- Recommended next sprint: `Shopify Sprint 010 planning`.
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 009.6 Launcher Navigation Closure
 
