@@ -93,6 +93,7 @@ export interface RocktomicSourceIngestionSnapshot {
 }
 
 let cache = new Map<string, { expiresAt: number; snapshot: RocktomicSourceIngestionSnapshot }>();
+let inFlightByCacheKey = new Map<string, Promise<RocktomicSourceIngestionSnapshot>>();
 
 function normalizeHeader(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -740,129 +741,136 @@ export async function getRocktomicSourceIngestionSnapshot(
     return existing.snapshot;
   }
 
-  const config = getRocktomicSourceConfigSnapshot();
-  const lastCheckedAt = new Date(now).toISOString();
-  const sourceDiagnostics: RocktomicSourceIngestionDiagnostic[] = [];
+  const inFlight = inFlightByCacheKey.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
 
-  const catalogRowsBySku = new Map<string, CatalogRow>();
-  const inventoryBySku = new Map<string, InventoryRow>();
-  const catalogPdfFieldsBySku = new Map<string, CatalogPdfSkuFields>();
-  const membershipTiersDetected = new Set<string>();
-  let pendingCatalogPdf:
-    | {
-        referenceId: RocktomicSourceReference["id"];
-        pdfBytes: ArrayBuffer;
-      }
-    | null = null;
+  const snapshotPromise = (async (): Promise<RocktomicSourceIngestionSnapshot> => {
 
-  for (const reference of config.references) {
-    const diagnostic: RocktomicSourceIngestionDiagnostic = {
-      id: reference.id,
-      label: reference.label,
-      configured: reference.status === "configured" && !!reference.sourceUrl,
-      fetchable: false,
-      parsed: false,
-      recordCount: 0,
-      lastCheckedAt,
-      lastError: null,
-      sourceUrl: reference.sourceUrl,
-      fetchUrl: null,
-    };
+    const config = getRocktomicSourceConfigSnapshot();
+    const lastCheckedAt = new Date(now).toISOString();
+    const sourceDiagnostics: RocktomicSourceIngestionDiagnostic[] = [];
 
-    if (!diagnostic.configured || !reference.sourceUrl) {
-      sourceDiagnostics.push(diagnostic);
-      continue;
-    }
-
-    try {
-      if (looksLikeGoogleSheet(reference.sourceUrl)) {
-        const csvUrl = toGoogleSheetCsvUrl(reference.sourceUrl);
-        if (!csvUrl) throw new Error("Could not derive Google Sheets CSV export URL.");
-
-        diagnostic.fetchUrl = csvUrl;
-        const csvBody = await fetchWithTimeout(csvUrl);
-        diagnostic.fetchable = true;
-
-        if (reference.id === "inventory_report") {
-          const rows = parseInventoryCsv(csvBody);
-          diagnostic.parsed = rows.length > 0;
-          diagnostic.recordCount = rows.length;
-          if (!rows.length) diagnostic.lastError = "No inventory rows parsed from source CSV.";
-          rows.forEach((row) => inventoryBySku.set(row.sku, row));
-        } else if (reference.id === "msrp_profit_margins_report" || reference.id === "plds_catalog") {
-          const parsedCatalog = parseCatalogCsv(csvBody, {
-            selectedMembershipTierKey,
-          });
-          const rows = parsedCatalog.rows;
-          parsedCatalog.membershipTiersDetected.forEach((tier) => membershipTiersDetected.add(tier));
-          diagnostic.parsed = rows.length > 0;
-          diagnostic.recordCount = rows.length;
-          if (!rows.length) diagnostic.lastError = "No catalog rows parsed from source CSV.";
-          rows.forEach((row) => catalogRowsBySku.set(row.sku, row));
-        } else {
-          diagnostic.parsed = true;
-          diagnostic.recordCount = csvBody.trim().length > 0 ? 1 : 0;
+    const catalogRowsBySku = new Map<string, CatalogRow>();
+    const inventoryBySku = new Map<string, InventoryRow>();
+    const catalogPdfFieldsBySku = new Map<string, CatalogPdfSkuFields>();
+    const membershipTiersDetected = new Set<string>();
+    let pendingCatalogPdf:
+      | {
+          referenceId: RocktomicSourceReference["id"];
+          pdfBytes: ArrayBuffer;
         }
-      } else if (reference.id === "catalog_pdf") {
-        diagnostic.fetchUrl = reference.sourceUrl;
-        const pdfBytes = await fetchBinaryWithTimeout(reference.sourceUrl);
-        diagnostic.fetchable = true;
-        pendingCatalogPdf = {
-          referenceId: reference.id,
-          pdfBytes,
-        };
-        diagnostic.parsed = false;
-        diagnostic.recordCount = 0;
-      } else {
-        await checkUrlFetchable(reference.sourceUrl);
-        diagnostic.fetchable = true;
-        diagnostic.parsed = true;
-        diagnostic.recordCount = 0;
+      | null = null;
+
+    for (const reference of config.references) {
+      const diagnostic: RocktomicSourceIngestionDiagnostic = {
+        id: reference.id,
+        label: reference.label,
+        configured: reference.status === "configured" && !!reference.sourceUrl,
+        fetchable: false,
+        parsed: false,
+        recordCount: 0,
+        lastCheckedAt,
+        lastError: null,
+        sourceUrl: reference.sourceUrl,
+        fetchUrl: null,
+      };
+
+      if (!diagnostic.configured || !reference.sourceUrl) {
+        sourceDiagnostics.push(diagnostic);
+        continue;
       }
-    } catch (error) {
-      diagnostic.lastError = redactError(error);
+
+      try {
+        if (looksLikeGoogleSheet(reference.sourceUrl)) {
+          const csvUrl = toGoogleSheetCsvUrl(reference.sourceUrl);
+          if (!csvUrl) throw new Error("Could not derive Google Sheets CSV export URL.");
+
+          diagnostic.fetchUrl = csvUrl;
+          const csvBody = await fetchWithTimeout(csvUrl);
+          diagnostic.fetchable = true;
+
+          if (reference.id === "inventory_report") {
+            const rows = parseInventoryCsv(csvBody);
+            diagnostic.parsed = rows.length > 0;
+            diagnostic.recordCount = rows.length;
+            if (!rows.length) diagnostic.lastError = "No inventory rows parsed from source CSV.";
+            rows.forEach((row) => inventoryBySku.set(row.sku, row));
+          } else if (reference.id === "msrp_profit_margins_report" || reference.id === "plds_catalog") {
+            const parsedCatalog = parseCatalogCsv(csvBody, {
+              selectedMembershipTierKey,
+            });
+            const rows = parsedCatalog.rows;
+            parsedCatalog.membershipTiersDetected.forEach((tier) => membershipTiersDetected.add(tier));
+            diagnostic.parsed = rows.length > 0;
+            diagnostic.recordCount = rows.length;
+            if (!rows.length) diagnostic.lastError = "No catalog rows parsed from source CSV.";
+            rows.forEach((row) => catalogRowsBySku.set(row.sku, row));
+          } else {
+            diagnostic.parsed = true;
+            diagnostic.recordCount = csvBody.trim().length > 0 ? 1 : 0;
+          }
+        } else if (reference.id === "catalog_pdf") {
+          diagnostic.fetchUrl = reference.sourceUrl;
+          const pdfBytes = await fetchBinaryWithTimeout(reference.sourceUrl);
+          diagnostic.fetchable = true;
+          pendingCatalogPdf = {
+            referenceId: reference.id,
+            pdfBytes,
+          };
+          diagnostic.parsed = false;
+          diagnostic.recordCount = 0;
+        } else {
+          await checkUrlFetchable(reference.sourceUrl);
+          diagnostic.fetchable = true;
+          diagnostic.parsed = true;
+          diagnostic.recordCount = 0;
+        }
+      } catch (error) {
+        diagnostic.lastError = redactError(error);
+      }
+
+      sourceDiagnostics.push(diagnostic);
     }
 
-    sourceDiagnostics.push(diagnostic);
-  }
-
-  if (pendingCatalogPdf) {
-    const parsed = mapCatalogPdfFieldsBySku({
-      pdfBytes: pendingCatalogPdf.pdfBytes,
-      catalogRowsBySku,
-    });
-    parsed.forEach((value, sku) => catalogPdfFieldsBySku.set(sku, value));
-    const catalogPdfDiagnostic = sourceDiagnostics.find((entry) => entry.id === pendingCatalogPdf?.referenceId);
-    if (catalogPdfDiagnostic) {
-      catalogPdfDiagnostic.parsed = parsed.size > 0;
-      catalogPdfDiagnostic.recordCount = parsed.size;
-      catalogPdfDiagnostic.lastError = parsed.size > 0 ? null : "No deterministic catalog SKU blocks parsed from PDF.";
+    if (pendingCatalogPdf) {
+      const parsed = mapCatalogPdfFieldsBySku({
+        pdfBytes: pendingCatalogPdf.pdfBytes,
+        catalogRowsBySku,
+      });
+      parsed.forEach((value, sku) => catalogPdfFieldsBySku.set(sku, value));
+      const catalogPdfDiagnostic = sourceDiagnostics.find((entry) => entry.id === pendingCatalogPdf?.referenceId);
+      if (catalogPdfDiagnostic) {
+        catalogPdfDiagnostic.parsed = parsed.size > 0;
+        catalogPdfDiagnostic.recordCount = parsed.size;
+        catalogPdfDiagnostic.lastError = parsed.size > 0 ? null : "No deterministic catalog SKU blocks parsed from PDF.";
+      }
     }
-  }
 
-  const inventoryAvailable = sourceDiagnostics.some((source) => source.id === "inventory_report" && source.parsed);
-  const sourceUpdatedAt = config.lastSyncedAt || lastCheckedAt;
-  const sourceVersion =
-    config.references.find((reference) => reference.id === "plds_catalog" || reference.id === "msrp_profit_margins_report")
-      ?.sourceVersion || "rocktomic_catalog_runtime";
-  const coaRepositoryUrl = config.references.find((reference) => reference.id === "coa_repository")?.sourceUrl || null;
-  const returnPolicyConfigured = config.references.some((reference) => reference.id === "order_refund_policy" && reference.status === "configured");
+    const inventoryAvailable = sourceDiagnostics.some((source) => source.id === "inventory_report" && source.parsed);
+    const sourceUpdatedAt = config.lastSyncedAt || lastCheckedAt;
+    const sourceVersion =
+      config.references.find((reference) => reference.id === "plds_catalog" || reference.id === "msrp_profit_margins_report")
+        ?.sourceVersion || "rocktomic_catalog_runtime";
+    const coaRepositoryUrl = config.references.find((reference) => reference.id === "coa_repository")?.sourceUrl || null;
+    const returnPolicyConfigured = config.references.some((reference) => reference.id === "order_refund_policy" && reference.status === "configured");
 
-  const catalogRows = Array.from(catalogRowsBySku.values());
-  const products: RocktomicSupplierProduct[] = catalogRows.length
-    ? catalogRows.map((catalogRow) =>
-        buildProduct({
-          catalogRow,
-          inventoryBySku,
-          catalogPdfFieldsBySku,
-          sourceVersion,
-          sourceUpdatedAt,
-          lastSyncedAt: lastCheckedAt,
-          coaRepositoryUrl,
-          returnPolicyConfigured,
-        })
-      )
-    : listRocktomicSupplierProducts().map((product): RocktomicSupplierProduct => {
+    const catalogRows = Array.from(catalogRowsBySku.values());
+    const products: RocktomicSupplierProduct[] = catalogRows.length
+      ? catalogRows.map((catalogRow) =>
+          buildProduct({
+            catalogRow,
+            inventoryBySku,
+            catalogPdfFieldsBySku,
+            sourceVersion,
+            sourceUpdatedAt,
+            lastSyncedAt: lastCheckedAt,
+            coaRepositoryUrl,
+            returnPolicyConfigured,
+          })
+        )
+      : listRocktomicSupplierProducts().map((product): RocktomicSupplierProduct => {
         const pdfFields = catalogPdfFieldsBySku.get(product.sku);
         if (!pdfFields) return product;
         const coaUrl = pdfFields.coaUrl ?? product.coa.url;
@@ -913,42 +921,51 @@ export async function getRocktomicSourceIngestionSnapshot(
             url: pdfFields.mockupUrl ?? product.mockup.url,
           },
         };
-      });
+        });
 
-  const snapshot: RocktomicSourceIngestionSnapshot = {
-    supplier: "Rocktomic",
-    products,
-    productCount: products.length,
-    catalogSkuCount: catalogRows.length,
-    catalogExtractedSkuCount: catalogPdfFieldsBySku.size,
-    inventorySkuCount: inventoryBySku.size,
-    inventoryAvailable,
-    usedSeedFallback: catalogRows.length === 0,
-    membershipTiersDetected: Array.from(membershipTiersDetected.values()),
-    sourceDiagnostics: sourceDiagnostics.map((diagnostic) => {
-      if (diagnostic.lastError) return diagnostic;
-      const reference = config.references.find((entry) => entry.id === diagnostic.id);
-      if (!reference) return diagnostic;
-      return {
-        ...diagnostic,
-        lastError: diagnostic.parsed ? null : reference.status === "pending" ? "Source pending." : null,
-        fetchUrl: diagnostic.fetchUrl,
-        sourceUrl: reference.sourceUrl,
-        lastCheckedAt,
-        configured: reference.status === "configured" && !!reference.sourceUrl,
-      };
-    }),
-    lastCheckedAt,
-  };
+    const snapshot: RocktomicSourceIngestionSnapshot = {
+      supplier: "Rocktomic",
+      products,
+      productCount: products.length,
+      catalogSkuCount: catalogRows.length,
+      catalogExtractedSkuCount: catalogPdfFieldsBySku.size,
+      inventorySkuCount: inventoryBySku.size,
+      inventoryAvailable,
+      usedSeedFallback: catalogRows.length === 0,
+      membershipTiersDetected: Array.from(membershipTiersDetected.values()),
+      sourceDiagnostics: sourceDiagnostics.map((diagnostic) => {
+        if (diagnostic.lastError) return diagnostic;
+        const reference = config.references.find((entry) => entry.id === diagnostic.id);
+        if (!reference) return diagnostic;
+        return {
+          ...diagnostic,
+          lastError: diagnostic.parsed ? null : reference.status === "pending" ? "Source pending." : null,
+          fetchUrl: diagnostic.fetchUrl,
+          sourceUrl: reference.sourceUrl,
+          lastCheckedAt,
+          configured: reference.status === "configured" && !!reference.sourceUrl,
+        };
+      }),
+      lastCheckedAt,
+    };
 
-  cache.set(cacheKey, {
-    snapshot,
-    expiresAt: now + ROCKTOMIC_INGESTION_TTL_MS,
-  });
+    cache.set(cacheKey, {
+      snapshot,
+      expiresAt: now + ROCKTOMIC_INGESTION_TTL_MS,
+    });
 
-  return snapshot;
+    return snapshot;
+  })();
+
+  inFlightByCacheKey.set(cacheKey, snapshotPromise);
+  try {
+    return await snapshotPromise;
+  } finally {
+    inFlightByCacheKey.delete(cacheKey);
+  }
 }
 
 export function clearRocktomicSourceIngestionCache(): void {
   cache = new Map<string, { expiresAt: number; snapshot: RocktomicSourceIngestionSnapshot }>();
+  inFlightByCacheKey = new Map<string, Promise<RocktomicSourceIngestionSnapshot>>();
 }

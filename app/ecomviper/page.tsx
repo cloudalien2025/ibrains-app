@@ -5,18 +5,20 @@ import { toEcomViperProductInventoryRows } from "@/lib/ecomviper/shopify/shopify
 import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopify-connection";
 import { getShopifyImportStateForUser, listShopifyProductsForUser } from "@/lib/ecomviper/shopify/shopify-import";
 import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify/openai-connection";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function EcomViperDashboardPage() {
-  let userId: string | null = null;
+  let userId: string;
   try {
     const auth = await requireSignedInUser();
-    if (!auth.unauthorizedResponse && auth.userId) {
-      userId = auth.userId;
+    if (auth.unauthorizedResponse || !auth.userId) {
+      redirect("/sign-in");
     }
+    userId = auth.userId;
   } catch {
-    userId = null;
+    redirect("/sign-in");
   }
 
   let shopifyConnected = false;
@@ -32,39 +34,37 @@ export default async function EcomViperDashboardPage() {
     return null;
   });
 
-  if (userId) {
-    try {
-      const connection = await getShopifyConnectionStatusForUser(userId);
-      shopifyConnected = connection.connected;
-      storeDomain = connection.storeDomain;
-      shopifyStatusLabel = connection.connected ? "Connected" : "Not connected";
-    } catch (error) {
-      sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify connection status.");
-    }
+  try {
+    const connection = await getShopifyConnectionStatusForUser(userId);
+    shopifyConnected = connection.connected;
+    storeDomain = connection.storeDomain;
+    shopifyStatusLabel = connection.connected ? "Connected" : "Not connected";
+  } catch (error) {
+    sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify connection status.");
+  }
 
-    try {
-      const importState = await getShopifyImportStateForUser(userId);
-      lastImportAt = importState.lastImportAt;
-    } catch (error) {
-      sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify import state.");
-    }
+  try {
+    const importState = await getShopifyImportStateForUser(userId);
+    lastImportAt = importState.lastImportAt;
+  } catch (error) {
+    sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify import state.");
+  }
 
-    try {
-      const openAiStatus = await getShopifyOpenAiConnectionStatusForUser(userId);
-      openAiStatusLabel = openAiStatus.connected ? "Connected" : "Not connected";
-    } catch {
-      openAiStatusLabel = "Not connected";
-    }
+  try {
+    const openAiStatus = await getShopifyOpenAiConnectionStatusForUser(userId);
+    openAiStatusLabel = openAiStatus.connected ? "Connected" : "Not connected";
+  } catch {
+    openAiStatusLabel = "Not connected";
+  }
 
-    try {
-      const products = await listShopifyProductsForUser(userId);
-      rows = toEcomViperProductInventoryRows(products, {
-        supplierProducts: rocktomicSnapshot?.products,
-        rocktomicInventoryAvailable: rocktomicSnapshot?.inventoryAvailable ?? false,
-      });
-    } catch (error) {
-      sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify products.");
-    }
+  try {
+    const products = await listShopifyProductsForUser(userId);
+    rows = toEcomViperProductInventoryRows(products, {
+      supplierProducts: rocktomicSnapshot?.products,
+      rocktomicInventoryAvailable: rocktomicSnapshot?.inventoryAvailable ?? false,
+    });
+  } catch (error) {
+    sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify products.");
   }
 
   return (
