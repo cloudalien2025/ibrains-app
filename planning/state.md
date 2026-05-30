@@ -42,7 +42,47 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 009.7: Completed and merged (`hotfix-009-7-frontdoor-auth-saturation-guard`, frontdoor anonymous auth saturation guard + production recovery deployment).
 - Shopify Hotfix Sprint 009.8: Completed and merged (`hotfix-009-8-ecomviper-saturation-guard`, `/ecomviper` unauthenticated saturation guard + Rocktomic ingestion single-flight + protected-route malformed-session hardening, production deployed).
 - Shopify Sprint 010: Completed and merged (`sprint-010-ecomviper-regression-hardening`, `/ecomviper` load-path optimization + CI verify guardrail expansion).
+- Shopify Hotfix Sprint 010.1: Completed and merged (`hotfix-010-1-ecomviper-saturation-swr`, Rocktomic stale-while-revalidate cache + duplicate-source fetch dedupe + disconnected-workspace ingestion skip, production deployed).
 - Current recommended sprint: `Shopify Sprint 011 planning` (next scoped execution after Sprint 010 closure).
+
+## Sprint Completion Log: Shopify Hotfix Sprint 010.1 EcomViper Saturation SWR Guard
+
+- Sprint/lane: `Shopify Hotfix Sprint 010.1` (`hotfix-010-1-ecomviper-saturation-swr`) - closed.
+- Incident/diagnosis summary (`2026-05-30 15:18 UTC`):
+  - production `https://app.ibrains.ai` timed out across `/`, `/sign-in`, `/ecomviper`, `/api/health`, `/api/meta/release`, indicating broad origin saturation rather than a single-route rendering failure.
+  - `/ecomviper` still executed supplier ingestion work in disconnected-store scenarios.
+  - Rocktomic source refresh could duplicate same-source fetch work inside a refresh pass and force synchronous refresh waits once cache expired.
+- Chosen fix:
+  - added stale-while-revalidate behavior to Rocktomic ingestion cache: stale snapshots are returned immediately while refresh continues in single-flight background mode.
+  - deduplicated text/binary source fetches by URL within one refresh pass to avoid duplicate catalog downloads.
+  - updated `/ecomviper` dashboard flow to skip supplier ingestion when Shopify is disconnected.
+  - updated focused tests for disconnected ingestion skip and revised ingestion dedupe expectation.
+- Files changed:
+  - `app/ecomviper/page.tsx`
+  - `lib/ecomviper/dropshipping/rocktomic-source-ingestion.ts`
+  - `tests/ecomviper_dashboard_auth_guard.test.tsx`
+  - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+- Validation summary:
+  - `npm test -- --run tests/ecomviper_dashboard_auth_guard.test.tsx tests/ecomviper_rocktomic_source_ingestion.test.ts tests/proxy_apps_auth_protection.test.ts tests/frontdoor_auth_state.test.ts tests/require_signed_in_user_auth_unavailable.test.ts`
+  - `npm run build`
+- MR: `!251` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/251`).
+- MR pipeline: `2564074916` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2564074916`).
+- Merge commit SHA: `29151518c92459ce6ec342be7c636e21e419bc9c`.
+- Main/deploy pipeline: `2564077777` (status: `success`, includes `deploy_production`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2564077777`).
+- Production/runtime verification (`2026-05-30 15:35 UTC`):
+  - `GET https://app.ibrains.ai/` -> `200`.
+  - `GET https://app.ibrains.ai/sign-in` -> `200`.
+  - `GET https://app.ibrains.ai/ecomviper` -> `307` to sign-in (expected signed-out behavior).
+  - `GET https://app.ibrains.ai/api/health` -> `200` (`ok: true`, `upstream_ok: true`).
+  - `GET https://app.ibrains.ai/api/meta/release` -> `200` with `git_sha=29151518c92459ce6ec342be7c636e21e419bc9c`, `build_id=2564077777`.
+- Branch deletion status:
+  - remote: deleted on merge (`hotfix-010-1-ecomviper-saturation-swr` no longer present on `origin`).
+  - local: deleted via `git branch -d hotfix-010-1-ecomviper-saturation-swr`.
+- Final local branch/status:
+  - `git switch main`
+  - `git pull`
+  - final status `## main...origin/main` (clean) before state closure update branch.
+- Recommended next sprint: `Shopify Sprint 011 planning`.
 
 ## Sprint Completion Log: Shopify Sprint 010 EcomViper Regression Hardening
 
