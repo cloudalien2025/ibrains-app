@@ -31,6 +31,8 @@ const FETCH_TIMEOUT_MS = 12_000;
 const MAX_TEXT_PAYLOAD_BYTES = 4 * 1024 * 1024;
 const MAX_BINARY_PAYLOAD_BYTES = 8 * 1024 * 1024;
 const MAX_TRUSTED_CATALOG_PDF_PAYLOAD_BYTES = 32 * 1024 * 1024;
+const MAX_PDF_RAW_STRING_FALLBACK_SCAN_BYTES = 2 * 1024 * 1024;
+const MAX_PDF_EXTRACTED_LINES = 10_000;
 
 interface CsvTable {
   rows: string[][];
@@ -446,20 +448,30 @@ function extractPdfTextContent(content: string): string[] {
         decodePdfString(segment[1] || "")
       );
       if (textSegments.length) lines.push(textSegments.join(""));
+      if (lines.length >= MAX_PDF_EXTRACTED_LINES) break;
     }
+    if (lines.length >= MAX_PDF_EXTRACTED_LINES) break;
 
     const tjPatternSingle = /\(([^\\)]*(?:\\.[^\\)]*)*)\)\s*Tj/g;
     for (const tj of decoded.matchAll(tjPatternSingle)) {
       lines.push(decodePdfString(tj[1] || ""));
+      if (lines.length >= MAX_PDF_EXTRACTED_LINES) break;
     }
+    if (lines.length >= MAX_PDF_EXTRACTED_LINES) break;
   }
 
-  const rawPattern = /\(([^\\)]*(?:\\.[^\\)]*)*)\)/g;
-  for (const match of content.matchAll(rawPattern)) {
-    const decoded = decodePdfString(match[1] || "");
-    if (decoded.length < 3) continue;
-    if (!/[a-z0-9]/i.test(decoded)) continue;
-    lines.push(decoded);
+  if (
+    lines.length < MAX_PDF_EXTRACTED_LINES &&
+    Buffer.byteLength(content, "latin1") <= MAX_PDF_RAW_STRING_FALLBACK_SCAN_BYTES
+  ) {
+    const rawPattern = /\(([^\\)]*(?:\\.[^\\)]*)*)\)/g;
+    for (const match of content.matchAll(rawPattern)) {
+      const decoded = decodePdfString(match[1] || "");
+      if (decoded.length < 3) continue;
+      if (!/[a-z0-9]/i.test(decoded)) continue;
+      lines.push(decoded);
+      if (lines.length >= MAX_PDF_EXTRACTED_LINES) break;
+    }
   }
 
   const normalized = lines
