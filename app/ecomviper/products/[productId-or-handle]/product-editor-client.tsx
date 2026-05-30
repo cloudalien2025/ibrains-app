@@ -9,6 +9,7 @@ import {
   type ShopifyPdpIntelligenceRecord,
 } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence";
 import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
+import { safeIsoDate, safeMoney } from "@/lib/ui/safe-formatters";
 
 type AsyncStatus = "idle" | "loading" | "success" | "error";
 type EditorTab =
@@ -31,15 +32,11 @@ interface PdpIntelligenceApiResponse {
 }
 
 function asIso(value: string | null): string {
-  if (!value) return "Never";
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Date(parsed).toISOString();
+  return safeIsoDate(value, "Never");
 }
 
 function asMoney(value: number | null, currency = "USD"): string {
-  if (value == null || !Number.isFinite(value)) return "Unknown";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
+  return safeMoney(value, { currency, fallback: "Unknown" });
 }
 
 function listToTextarea(values: string[]): string {
@@ -229,7 +226,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     setStatusMessage(null);
     try {
       const body = await postAction("generate");
-      setRecord(body.intelligence as ShopifyPdpIntelligenceRecord);
+      setRecord(sanitizeShopifyPdpIntelligenceRecord(body.intelligence as ShopifyPdpIntelligenceRecord, baseRecord));
       setGenerationStatus("success");
       setStatusMessage(
         body.generationUnavailable
@@ -247,7 +244,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     setStatusMessage(null);
     try {
       const body = await postAction("save", record);
-      setRecord(body.intelligence as ShopifyPdpIntelligenceRecord);
+      setRecord(sanitizeShopifyPdpIntelligenceRecord(body.intelligence as ShopifyPdpIntelligenceRecord, baseRecord));
       setSaveStatus("success");
       setStatusMessage("PDP intelligence saved.");
     } catch (error) {

@@ -72,7 +72,11 @@ export default async function EcomViperDashboardPage() {
 
   let rocktomicSnapshot: Awaited<ReturnType<typeof getRocktomicSourceIngestionSnapshot>> | null = null;
   if (shopifyConnected) {
-    const rocktomicResultPromise = getRocktomicSourceIngestionSnapshot({ userId })
+    const rocktomicResultPromise = getRocktomicSourceIngestionSnapshot({
+      userId,
+      allowRefresh: false,
+      triggerBackgroundRefresh: true,
+    })
       .then((snapshot) => ({ kind: "ok" as const, snapshot }))
       .catch((error) => ({ kind: "error" as const, error }));
     const rocktomicSoftTimeout = new Promise<{ kind: "timeout" }>((resolve) => {

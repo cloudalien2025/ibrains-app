@@ -88,6 +88,18 @@ BASE_URL=http://127.0.0.1 HOST_HEADER=app.ibrains.ai /root/ibrains-app/scripts/p
 
 `prod_smoke.sh` now validates `/_next/static/*` assets referenced by `/`, `/dashboard`, and `/sign-in`. It fails on non-`200` responses and on wrong JS/CSS content types so HTML/chunk mismatch deploys cannot pass smoke.
 
+## Production Runtime Watchdog Script
+```bash
+# full runtime + logs + timing checks
+/root/ibrains-app/scripts/production_smoke_check.sh app.ibrains.ai
+
+# local host-header mode
+BASE_URL=http://127.0.0.1:3001 HOST_HEADER=app.ibrains.ai RUN_DETAILED_SMOKE=0 \
+  /root/ibrains-app/scripts/production_smoke_check.sh app.ibrains.ai
+```
+
+`production_smoke_check.sh` adds service-state checks, CLOSE-WAIT socket trend checks, route timing probes, and recent `journalctl`/nginx/app log tails for 504 diagnosis.
+
 ## TLS (Let’s Encrypt)
 Only run after DNS A record for app.ibrains.ai points to 104.236.44.185.
 

@@ -88,6 +88,32 @@ Last updated: 2026-05-30 (UTC)
 - Production observation during audit (`2026-05-30 UTC`):
   - bounded `curl --max-time 10` probes for `/api/health`, `/brains`, `/ecomviper`, `/ecomviper/settings`, `/ecomviper/dropshipping/rocktomic`, `/api/meta/release` all timed out (`code=000`, `~10s`), indicating current broad origin unavailability.
 
+## Active Sprint Note: Emergency Stabilization Sprint (In Progress)
+
+- Sprint/lane: `Emergency Stabilization Sprint` (`emergency-stabilization-production-runtime-client-crashes`) - in progress.
+- Start date: `2026-05-30 (UTC)`.
+- Objective:
+  - stop repeated production runtime failures (`504`, route hangs, client crashes),
+  - harden client/runtime fallbacks and route-level error boundaries,
+  - strengthen release metadata reliability and deployment safety diagnostics.
+- Code hardening completed so far:
+  - added app/global + EcomViper route error boundaries:
+    - `app/global-error.tsx`
+    - `app/ecomviper/error.tsx`
+    - `app/ecomviper/products/[productId-or-handle]/error.tsx`
+  - added safe formatter helpers:
+    - `lib/ui/safe-formatters.ts`
+    - applied to dashboard/settings/rocktomic/product-editor client rendering.
+  - hardened `/ecomviper` supplier snapshot call to cache-safe mode with async background refresh:
+    - `allowRefresh: false`
+    - `triggerBackgroundRefresh: true`
+  - hardened `/api/meta/release` non-null fallback behavior + diagnostics.
+  - switched release metadata writes to atomic script in CI/deploy:
+    - `scripts/write_release_metadata.sh`
+    - `.gitlab-ci.yml` updated to call script.
+  - added production watchdog script:
+    - `scripts/production_smoke_check.sh`.
+
 ## Sprint Completion Log: Shopify Hotfix Sprint 010.1 EcomViper Saturation SWR Guard
 
 - Sprint/lane: `Shopify Hotfix Sprint 010.1` (`hotfix-010-1-ecomviper-saturation-swr`) - closed.

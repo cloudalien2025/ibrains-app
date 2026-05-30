@@ -69,6 +69,18 @@ Set a Clerk secret key for server-side auth and middleware protection:
 - signed-out `/api/brains` and `/api/brains/ecomviper/stats` return `401` (not `500`).
 - deprecated routes remain `404`: `/apps`, `/apps/studio`, `/studio`, `/siteforge`, `/uapforge`.
 
+## Authenticated verification checklist (manual)
+
+Use this after deploys when automated signed-in smoke is unavailable.
+
+1. Open `https://app.ibrains.ai/sign-in` and authenticate in a clean browser profile.
+2. Open `/brains` and confirm launcher cards render with no redirect loop.
+3. Open `/ecomviper` and confirm products table/status cards load.
+4. Open `/ecomviper/settings` and confirm page renders without hang/crash.
+5. Open one `/ecomviper/products/[productId-or-handle]` route and confirm editor renders.
+6. Open browser console and confirm no uncaught client exception.
+7. Record verification timestamp plus blocker reason if signed-in verification could not run.
+
 If users previously hit stale proxy-mode/session errors, clear cookies/session once for:
 - `app.ibrains.ai`
 - `ibrains.ai`

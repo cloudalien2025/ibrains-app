@@ -111,6 +111,11 @@ describe("ecomviper dashboard auth guard", () => {
 
     await expect(page()).resolves.toBeTruthy();
     expect(mocks.getRocktomicSourceIngestionSnapshot).toHaveBeenCalledTimes(1);
+    expect(mocks.getRocktomicSourceIngestionSnapshot).toHaveBeenCalledWith({
+      userId: "user_1",
+      allowRefresh: false,
+      triggerBackgroundRefresh: true,
+    });
     expect(mocks.listShopifyProductsForUser).toHaveBeenCalledTimes(1);
   });
 

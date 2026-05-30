@@ -17,6 +17,7 @@ import {
   type ShopifyStep3PublishDryRunResult,
 } from "@/lib/ecomviper/shopify/shopify-product-editor-publish-workflow";
 import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
+import { safeIsoDate } from "@/lib/ui/safe-formatters";
 
 type EditorTabKey = "current" | "optimize" | "review";
 
@@ -39,10 +40,7 @@ const editorTabs: Array<{ key: EditorTabKey; label: string; testId: string }> = 
 ];
 
 function formatTimestamp(value: string | null): string {
-  if (!value) return "Never";
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Date(parsed).toISOString();
+  return safeIsoDate(value, "Never");
 }
 
 function splitTags(value: string): string[] {
