@@ -735,22 +735,13 @@ export async function getRocktomicSourceIngestionSnapshot(
     ? normalizeTierKey(selectedMembershipTier)
     : "";
   const cacheKey = selectedMembershipTierKey || "__default__";
-  const now = Date.now();
-  const existing = cache.get(cacheKey);
-  if (!options?.forceRefresh && existing && existing.expiresAt > now) {
-    return existing.snapshot;
-  }
-
-  const inFlight = inFlightByCacheKey.get(cacheKey);
-  if (inFlight) {
-    return inFlight;
-  }
-
-  const snapshotPromise = (async (): Promise<RocktomicSourceIngestionSnapshot> => {
-
+  const createSnapshotPromise = async (): Promise<RocktomicSourceIngestionSnapshot> => {
+    const now = Date.now();
     const config = getRocktomicSourceConfigSnapshot();
     const lastCheckedAt = new Date(now).toISOString();
     const sourceDiagnostics: RocktomicSourceIngestionDiagnostic[] = [];
+    const fetchedTextByUrl = new Map<string, Promise<string>>();
+    const fetchedBinaryByUrl = new Map<string, Promise<ArrayBuffer>>();
 
     const catalogRowsBySku = new Map<string, CatalogRow>();
     const inventoryBySku = new Map<string, InventoryRow>();
@@ -788,7 +779,12 @@ export async function getRocktomicSourceIngestionSnapshot(
           if (!csvUrl) throw new Error("Could not derive Google Sheets CSV export URL.");
 
           diagnostic.fetchUrl = csvUrl;
-          const csvBody = await fetchWithTimeout(csvUrl);
+          let csvBodyPromise = fetchedTextByUrl.get(csvUrl);
+          if (!csvBodyPromise) {
+            csvBodyPromise = fetchWithTimeout(csvUrl);
+            fetchedTextByUrl.set(csvUrl, csvBodyPromise);
+          }
+          const csvBody = await csvBodyPromise;
           diagnostic.fetchable = true;
 
           if (reference.id === "inventory_report") {
@@ -813,7 +809,12 @@ export async function getRocktomicSourceIngestionSnapshot(
           }
         } else if (reference.id === "catalog_pdf") {
           diagnostic.fetchUrl = reference.sourceUrl;
-          const pdfBytes = await fetchBinaryWithTimeout(reference.sourceUrl);
+          let pdfBytesPromise = fetchedBinaryByUrl.get(reference.sourceUrl);
+          if (!pdfBytesPromise) {
+            pdfBytesPromise = fetchBinaryWithTimeout(reference.sourceUrl);
+            fetchedBinaryByUrl.set(reference.sourceUrl, pdfBytesPromise);
+          }
+          const pdfBytes = await pdfBytesPromise;
           diagnostic.fetchable = true;
           pendingCatalogPdf = {
             referenceId: reference.id,
@@ -955,7 +956,35 @@ export async function getRocktomicSourceIngestionSnapshot(
     });
 
     return snapshot;
-  })();
+  };
+
+  const now = Date.now();
+  const existing = cache.get(cacheKey);
+  if (!options?.forceRefresh && existing) {
+    if (existing.expiresAt > now) {
+      return existing.snapshot;
+    }
+
+    const staleRefreshInFlight = inFlightByCacheKey.get(cacheKey);
+    if (!staleRefreshInFlight) {
+      const backgroundRefresh = createSnapshotPromise();
+      inFlightByCacheKey.set(cacheKey, backgroundRefresh);
+      backgroundRefresh
+        .catch(() => undefined)
+        .finally(() => {
+          inFlightByCacheKey.delete(cacheKey);
+        });
+    }
+
+    return existing.snapshot;
+  }
+
+  const inFlight = inFlightByCacheKey.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
+  }
+
+  const snapshotPromise = createSnapshotPromise();
 
   inFlightByCacheKey.set(cacheKey, snapshotPromise);
   try {

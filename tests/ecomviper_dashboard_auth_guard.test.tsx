@@ -156,6 +156,7 @@ describe("ecomviper dashboard auth guard", () => {
     const page = mod.default;
 
     await expect(page()).resolves.toBeTruthy();
+    expect(mocks.getRocktomicSourceIngestionSnapshot).not.toHaveBeenCalled();
     expect(mocks.listShopifyProductsForUser).not.toHaveBeenCalled();
   });
 });
