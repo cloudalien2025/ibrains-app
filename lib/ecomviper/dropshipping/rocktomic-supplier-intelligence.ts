@@ -20,9 +20,15 @@ export interface RocktomicSupplierProduct {
   productWeight: string | null;
   servingSize?: string | null;
   servingsPerContainer?: string | null;
+  activeIngredients?: string[];
+  amountPerServing?: string | null;
   ingredientHighlights?: string[];
   productFeatures?: string[];
   otherIngredients?: string | null;
+  allergenDietaryAttributes?: string[];
+  sourceDiagnostics?: string[];
+  coaLinkStatus?: "extracted" | "extraction_failed" | "not_present";
+  coaLinkError?: string | null;
   coa: {
     status: RocktomicDataStatus;
     url: string | null;
@@ -114,9 +120,15 @@ const BASE_PRODUCT: Omit<RocktomicSupplierProduct, "sku" | "productName" | "cate
   productWeight: null,
   servingSize: null,
   servingsPerContainer: null,
+  activeIngredients: [],
+  amountPerServing: null,
   ingredientHighlights: [],
   productFeatures: [],
   otherIngredients: null,
+  allergenDietaryAttributes: [],
+  sourceDiagnostics: [],
+  coaLinkStatus: "not_present",
+  coaLinkError: null,
   coa: { status: "pending_source", url: null, expiresAt: null, testingCategories: [], verificationStatus: "pending" },
   labelTemplate: { status: "configured", url: null },
   mockup: { status: "pending_source", url: null },

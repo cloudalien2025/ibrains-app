@@ -73,6 +73,9 @@ function toAvailabilityStatus(status: string): string {
 }
 
 function toGroundedIngredients(supplier: RocktomicSupplierProduct | null): string[] {
+  if (supplier?.activeIngredients?.length) {
+    return supplier.activeIngredients.map((entry) => entry.trim()).filter(Boolean);
+  }
   if (!supplier?.supplementFacts.value) return ["Unknown"];
   const lines = supplier.supplementFacts.value
     .split(/\n|;|,/g)
@@ -163,7 +166,13 @@ function buildGroundedRecord(
     ]),
     ingredient_highlights: sanitizePublicList(groundedIngredients),
     supplement_facts: sanitizePublicText(supplier?.supplementFacts?.value || "Unknown"),
-    ingredients: sanitizePublicList(groundedIngredients),
+    ingredients: sanitizePublicList(
+      supplier?.activeIngredients?.length
+        ? supplier.activeIngredients.map((entry) =>
+            supplier.amountPerServing ? `${entry}: ${supplier.amountPerServing}` : entry
+          )
+        : groundedIngredients
+    ),
     serving_size: sanitizePublicText(supplier?.servingSize || "Unknown"),
     servings_per_container: sanitizePublicText(supplier?.servingsPerContainer || "Unknown"),
     other_ingredients: sanitizePublicText(supplier?.otherIngredients || "Unknown"),
@@ -171,6 +180,8 @@ function buildGroundedRecord(
       options.supplierMatch.supplierSku ? `Matched SKU: ${options.supplierMatch.supplierSku}` : "Matched SKU: Unknown",
       `Inventory source: ${options.supplierMatch.inventoryAvailable ? "Available" : "Unavailable"}`,
       `Catalog mapping: ${supplier ? "Mapped" : "Not mapped"}`,
+      `coa_link_status: ${supplier?.coaLinkStatus || "not_present"}`,
+      `coa_link_error: ${supplier?.coaLinkError || "none"}`,
     ],
     trust_signals: sanitizePublicList([
       ...certifications,

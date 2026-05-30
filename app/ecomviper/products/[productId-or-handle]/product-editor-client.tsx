@@ -140,6 +140,12 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
       margin_percent: seeded.margin_percent ?? supplierProduct?.pricing?.marginPercent ?? null,
       currency: seeded.currency || supplierProduct?.pricing?.currency || "USD",
       supplement_facts: seeded.supplement_facts || supplierProduct?.supplementFacts?.value || "",
+      ingredients:
+        seeded.ingredients.length > 0
+          ? seeded.ingredients
+          : supplierProduct?.activeIngredients?.length
+            ? supplierProduct.activeIngredients
+            : [],
       serving_size: seeded.serving_size || supplierProduct?.servingSize || "",
       servings_per_container: seeded.servings_per_container || supplierProduct?.servingsPerContainer || "",
       other_ingredients: seeded.other_ingredients || supplierProduct?.otherIngredients || "",
@@ -161,6 +167,9 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
           : [
               initialState.supplierContext.matched ? `Matched SKU: ${initialState.supplierContext.matchedSku}` : "Matched SKU: Unknown",
               `Inventory source: ${initialState.supplierContext.inventoryAvailable ? "Available" : "Unavailable"}`,
+              `coa_link_status: ${supplierProduct?.coaLinkStatus || "not_present"}`,
+              `coa_link_error: ${supplierProduct?.coaLinkError || "none"}`,
+              ...(supplierProduct?.sourceDiagnostics || []),
             ],
     };
   }, [initialState.pdpIntelligence, initialState.supplierContext, product.handle, product.productId, supplierProduct]);
@@ -590,10 +599,11 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
               <h2 className="text-sm font-semibold">COA</h2>
               <div className="mt-2 space-y-1 text-xs text-[#475569]">
                 <p>COA Status: {record.coa_status || "unknown"}</p>
-                <p>COA Link: {record.coa_link ? <a className="text-[#1D4ED8] hover:underline" href={record.coa_link} target="_blank" rel="noreferrer">Open</a> : "Not available"}</p>
+                <p>COA Link: {record.coa_link ? <a className="text-[#1D4ED8] hover:underline" href={record.coa_link} target="_blank" rel="noreferrer">Open</a> : supplierProduct?.coaLinkStatus === "extraction_failed" ? "Extraction failed" : "Not available"}</p>
                 <p>Expiration Date: {record.coa_expiration_date || "Unknown"}</p>
                 <p>Testing Categories: {record.coa_testing_categories.join(", ") || "Unknown"}</p>
                 <p>Verification Status: {record.coa_verification_status || "unknown"}</p>
+                {supplierProduct?.coaLinkError ? <p>Diagnostic: {supplierProduct.coaLinkError}</p> : null}
               </div>
             </section>
           </aside>

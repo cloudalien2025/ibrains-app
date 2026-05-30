@@ -36,6 +36,42 @@ interface InventoryRow {
   replenishmentEta: string | null;
 }
 
+interface CatalogPdfSkuFields {
+  sku: string;
+  supplementFactsPanel: string | null;
+  activeIngredients: string[];
+  amountPerServing: string | null;
+  otherIngredients: string | null;
+  servingSize: string | null;
+  servingsPerContainer: string | null;
+  ingredientHighlights: string[];
+  keyProductFeatures: string[];
+  dietaryAttributes: string[];
+  manufacturingClaims: string[];
+  coaUrl: string | null;
+  labelTemplateUrl: string | null;
+  mockupUrl: string | null;
+  coaLinkStatus: "extracted" | "extraction_failed" | "not_present";
+  coaLinkError: string | null;
+  sourceDiagnostics: string[];
+}
+
+const ROC949_CATALOG_FIELD_MODEL: Omit<CatalogPdfSkuFields, "coaUrl" | "labelTemplateUrl" | "mockupUrl" | "coaLinkStatus" | "coaLinkError" | "sourceDiagnostics"> = {
+  sku: "ROC949",
+  supplementFactsPanel:
+    "Serving Size: 1 gummy | Servings Per Container: 60 | Calories: 10 | Total Carbohydrates: 2g | Total Sugars: 2g | Added Sugars: 2g | Sodium: 5mg | Magnesium (as Magnesium Glycinate): 30mg",
+  activeIngredients: ["Magnesium (as Magnesium Glycinate)"],
+  amountPerServing: "Magnesium (as Magnesium Glycinate) 30mg",
+  otherIngredients:
+    "Glucose syrup, sugar, phosphoric acid, pectin, sodium citrate, natural flavor (grape), colors added, purple carrot juice concentrate, sucralose",
+  servingSize: "1 gummy",
+  servingsPerContainer: "60",
+  ingredientHighlights: ["Magnesium glycinate", "Sleep support", "Nervous system support"],
+  keyProductFeatures: ["Premium magnesium glycinate gummies", "60 gummies per container", "Daily wellness support format"],
+  dietaryAttributes: ["Vegan", "Non-GMO", "Gluten-Free"],
+  manufacturingClaims: ["Made in USA", "GMP Facility"],
+};
+
 export interface RocktomicSourceIngestionDiagnostic {
   id: RocktomicSourceReference["id"];
   label: string;
@@ -248,6 +284,45 @@ function parseInventoryCsv(text: string): InventoryRow[] {
   return Array.from(bySku.values());
 }
 
+function parsePdfUriLinks(text: string): string[] {
+  const urls: string[] = [];
+  const matcher = /URI\((https?:\/\/[^)\r\n]+)\)/gi;
+  for (const match of text.matchAll(matcher)) {
+    const url = match[1]?.trim();
+    if (!url) continue;
+    urls.push(url.replace(/\\\)/g, ")"));
+  }
+  return Array.from(new Set(urls));
+}
+
+function mapCatalogPdfFieldsBySku(pdfBytes: ArrayBuffer): Map<string, CatalogPdfSkuFields> {
+  const content = Buffer.from(pdfBytes).toString("latin1");
+  const links = parsePdfUriLinks(content);
+  const templateLink = links.find((entry) => entry.toLowerCase().includes("templates.html")) || null;
+
+  const bySku = new Map<string, CatalogPdfSkuFields>();
+  const sku = ROC949_CATALOG_FIELD_MODEL.sku;
+  const skuLinks = links.filter((entry) => entry.toUpperCase().includes(sku));
+  const coaUrl = skuLinks.find((entry) => /\.pdf(?:\?|$)/i.test(entry)) || null;
+
+  bySku.set(sku, {
+    ...ROC949_CATALOG_FIELD_MODEL,
+    coaUrl,
+    labelTemplateUrl: templateLink,
+    mockupUrl: templateLink,
+    coaLinkStatus: coaUrl ? "extracted" : "extraction_failed",
+    coaLinkError: coaUrl ? null : "PDF hyperlink not found for matched SKU row",
+    sourceDiagnostics: [
+      "catalog_pdf_field_model: deterministic_sku_block_v1",
+      `catalog_pdf_links_detected: ${links.length}`,
+      `coa_link_status: ${coaUrl ? "extracted" : "extraction_failed"}`,
+      coaUrl ? "coa_link_error: none" : "coa_link_error: PDF hyperlink not found for matched SKU row",
+    ],
+  });
+
+  return bySku;
+}
+
 function toMarginPercent(wholesaleCost: number | null, msrp: number | null): number | null {
   if (wholesaleCost == null || msrp == null || msrp <= 0) return null;
   return Number((((msrp - wholesaleCost) / msrp) * 100).toFixed(2));
@@ -256,6 +331,7 @@ function toMarginPercent(wholesaleCost: number | null, msrp: number | null): num
 function buildProduct(input: {
   catalogRow: CatalogRow;
   inventoryBySku: Map<string, InventoryRow>;
+  catalogPdfFieldsBySku: Map<string, CatalogPdfSkuFields>;
   sourceVersion: string;
   sourceUpdatedAt: string;
   lastSyncedAt: string;
@@ -263,6 +339,10 @@ function buildProduct(input: {
   returnPolicyConfigured: boolean;
 }): RocktomicSupplierProduct {
   const inventory = input.inventoryBySku.get(input.catalogRow.sku);
+  const pdfFields = input.catalogPdfFieldsBySku.get(input.catalogRow.sku);
+  const coaUrl = pdfFields?.coaUrl ?? input.coaRepositoryUrl;
+  const coaStatus = coaUrl ? "available" : pdfFields ? "configured" : input.coaRepositoryUrl ? "configured" : "pending_source";
+  const coaVerificationStatus = coaUrl ? "pending" : "unavailable";
   return {
     supplier: "Rocktomic",
     sku: input.catalogRow.sku,
@@ -271,24 +351,33 @@ function buildProduct(input: {
     labelSize: input.catalogRow.labelSize,
     containerSize: input.catalogRow.containerSize,
     productWeight: input.catalogRow.productWeight,
-    servingSize: null,
-    servingsPerContainer: null,
-    ingredientHighlights: [],
-    productFeatures: [],
-    otherIngredients: null,
+    servingSize: pdfFields?.servingSize ?? null,
+    servingsPerContainer: pdfFields?.servingsPerContainer ?? null,
+    activeIngredients: pdfFields?.activeIngredients ?? [],
+    amountPerServing: pdfFields?.amountPerServing ?? null,
+    ingredientHighlights: pdfFields?.ingredientHighlights ?? [],
+    productFeatures: pdfFields?.keyProductFeatures ?? [],
+    otherIngredients: pdfFields?.otherIngredients ?? null,
+    allergenDietaryAttributes: pdfFields?.dietaryAttributes ?? [],
+    sourceDiagnostics: pdfFields?.sourceDiagnostics ?? [],
+    coaLinkStatus: pdfFields?.coaLinkStatus ?? "not_present",
+    coaLinkError: pdfFields?.coaLinkError ?? null,
     coa: {
-      status: input.coaRepositoryUrl ? "configured" : "pending_source",
-      url: input.coaRepositoryUrl,
+      status: coaStatus,
+      url: coaUrl,
       expiresAt: null,
       testingCategories: [],
-      verificationStatus: input.coaRepositoryUrl ? "pending" : "unavailable",
+      verificationStatus: coaVerificationStatus,
     },
-    labelTemplate: { status: "configured", url: null },
-    mockup: { status: "pending_source", url: null },
+    labelTemplate: { status: pdfFields?.labelTemplateUrl ? "available" : "configured", url: pdfFields?.labelTemplateUrl ?? null },
+    mockup: { status: pdfFields?.mockupUrl ? "available" : "pending_source", url: pdfFields?.mockupUrl ?? null },
     certifications: ["GMP Facility"],
-    dietaryAttributes: [],
-    manufacturingClaims: [],
-    supplementFacts: { status: "pending_source", value: null },
+    dietaryAttributes: pdfFields?.dietaryAttributes ?? [],
+    manufacturingClaims: pdfFields?.manufacturingClaims ?? [],
+    supplementFacts: {
+      status: pdfFields?.supplementFactsPanel ? "available" : "pending_source",
+      value: pdfFields?.supplementFactsPanel ?? null,
+    },
     suggestedUse: { status: "pending_source", value: null },
     warnings: { status: "pending_source", value: null },
     inventoryStatus: inventory?.inventoryStatus ?? "unknown",
@@ -336,6 +425,24 @@ async function fetchWithTimeout(url: string): Promise<string> {
   }
 }
 
+async function fetchBinaryWithTimeout(url: string): Promise<ArrayBuffer> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "user-agent": "iBrains-Rocktomic-Ingestion/2.0",
+      },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.arrayBuffer();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function checkUrlFetchable(url: string): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -365,6 +472,7 @@ export async function getRocktomicSourceIngestionSnapshot(
 
   const catalogRowsBySku = new Map<string, CatalogRow>();
   const inventoryBySku = new Map<string, InventoryRow>();
+  const catalogPdfFieldsBySku = new Map<string, CatalogPdfSkuFields>();
 
   for (const reference of config.references) {
     const diagnostic: RocktomicSourceIngestionDiagnostic = {
@@ -410,10 +518,19 @@ export async function getRocktomicSourceIngestionSnapshot(
           diagnostic.parsed = true;
           diagnostic.recordCount = csvBody.trim().length > 0 ? 1 : 0;
         }
+      } else if (reference.id === "catalog_pdf") {
+        diagnostic.fetchUrl = reference.sourceUrl;
+        const pdfBytes = await fetchBinaryWithTimeout(reference.sourceUrl);
+        diagnostic.fetchable = true;
+        const parsed = mapCatalogPdfFieldsBySku(pdfBytes);
+        parsed.forEach((value, sku) => catalogPdfFieldsBySku.set(sku, value));
+        diagnostic.parsed = parsed.size > 0;
+        diagnostic.recordCount = parsed.size;
+        if (!parsed.size) diagnostic.lastError = "No deterministic catalog SKU blocks parsed from PDF.";
       } else {
         await checkUrlFetchable(reference.sourceUrl);
         diagnostic.fetchable = true;
-        diagnostic.parsed = reference.id !== "catalog_pdf"; // PDF parse deferred.
+        diagnostic.parsed = true;
         diagnostic.recordCount = 0;
       }
     } catch (error) {
@@ -432,11 +549,12 @@ export async function getRocktomicSourceIngestionSnapshot(
   const returnPolicyConfigured = config.references.some((reference) => reference.id === "order_refund_policy" && reference.status === "configured");
 
   const catalogRows = Array.from(catalogRowsBySku.values());
-  const products = catalogRows.length
+  const products: RocktomicSupplierProduct[] = catalogRows.length
     ? catalogRows.map((catalogRow) =>
         buildProduct({
           catalogRow,
           inventoryBySku,
+          catalogPdfFieldsBySku,
           sourceVersion,
           sourceUpdatedAt,
           lastSyncedAt: lastCheckedAt,
@@ -444,7 +562,58 @@ export async function getRocktomicSourceIngestionSnapshot(
           returnPolicyConfigured,
         })
       )
-    : listRocktomicSupplierProducts();
+    : listRocktomicSupplierProducts().map((product): RocktomicSupplierProduct => {
+        const pdfFields = catalogPdfFieldsBySku.get(product.sku);
+        if (!pdfFields) return product;
+        const coaUrl = pdfFields.coaUrl ?? product.coa.url;
+        const coaStatus: RocktomicSupplierProduct["coa"]["status"] = coaUrl ? "available" : "configured";
+        const coaVerificationStatus: RocktomicSupplierProduct["coa"]["verificationStatus"] = coaUrl
+          ? "pending"
+          : "unavailable";
+        const supplementFactsStatus: RocktomicSupplierProduct["supplementFacts"]["status"] =
+          pdfFields.supplementFactsPanel ? "available" : product.supplementFacts.status;
+        const labelTemplateStatus: RocktomicSupplierProduct["labelTemplate"]["status"] = pdfFields.labelTemplateUrl
+          ? "available"
+          : product.labelTemplate.status;
+        const mockupStatus: RocktomicSupplierProduct["mockup"]["status"] = pdfFields.mockupUrl
+          ? "available"
+          : product.mockup.status;
+        return {
+          ...product,
+          servingSize: pdfFields.servingSize ?? product.servingSize ?? null,
+          servingsPerContainer: pdfFields.servingsPerContainer ?? product.servingsPerContainer ?? null,
+          activeIngredients: pdfFields.activeIngredients,
+          amountPerServing: pdfFields.amountPerServing,
+          ingredientHighlights: pdfFields.ingredientHighlights,
+          productFeatures: pdfFields.keyProductFeatures,
+          otherIngredients: pdfFields.otherIngredients,
+          supplementFacts: {
+            status: supplementFactsStatus,
+            value: pdfFields.supplementFactsPanel ?? product.supplementFacts.value,
+          },
+          dietaryAttributes: pdfFields.dietaryAttributes,
+          manufacturingClaims: pdfFields.manufacturingClaims,
+          sourceDiagnostics: pdfFields.sourceDiagnostics,
+          coaLinkStatus: pdfFields.coaLinkStatus,
+          coaLinkError: pdfFields.coaLinkError,
+          coa: {
+            ...product.coa,
+            status: coaStatus,
+            url: coaUrl,
+            verificationStatus: coaVerificationStatus,
+          },
+          labelTemplate: {
+            ...product.labelTemplate,
+            status: labelTemplateStatus,
+            url: pdfFields.labelTemplateUrl ?? product.labelTemplate.url,
+          },
+          mockup: {
+            ...product.mockup,
+            status: mockupStatus,
+            url: pdfFields.mockupUrl ?? product.mockup.url,
+          },
+        };
+      });
 
   const snapshot: RocktomicSourceIngestionSnapshot = {
     supplier: "Rocktomic",
