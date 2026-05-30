@@ -52,6 +52,28 @@ curl -sS http://127.0.0.1:3001/api/health
 curl -I http://127.0.0.1/api/health -H 'Host: app.ibrains.ai'
 ```
 
+## 504 / Proxy Timeout Triage (Hotfix 009.5)
+
+If Cloudflare reports `504 Gateway Timeout` (`Host Error`), run:
+
+```bash
+curl -I --max-time 10 http://127.0.0.1:3001/brains
+curl -I --max-time 10 http://127.0.0.1:3001/ecomviper
+curl --max-time 10 http://127.0.0.1:3001/api/health
+curl --max-time 10 http://127.0.0.1:3001/api/meta/release
+grep -R "localhost:3001\\|127.0.0.1:3001\\|https://localhost" -n /etc/nginx/sites-enabled /etc/nginx/conf.d
+tail -n 200 /var/log/ibrains-app/app.log
+tail -n 200 /var/log/nginx/app.ibrains.ai.error.log
+```
+
+Expected nginx upstream target:
+
+```nginx
+proxy_pass http://127.0.0.1:3001;
+```
+
+Known failure mode (observed 2026-05-30): repeated `/robots.txt` traffic can trigger Clerk middleware self-proxy attempts to `https://localhost:3001/robots.txt` (`EPROTO wrong version number`) and saturate Next.js sockets/CPU, causing broad upstream timeouts. Hotfix 009.5 prevents non-protected public routes from entering Clerk proxy middleware.
+
 ## Smoke Test Script
 ```bash
 # HTTPS (after DNS + certbot)
