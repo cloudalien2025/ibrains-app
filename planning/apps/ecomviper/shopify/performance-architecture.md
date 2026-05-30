@@ -39,7 +39,7 @@ It is a stabilization contract, not a feature expansion plan.
 ### `/ecomviper`
 - Protected.
 - Shopify status/import state fetched first.
-- Supplier diagnostics are optional and bounded by soft timeout.
+- Supplier diagnostics are optional, cache-only, and bounded by soft timeout.
 - Supplier ingestion is skipped when Shopify is disconnected.
 - Product rows render from Shopify durable data with optional supplier enrichment.
 

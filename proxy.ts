@@ -84,8 +84,8 @@ function isSiteforgeApiRoute(req: NextRequest): boolean {
 function buildSignInRedirect(req: NextRequest): NextResponse {
   const appBaseUrl = resolveAppBaseUrlOrigin();
   const signInUrl = new URL(clerkRouteContract.signInUrl, appBaseUrl);
-  const redirectUrl = new URL(`${req.nextUrl.pathname}${req.nextUrl.search}`, appBaseUrl);
-  signInUrl.searchParams.set("redirect_url", redirectUrl.toString());
+  const redirectUrl = `${req.nextUrl.pathname}${req.nextUrl.search}` || "/";
+  signInUrl.searchParams.set("redirect_url", redirectUrl);
   return NextResponse.redirect(signInUrl);
 }
 

@@ -37,6 +37,7 @@ build_release:
     - npm ci
     - BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     - bash scripts/write_release_metadata.sh app/_meta/release.json "${CI_COMMIT_SHA}" "${CI_PIPELINE_ID}" "${BUILD_TIMESTAMP}" "ibrains" "production" "gitlab_ci"
+    - rm -rf .next
     - npm run build
     - mkdir -p artifacts
     - |
@@ -123,6 +124,7 @@ deploy_production:
       npm ci
       BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
       bash "${DEPLOY_PATH}/scripts/write_release_metadata.sh" app/_meta/release.json "${CI_COMMIT_SHA}" "${CI_PIPELINE_ID}" "${BUILD_TIMESTAMP}" "ibrains" "production" "gitlab_ci"
+      rm -rf .next
       npm run build
 
       bash "${DEPLOY_PATH}/scripts/apply_directoryiq_schema.sh"

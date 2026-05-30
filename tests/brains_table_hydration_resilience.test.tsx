@@ -38,10 +38,11 @@ describe("brains table hydration resilience", () => {
     document.body.innerHTML = "";
   });
 
-  it("still renders canonical cards when stats hydration fails", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => {
+  it("renders canonical cards without client stats hydration fetches", async () => {
+    const fetchMock = vi.fn(async () => {
       throw new Error("network failure");
-    }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -78,5 +79,6 @@ describe("brains table hydration resilience", () => {
     expect(rendered).toContain("Reelify");
     expect(rendered).toContain("iPetzo");
     expect(container.querySelectorAll('a[href*=\"/apps\"]').length).toBe(0);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

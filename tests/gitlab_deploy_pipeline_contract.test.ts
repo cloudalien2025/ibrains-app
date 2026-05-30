@@ -159,6 +159,7 @@ describe("gitlab deploy pipeline contract", () => {
     expect(pipelineSource.includes("git pull --ff-only origin \"${CI_DEFAULT_BRANCH}\"")).toBe(true);
     expect(pipelineSource.includes("deployed checkout mismatch")).toBe(true);
     expect(pipelineSource.includes("npm run build")).toBe(true);
+    expect(pipelineSource.includes("rm -rf .next")).toBe(true);
     expect(pipelineSource.includes("rsync -a --delete")).toBe(false);
     expect(pipelineSource.includes("EXPECT_RELEASE_FILE=1")).toBe(true);
     expect(pipelineSource.includes("PUBLIC_SMOKE_PATHS=\"/ /sign-in\"")).toBe(true);
@@ -181,6 +182,8 @@ describe("gitlab deploy pipeline contract", () => {
     expect(smokeSource.includes("health http status:")).toBe(true);
     expect(smokeSource.includes("health body:")).toBe(true);
     expect(smokeSource.includes("health parsed:")).toBe(true);
+    expect(smokeSource.includes("release build_id is non-null")).toBe(true);
+    expect(smokeSource.includes("release git_sha is non-null")).toBe(true);
   });
 
   it("passes when protected routes redirect unauthenticated requests to app.ibrains.ai sign-in", async () => {

@@ -11,9 +11,11 @@ describe("production smoke check script contract", () => {
 
     expect(source).toContain("systemctl");
     expect(source).toContain("journalctl");
+    expect(source).toContain("/var/log/nginx/error.log");
     expect(source).toContain("/var/log/nginx/app.ibrains.ai.error.log");
     expect(source).toContain("/var/log/ibrains-app/app.log");
     expect(source).toContain("ss -tan state close-wait");
+    expect(source).toContain("check_release_metadata_non_null");
 
     expect(source).toContain('check_route_timing "/api/health"');
     expect(source).toContain('check_route_timing "/api/meta/release"');

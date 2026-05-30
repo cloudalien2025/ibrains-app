@@ -88,8 +88,28 @@ describe("proxy app/auth protection", () => {
     const location = response.headers.get("location");
     expect(location).toContain("/sign-in");
     expect(location).toContain(
-      "redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Foptiwal%2Fconnect"
+      "redirect_url=%2Foptiwal%2Fconnect"
     );
+    expect(state.clerkProxyCalls).toBe(0);
+  });
+
+  it("redirects signed-out /brains and /ecomviper without creating cross-route loops", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const brainsResponse = await handler(new NextRequest("https://app.ibrains.ai/brains"));
+    const brainsLocation = brainsResponse.headers.get("location") ?? "";
+    expect(brainsResponse.status).toBe(307);
+    expect(brainsLocation).toContain("/sign-in");
+    expect(brainsLocation).toContain("redirect_url=%2Fbrains");
+    expect(brainsLocation).not.toContain("%2Fecomviper");
+
+    const ecomviperResponse = await handler(new NextRequest("https://app.ibrains.ai/ecomviper"));
+    const ecomviperLocation = ecomviperResponse.headers.get("location") ?? "";
+    expect(ecomviperResponse.status).toBe(307);
+    expect(ecomviperLocation).toContain("/sign-in");
+    expect(ecomviperLocation).toContain("redirect_url=%2Fecomviper");
+    expect(ecomviperLocation).not.toContain("%2Fbrains");
     expect(state.clerkProxyCalls).toBe(0);
   });
 
@@ -103,7 +123,7 @@ describe("proxy app/auth protection", () => {
     const location = response.headers.get("location");
     expect(location).toContain("/sign-in");
     expect(location).toContain(
-      "redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fapi%2Fecomviper%2Fwalmart%2Fconnect%2Fsave"
+      "redirect_url=%2Fapi%2Fecomviper%2Fwalmart%2Fconnect%2Fsave"
     );
     expect(state.clerkProxyCalls).toBe(0);
   });
@@ -185,7 +205,7 @@ describe("proxy app/auth protection", () => {
     expect(response.status).toBe(307);
     const location = response.headers.get("location");
     expect(location).toContain("/sign-in");
-    expect(location).toContain("redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fruns%2Frun_123");
+    expect(location).toContain("redirect_url=%2Fruns%2Frun_123");
     expect(state.clerkProxyCalls).toBe(0);
   });
 
