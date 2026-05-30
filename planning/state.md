@@ -36,8 +36,90 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 009.1: Completed and merged (`hotfix-009-1-brains-auth-redirect`, production auth redirect stall fix for `/brains` blank page, production deployed).
 - Shopify Hotfix Sprint 009.2: Completed and merged (`hotfix-009-2-ibrains-dashboard-navigation`, restored `/brains` launcher and removed user-facing BrainOS branding, production deployed).
 - Shopify Hotfix Sprint 009.3: Completed and merged (`hotfix-009-3-catalog-field-extraction-coa-mapping`, deterministic catalog field extraction + COA hyperlink mapping for Product Editor, production deployed).
-- Shopify Hotfix Sprint 009.4: In progress (`hotfix-009-4-universal-catalog-pricing-engine`, universal catalog extraction + membership pricing engine).
-- Current recommended sprint: `Shopify Hotfix Sprint 009.4 completion` (MR/pipeline/deploy/browser verification closure pending).
+- Shopify Hotfix Sprint 009.4: Completed and merged (`hotfix-009-4-universal-catalog-pricing-engine`, universal catalog extraction + membership pricing engine, production deployed).
+- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.4 closure).
+
+## Sprint Completion Log: Shopify Hotfix Sprint 009.4 Production Closure
+
+- Sprint/lane: `Shopify Hotfix Sprint 009.4` (`hotfix-009-4-universal-catalog-pricing-engine`) - closed.
+- Branch: `hotfix-009-4-universal-catalog-pricing-engine`.
+- Root cause:
+  - Catalog extraction still retained SKU-specific behavior from Hotfix 009.3 and did not provide universal deterministic field mapping for broader supplier SKU coverage.
+  - Pricing/MSRP source existed but Product Editor did not support user-selected membership tier or selected-tier cost/profit/margin mapping.
+  - Catalog PDF parsing order could run before catalog sheet parse, causing missing SKU-level COA/link diagnostics when hyperlinks were absent.
+- Chosen fix:
+  - implemented universal catalog extraction engine path (SKU detection, block extraction, field extraction, hyperlink association, deterministic diagnostics).
+  - deferred PDF field mapping until after catalog sheet parse so SKU-aware diagnostics remain deterministic.
+  - added supplier membership tier settings persistence + API + settings UI selector.
+  - parsed membership-tier columns dynamically from PLDS/MSRP headers and mapped selected-tier wholesale cost into supplier intelligence.
+  - updated Product Editor commerce/right-rail to show membership context, pricing status, and explicit no-tier prompt.
+- Number of extracted catalog records (runtime):
+  - source diagnostics now report parsed `catalog_pdf` record count as extracted SKU count (`catalogExtractedSkuCount`) instead of fixed seeded values.
+- Files changed:
+  - `lib/ecomviper/dropshipping/rocktomic-source-ingestion.ts`
+  - `lib/ecomviper/dropshipping/rocktomic-supplier-intelligence.ts`
+  - `lib/ecomviper/suppliers/supplier-intelligence.ts`
+  - `lib/ecomviper/shopify/shopify-product-editor-state.ts`
+  - `lib/ecomviper/settings/supplier-membership.ts`
+  - `app/api/ecomviper/settings/supplier-membership/route.ts`
+  - `app/api/ecomviper/pdp-intelligence/route.ts`
+  - `app/ecomviper/settings/page.tsx`
+  - `app/ecomviper/settings/supplier-membership-tier-form.tsx`
+  - `app/ecomviper/page.tsx`
+  - `app/ecomviper/products/[productId-or-handle]/product-editor-client.tsx`
+  - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+  - `tests/ecomviper_supplier_membership_route.test.ts`
+  - `tests/ecomviper_settings_membership_ui_contract.test.ts`
+  - `planning/design.md`
+  - `planning/apps/ecomviper/shopify/architecture.md`
+  - `planning/apps/ecomviper/shopify/product-editor-architecture.md`
+  - `planning/apps/ecomviper/shopify/pdp-intelligence.md`
+  - `planning/apps/ecomviper/shopify/inventory-architecture.md`
+  - `planning/apps/ecomviper/shopify/coa-architecture.md`
+  - `planning/apps/ecomviper/shopify/pricing-architecture.md`
+  - `planning/state.md`
+- Tests added/updated:
+  - added:
+    - `tests/ecomviper_supplier_membership_route.test.ts`
+    - `tests/ecomviper_settings_membership_ui_contract.test.ts`
+  - updated:
+    - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+    - `tests/ecomviper_product_editor_source_mapping.test.tsx`
+    - `tests/ecomviper_pdp_intelligence_generation.test.ts`
+- Validation summary:
+  - focused hotfix suites passed:
+    - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+    - `tests/ecomviper_product_editor_source_mapping.test.tsx`
+    - `tests/ecomviper_pdp_intelligence_generation.test.ts`
+    - `tests/ecomviper_inventory_foundation_dashboard.test.tsx`
+    - `tests/ecomviper_supplier_membership_route.test.ts`
+    - `tests/ecomviper_settings_membership_ui_contract.test.ts`
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+  - `npm test`: failed on unrelated existing baseline suites (observed families: Walmart product persistence, CasaFlix media planning/AI-channel contract); hotfix-focused suites passed.
+- MR: `!240` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/240`).
+- MR pipeline: `2563170056` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2563170056`).
+- Main/deploy pipeline: `2563173861` (status: `success`, includes `build_release` + `deploy_production`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2563173861`).
+- Merge commit SHA: `d5e28d3a594f56b23bb2b37861ae52c46e535ae4`.
+- Production deployed commit SHA: `d5e28d3a594f56b23bb2b37861ae52c46e535ae4`.
+- Production/runtime status:
+  - `GET https://app.ibrains.ai/api/meta/release` reports `git_sha=d5e28d3a594f56b23bb2b37861ae52c46e535ae4`, `build_id=2563173861`.
+  - `GET https://app.ibrains.ai/api/health` returned `200` with `ok: true`.
+- Log inspection summary:
+  - `journalctl -u ibrains-app` shows clean restart aligned with deploy window (`2026-05-30 03:12 UTC`).
+  - nginx error log tail showed no new hotfix-specific auth/runtime faults during checks.
+- Browser verification status:
+  - signed-out checks (`2026-05-30 03:12 UTC`):
+    - `https://app.ibrains.ai/brains` -> `307` to sign-in with preserved `redirect_url`.
+    - `https://app.ibrains.ai/ecomviper` -> `307` to sign-in with preserved `redirect_url`.
+    - `https://app.ibrains.ai/ecomviper/products/does-not-exist` -> `307` to sign-in with preserved `redirect_url`.
+    - `https://app.ibrains.ai/ecomviper/settings` -> `307` to sign-in with preserved `redirect_url`.
+  - authenticated browser verification remains follow-up for a signed-in session:
+    - verify settings membership selector interaction and Product Editor Ingredients/Commerce/Assets mapped fields for matched SKU.
+- Final status: closed (MR merged + green pipelines + production deploy + runtime/log checks + signed-out browser verification + closure metadata recorded).
+- Risks/follow-ups:
+  - universal PDF extraction is deterministic but constrained by text-layer quality; low-fidelity pages may still emit partial extraction diagnostics.
+  - authenticated production walkthrough remains required for visual/no-console verification of tier pricing and SKU field hydration.
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 009.3 Production Closure
 
