@@ -1,17 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
 
-const redirectMock = vi.hoisted(() => vi.fn());
-
-vi.mock("next/navigation", () => ({
-  redirect: redirectMock,
-}));
-
-describe("brains route redirect", () => {
-  it("server-redirects /brains to /ecomviper", async () => {
+describe("brains route launcher", () => {
+  it("renders iBrains Dashboard launcher and does not redirect to /ecomviper", async () => {
     const pageMod = await import("@/app/(shell)/brains/page");
+    const html = renderToStaticMarkup(await pageMod.default());
 
-    await pageMod.default();
-
-    expect(redirectMock).toHaveBeenCalledWith("/ecomviper");
+    expect(html).toContain("iBrains Dashboard");
+    expect(html).not.toContain("BrainOS");
+    expect(html).toContain('data-testid="ibrains-dashboard-page"');
+    expect(html).toContain(">EcomViper<");
+    expect(html).toContain(">OptiBay<");
+    expect(html).toContain(">OptiZon<");
+    expect(html).toContain(">CasaFlix<");
+    expect(html).toContain(">SiteForge<");
+    expect(html).toContain(">DirectoryIQ<");
+    expect(html).toContain('href="/ecomviper"');
+    expect(html).toContain("lucide");
+    expect(html).not.toContain("NEXT_REDIRECT");
   });
 });

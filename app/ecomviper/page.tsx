@@ -28,7 +28,7 @@ export default async function EcomViperDashboardPage() {
   const sourceWarnings: string[] = [];
 
   const rocktomicSnapshot = await getRocktomicSourceIngestionSnapshot().catch((error) => {
-    sourceWarnings.push(error instanceof Error ? error.message : "Could not load Rocktomic source diagnostics.");
+    sourceWarnings.push(error instanceof Error ? error.message : "Could not load supplier source diagnostics.");
     return null;
   });
 
@@ -80,8 +80,8 @@ export default async function EcomViperDashboardPage() {
       rocktomicStatusLabel={
         rocktomicSnapshot
           ? rocktomicSnapshot.usedSeedFallback
-            ? "Using fallback seed"
-            : "Live source parsed"
+            ? "Connected (fallback)"
+            : "Connected"
           : "Unavailable"
       }
       rocktomicLastCheckedAt={rocktomicSnapshot?.lastCheckedAt ?? null}

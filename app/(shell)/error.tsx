@@ -31,7 +31,7 @@ export default function ShellError({
           href="/brains"
           className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
         >
-          Back to Brains
+          iBrains Dashboard
         </Link>
       </div>
     </div>

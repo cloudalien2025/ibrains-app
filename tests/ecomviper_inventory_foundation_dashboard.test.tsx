@@ -18,7 +18,7 @@ vi.mock("@/components/brains/back-to-brains-link", async () => {
   const React = await import("react");
   return {
     default: ({ className }: { className?: string }) =>
-      React.createElement("a", { href: "/brains", className }, "← Back to Brains"),
+      React.createElement("a", { href: "/brains", className }, "← iBrains Dashboard"),
   };
 });
 
@@ -87,7 +87,7 @@ describe("ecomviper inventory foundation dashboard", () => {
     delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
   });
 
-  it("renders BrainOS sidebar IA without duplicate horizontal module navigation", async () => {
+  it("renders iBrains Dashboard header + sidebar IA without duplicate horizontal module navigation", async () => {
     await act(async () => {
       root.render(
         <EcomViperDashboardClient
@@ -100,7 +100,7 @@ describe("ecomviper inventory foundation dashboard", () => {
           sourceWarnings={[]}
           rows={baseRows()}
           rocktomicProductCount={140}
-          rocktomicStatusLabel="Live source parsed"
+          rocktomicStatusLabel="Connected"
           rocktomicLastCheckedAt="2026-05-29T21:00:00.000Z"
         />
       );
@@ -114,7 +114,11 @@ describe("ecomviper inventory foundation dashboard", () => {
     expect(text).toContain("Agentic Visibility");
     expect(text).toContain("Settings");
     expect(text).not.toContain("Overview");
-    expect(text).toContain("iBrains BrainOS Dashboard");
+    expect(text).toContain("iBrains Dashboard");
+    expect(text).not.toContain("BrainOS");
+    const backLink = container.querySelector('a[href="/brains"]');
+    expect(backLink).not.toBeNull();
+    expect(backLink?.textContent).toContain("iBrains Dashboard");
   });
 
   it("filters products by supplier match and supports row navigation", async () => {
@@ -130,7 +134,7 @@ describe("ecomviper inventory foundation dashboard", () => {
           sourceWarnings={[]}
           rows={baseRows()}
           rocktomicProductCount={140}
-          rocktomicStatusLabel="Live source parsed"
+          rocktomicStatusLabel="Connected"
           rocktomicLastCheckedAt="2026-05-29T21:00:00.000Z"
         />
       );
@@ -150,6 +154,12 @@ describe("ecomviper inventory foundation dashboard", () => {
     expect(rows.length).toBe(1);
     expect(container.textContent).toContain("Premium Nitric Oxide Gummies");
     expect(container.textContent).not.toContain("Generic Product");
+    expect(container.textContent).toContain("Supplier Feed:");
+    expect(container.textContent).toContain("Supplier Records:");
+    expect(container.textContent).toContain("Open supplier diagnostics");
+    expect(container.textContent).toContain("Matched (ROC948)");
+    expect(container.textContent).not.toContain("Rocktomic records");
+    expect(container.textContent).not.toContain("Open Rocktomic diagnostics");
 
     await act(async () => {
       (rows[0] as HTMLTableRowElement).click();

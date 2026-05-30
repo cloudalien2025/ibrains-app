@@ -104,14 +104,14 @@ export const brainCatalog: BrainCatalogEntry[] = [
   },
   {
     id: "pagebolt",
-    name: "PageBolt",
+    name: "SiteForge",
     shortDescription:
       "Standalone website intelligence brain for briefs, strategy, and build-ready page generation.",
     tags: ["Website Strategy", "Build Workflows", "Publishing Automation"],
     primaryCtaText: "Open Brain",
-    upsellTitle: "Unlock PageBolt",
+    upsellTitle: "Unlock SiteForge",
     upsellMessage:
-      "Activate PageBolt to plan and generate high-performing web experiences from one brain workspace.",
+      "Activate SiteForge to plan and generate high-performing web experiences from one brain workspace.",
     iconKey: "map",
   },
   {
