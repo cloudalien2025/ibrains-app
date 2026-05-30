@@ -25,6 +25,11 @@ For matched supplier SKUs, Product Editor must hydrate deterministic source fiel
 
 Unknown is allowed only when the source lacks the field or deterministic extraction fails.
 
+Stabilization 009.6 guardrail:
+- If supplier source is configured but normalized SKU facts are missing, Product Editor must render:
+  - `Supplier data has not been synced for this SKU. Run source sync.`
+- Do not silently collapse this state to generic `Unknown`.
+
 ## COA Link Handling
 
 - COA link is mapped from catalog PDF hyperlink extraction by matched SKU row.
@@ -49,3 +54,8 @@ Unknown is allowed only when the source lacks the field or deterministic extract
 - Generate: server-side source-grounded intelligence generation
 - Save: persistence with tenant/workspace isolation
 - Tabs reduce vertical scroll and keep high-priority controls above fold
+
+## Source Sync Dependency
+
+- Product Editor reads normalized supplier records only.
+- Product Editor must not download PDFs, parse Google Sheets, or run OCR on route render.

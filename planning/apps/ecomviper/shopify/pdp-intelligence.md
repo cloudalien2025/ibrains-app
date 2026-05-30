@@ -57,3 +57,10 @@ Generation now also consumes selected membership-tier pricing context:
 - derived `estimated_profit` and `margin_percent` when inputs are present
 
 If selected tier or cost source is unavailable, generation must preserve `unknown`/source-unavailable semantics and must not invent values.
+
+## Stabilization 009.6 Guardrails
+
+- Generation reads normalized supplier facts only.
+- When normalized supplier facts are missing, generation runs in Shopify-limited mode with explicit warning:
+  - `Supplier facts not synced. Generated copy will be limited to Shopify data.`
+- Generation diagnostics must include source-fact usage and normalized record status fields.

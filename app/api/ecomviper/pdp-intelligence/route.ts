@@ -173,6 +173,13 @@ export async function POST(req: NextRequest) {
       triggerBackgroundRefresh: false,
     }).catch(() => null);
     const supplierMatch = supplierSnapshot?.match;
+    const supplierFactsSynced =
+      Boolean(supplierMatch?.product) &&
+      Boolean(
+        supplierSnapshot?.syncStatus === "synced" ||
+          supplierSnapshot?.syncStatus === "parsing_partial" ||
+          supplierSnapshot?.syncStatus === "ocr_required"
+      );
     const openAiApiKey = await getShopifyOpenAiApiKeyForUser(userId);
 
     const generated = await generateShopifyPdpIntelligence({
@@ -182,6 +189,8 @@ export async function POST(req: NextRequest) {
         supplierSku: supplierMatch?.matchedSku ?? null,
         product: supplierMatch?.product ?? null,
         inventoryAvailable: supplierSnapshot?.inventoryAvailable ?? false,
+        syncStatus: supplierSnapshot?.syncStatus ?? null,
+        supplierFactsSynced,
       },
       existing,
       openAiApiKey,
@@ -198,9 +207,17 @@ export async function POST(req: NextRequest) {
       ok: true,
       action: "generate",
       intelligence: persisted,
+      sourceFactsUsed: supplierFactsSynced,
+      supplierProductRecordStatus: supplierMatch?.product ? "synced" : "missing",
+      pricingRecordStatus: supplierMatch?.product?.pricing ? "synced" : "missing",
+      inventoryRecordStatus: supplierMatch?.product ? "synced" : "missing",
+      supplementFactsStatus: supplierMatch?.product?.supplementFacts?.status ?? "missing",
+      coaStatus: supplierMatch?.product?.coa?.status ?? "missing",
       generationUnavailable: persisted.generation_status === "generation_unavailable",
       message:
-        persisted.generation_status === "generation_unavailable"
+        !supplierFactsSynced
+          ? "Supplier facts not synced. Generated copy will be limited to Shopify data."
+          : persisted.generation_status === "generation_unavailable"
           ? "generation unavailable: missing server configuration"
           : null,
     });

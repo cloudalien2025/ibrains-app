@@ -82,7 +82,9 @@ export default function SupplierMembershipTierForm({
         <p className="mt-2 text-xs text-[#64748B]">Selected tier: {selectedTier}</p>
       ) : (
         <p className="mt-2 text-xs text-[#64748B]">
-          Select membership tier in Settings to calculate cost and profit.
+          {normalizedDetectedTiers.length
+            ? "Select membership tier in Settings to calculate cost and profit."
+            : "Run source sync to detect membership tiers."}
         </p>
       )}
       {message ? (

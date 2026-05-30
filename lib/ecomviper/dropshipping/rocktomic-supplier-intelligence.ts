@@ -2,6 +2,7 @@ export type RocktomicDataStatus =
   | "available"
   | "configured"
   | "pending_source"
+  | "ocr_required"
   | "not_available"
   | "not_applicable";
 

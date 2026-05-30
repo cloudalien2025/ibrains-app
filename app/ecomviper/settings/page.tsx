@@ -10,6 +10,7 @@ import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify
 import { getSupplierMembershipTierSelectionForUser } from "@/lib/ecomviper/settings/supplier-membership";
 import { safeIsoDate } from "@/lib/ui/safe-formatters";
 import SupplierMembershipTierForm from "@/app/ecomviper/settings/supplier-membership-tier-form";
+import RocktomicSourceSyncTrigger from "@/app/ecomviper/dropshipping/rocktomic/source-sync-trigger";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,11 @@ export default async function EcomViperSettingsPage() {
     membershipTiersDetected: [] as string[],
     sourceDiagnostics: [],
     lastCheckedAt: "",
+    lastSuccessfulSyncAt: null,
+    lastAttemptedSyncAt: null,
+    syncStatus: "never_synced" as const,
+    lastSyncError: null,
+    syncRunSummary: null,
     cacheState: "seed_fallback" as const,
     refreshState: "idle" as const,
   };
@@ -118,9 +124,16 @@ export default async function EcomViperSettingsPage() {
           <p className="mt-1 text-sm text-[#475569]">
             Product records: {rocktomic.productCount} · Inventory records: {rocktomic.inventorySkuCount} · Last checked: {asIso(rocktomic.lastCheckedAt)}
           </p>
+          <p className="mt-1 text-sm text-[#475569]">
+            Last attempted sync: {asIso(rocktomic.lastAttemptedSyncAt)} · Last successful sync: {asIso(rocktomic.lastSuccessfulSyncAt)} · Sync status: {rocktomic.syncStatus}
+          </p>
+          {rocktomic.lastSyncError ? <p className="mt-1 text-xs text-rose-700">Last sync error: {rocktomic.lastSyncError}</p> : null}
           <p className="mt-1 text-xs text-[#64748B]">
             Cache: {rocktomic.cacheState || "unknown"} · Refresh: {rocktomic.refreshState || "idle"}
           </p>
+          <div className="mt-2">
+            <RocktomicSourceSyncTrigger />
+          </div>
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-[0.1em] text-[#64748B]">
@@ -129,8 +142,10 @@ export default async function EcomViperSettingsPage() {
                   <th className="py-2 pr-3">Configured</th>
                   <th className="py-2 pr-3">Fetchable</th>
                   <th className="py-2 pr-3">Parsed</th>
+                  <th className="py-2 pr-3">Sync status</th>
                   <th className="py-2 pr-3">Records</th>
                   <th className="py-2 pr-3">Last checked</th>
+                  <th className="py-2 pr-3">Last successful sync</th>
                   <th className="py-2 pr-3">Error</th>
                 </tr>
               </thead>
@@ -141,8 +156,10 @@ export default async function EcomViperSettingsPage() {
                     <td className="py-3 pr-3">{source.configured ? "Yes" : "No"}</td>
                     <td className="py-3 pr-3">{source.fetchable ? "Yes" : "No"}</td>
                     <td className="py-3 pr-3">{source.parsed ? "Yes" : "No"}</td>
+                    <td className="py-3 pr-3">{source.syncStatus}</td>
                     <td className="py-3 pr-3">{source.recordCount}</td>
                     <td className="py-3 pr-3">{asIso(source.lastCheckedAt)}</td>
+                    <td className="py-3 pr-3">{asIso(source.lastSuccessfulSyncAt)}</td>
                     <td className="py-3 pr-3">{source.lastError || "-"}</td>
                   </tr>
                 ))}

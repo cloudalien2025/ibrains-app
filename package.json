@@ -17,6 +17,7 @@
     "test:e2e:list": "playwright test --list",
     "test:e2e:docker": "PW_NO_SANDBOX=1 pnpm playwright test",
     "test:ui-audit": "playwright test tests/ui-audit",
+    "ecomviper:sync-supplier-sources": "bash scripts/ecomviper_sync_supplier_sources.sh",
     "codex:run": "bash scripts/codex_pipeline.sh",
     "pr:automerge": "bash scripts/gh_automerge_pr.sh",
     "postinstall": "node scripts/patch_next_route_types.mjs"

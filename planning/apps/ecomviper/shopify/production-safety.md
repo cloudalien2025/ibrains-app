@@ -73,3 +73,18 @@ curl -w '%{time_total}\n' -o /dev/null -s --max-time 10 https://app.ibrains.ai/e
 2. Seed fallback quality depends on last-known deterministic source mapping completeness.
 3. External provider instability (Shopify/OpenAI/source URLs) still requires operational monitoring and alerting.
 4. Signed-in production browser verification still requires manual execution unless a secure automation session is provisioned.
+
+## Supplier Sync Runbook (Stabilization 009.6)
+
+Manual sync trigger options:
+
+1. Authenticated UI: `/ecomviper/dropshipping/rocktomic` -> `Run Source Sync`
+2. Authenticated API: `POST /api/ecomviper/supplier-sources/sync`
+3. Internal token script:
+   - `ECOMVIPER_SYNC_INTERNAL_TOKEN=... ECOMVIPER_SYNC_USER_ID=... bash scripts/ecomviper_sync_supplier_sources.sh`
+
+Validation after sync:
+
+1. `GET /api/ecomviper/supplier-sources/status`
+2. Confirm non-zero parsed counts where sources are accessible.
+3. Confirm Product Editor no longer shows `Supplier data has not been synced for this SKU. Run source sync.` for synced SKU.

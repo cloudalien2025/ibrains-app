@@ -61,6 +61,9 @@ export interface ShopifyProductEditorInitialState {
     matchConfidence: number;
     matchReason: string;
     platform: string | null;
+    syncStatus: string | null;
+    syncRequired: boolean;
+    syncMessage: string | null;
     inventoryAvailable: boolean;
     lastSupplierCheckAt: string | null;
     product: RocktomicSupplierProduct | null;
@@ -309,6 +312,9 @@ export async function buildShopifyProductEditorStateForUser(
         matchConfidence: 0,
         matchReason: "no_supplier_sku_match",
         platform: null,
+        syncStatus: null,
+        syncRequired: false,
+        syncMessage: null,
         inventoryAvailable: false,
         lastSupplierCheckAt: null,
         product: null,
@@ -385,6 +391,13 @@ export async function buildShopifyProductEditorStateForUser(
       : inventoryAvailable
         ? shopifyInventoryStatus
         : "unknown";
+  const syncStatus = supplierSnapshot?.syncStatus || null;
+  const syncRequired =
+    !supplierProduct &&
+    Boolean(syncStatus && syncStatus !== "synced");
+  const syncMessage = syncRequired
+    ? "Supplier data has not been synced for this SKU. Run source sync."
+    : null;
 
   return {
     productReference: reference,
@@ -415,6 +428,9 @@ export async function buildShopifyProductEditorStateForUser(
       matchConfidence: supplierMatch?.matchConfidence ?? 0,
       matchReason: supplierMatch?.matchReason ?? "no_supplier_sku_match",
       platform: supplierSnapshot?.platform ?? null,
+      syncStatus,
+      syncRequired,
+      syncMessage,
       inventoryAvailable,
       lastSupplierCheckAt: supplierSnapshot?.lastCheckedAt ?? null,
       product: supplierProduct,

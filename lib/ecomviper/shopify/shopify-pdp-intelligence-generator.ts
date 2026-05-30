@@ -26,6 +26,8 @@ interface GenerateOptions {
     supplierSku: string | null;
     product: RocktomicSupplierProduct | null;
     inventoryAvailable?: boolean;
+    syncStatus?: string | null;
+    supplierFactsSynced?: boolean;
   };
   existing: ShopifyPdpIntelligenceRecord | null;
   openAiApiKey: string | null;
@@ -205,6 +207,12 @@ function buildGroundedRecord(
       options.supplierMatch.supplierSku ? `Matched SKU: ${options.supplierMatch.supplierSku}` : "Matched SKU: Unknown",
       `Inventory source: ${options.supplierMatch.inventoryAvailable ? "Available" : "Unavailable"}`,
       `Catalog mapping: ${supplier ? "Mapped" : "Not mapped"}`,
+      `source_facts_used: ${options.supplierMatch.supplierFactsSynced ? "true" : "false"}`,
+      `supplier_product_record_status: ${supplier ? "synced" : "missing"}`,
+      `pricing_record_status: ${wholesaleCost != null || msrp != null ? "synced" : "missing"}`,
+      `inventory_record_status: ${supplier ? "synced" : "missing"}`,
+      `supplement_facts_status: ${supplier?.supplementFacts?.status || "missing"}`,
+      `coa_status: ${supplier?.coa?.status || "missing"}`,
       `coa_link_status: ${supplier?.coaLinkStatus || "not_present"}`,
       `coa_link_error: ${supplier?.coaLinkError || "none"}`,
     ],
@@ -418,6 +426,14 @@ export async function generateShopifyPdpIntelligence(
       options,
       "generation_unavailable",
       "Generation unavailable: missing server configuration for Shopify OpenAI credentials."
+    );
+  }
+
+  if (options.supplierMatch.supplierFactsSynced === false) {
+    return buildGroundedRecord(
+      options,
+      "generated",
+      "Supplier facts not synced. Generated copy is limited to Shopify data."
     );
   }
 
