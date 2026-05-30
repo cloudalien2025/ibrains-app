@@ -167,4 +167,59 @@ describe("ecomviper inventory foundation dashboard", () => {
 
     expect(pushMock).toHaveBeenCalledWith("/ecomviper/products/roc948");
   });
+
+  it("renders safely with malformed/partial row data", async () => {
+    await act(async () => {
+      root.render(
+        <EcomViperDashboardClient
+          shopifyConnected={true}
+          storeDomain="example.myshopify.com"
+          shopifyStatusLabel="Connected"
+          openAiStatusLabel="Connected"
+          lastImportAt={"not-a-date" as unknown as string}
+          productCount={1}
+          sourceWarnings={["supplier source unavailable"]}
+          rows={
+            [
+              {
+                id: "",
+                productEditorHref: "javascript:alert(1)",
+                imageUrl: null,
+                productName: "",
+                sku: null,
+                vendor: "",
+                productType: "",
+                shopifyStatus: "" as never,
+                supplierMatch: "unmatched",
+                supplierMatchedSku: null,
+                supplierMatchConfidence: Number.NaN,
+                supplierMatchReason: "no_supplier_sku_match",
+                supplierProductName: null,
+                aiPdpScore: Number.NaN,
+                publishedToEcomViper: false,
+                lastUpdated: "bad-date",
+                inventoryStatus: "unknown",
+                inventorySource: "unknown",
+              },
+            ] as unknown as EcomViperProductInventoryRow[]
+          }
+          rocktomicProductCount={0}
+          rocktomicStatusLabel="Unavailable"
+          rocktomicLastCheckedAt={"bad-date" as unknown as string}
+        />
+      );
+    });
+
+    const text = container.textContent || "";
+    expect(text).toContain("Untitled product");
+    expect(text).toContain("Unknown");
+    expect(text).toContain("Never");
+
+    const row = container.querySelector('[data-testid="ecomviper-product-row"]') as HTMLTableRowElement;
+    expect(row).toBeTruthy();
+    await act(async () => {
+      row.click();
+    });
+    expect(pushMock).toHaveBeenCalledWith("/ecomviper");
+  });
 });

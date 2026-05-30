@@ -10,6 +10,7 @@ Provide a deterministic diagnosis and recovery flow for EcomViper route saturati
 
 1. Check service status:
    - `systemctl is-active ibrains-app`
+   - `scripts/production_smoke_check.sh app.ibrains.ai`
 2. Check public health and release:
    - `GET /api/health`
    - `GET /api/meta/release`
@@ -55,6 +56,8 @@ curl -w '%{time_total}\n' -o /dev/null -s --max-time 10 https://app.ibrains.ai/e
 5. Supplier names do not leak into shopper-facing generated output.
 6. Auth protection/redirect behavior remains stable.
 7. Release metadata remains populated.
+8. Route-level/global error boundaries prevent blank-screen client crashes.
+9. Invalid/null date or money fields never throw in client render paths.
 
 ## OpenAI/PDP Safety
 
@@ -69,3 +72,4 @@ curl -w '%{time_total}\n' -o /dev/null -s --max-time 10 https://app.ibrains.ai/e
 1. In-memory dedupe/cache is process-local; multi-instance refresh coordination is not yet distributed.
 2. Seed fallback quality depends on last-known deterministic source mapping completeness.
 3. External provider instability (Shopify/OpenAI/source URLs) still requires operational monitoring and alerting.
+4. Signed-in production browser verification still requires manual execution unless a secure automation session is provisioned.

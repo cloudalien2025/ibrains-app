@@ -35,21 +35,8 @@ build_release:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   script:
     - npm ci
-    - mkdir -p app/_meta
     - BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-    - SHORT_SHA="${CI_COMMIT_SHA:0:7}"
-    - |
-      cat > app/_meta/release.json <<EOF
-      {
-        "service": "ibrains",
-        "environment": "production",
-        "git_sha": "${CI_COMMIT_SHA}",
-        "git_sha_short": "${SHORT_SHA}",
-        "build_timestamp": "${BUILD_TIMESTAMP}",
-        "build_id": "${CI_PIPELINE_ID}",
-        "source": "gitlab_ci"
-      }
-      EOF
+    - bash scripts/write_release_metadata.sh app/_meta/release.json "${CI_COMMIT_SHA}" "${CI_PIPELINE_ID}" "${BUILD_TIMESTAMP}" "ibrains" "production" "gitlab_ci"
     - npm run build
     - mkdir -p artifacts
     - |
@@ -134,20 +121,8 @@ deploy_production:
       fi
 
       npm ci
-      mkdir -p app/_meta
       BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-      SHORT_SHA="${CI_COMMIT_SHA:0:7}"
-      cat > app/_meta/release.json <<EOF2
-      {
-        "service": "ibrains",
-        "environment": "production",
-        "git_sha": "${CI_COMMIT_SHA}",
-        "git_sha_short": "${SHORT_SHA}",
-        "build_timestamp": "${BUILD_TIMESTAMP}",
-        "build_id": "${CI_PIPELINE_ID}",
-        "source": "gitlab_ci"
-      }
-      EOF2
+      bash "${DEPLOY_PATH}/scripts/write_release_metadata.sh" app/_meta/release.json "${CI_COMMIT_SHA}" "${CI_PIPELINE_ID}" "${BUILD_TIMESTAMP}" "ibrains" "production" "gitlab_ci"
       npm run build
 
       bash "${DEPLOY_PATH}/scripts/apply_directoryiq_schema.sh"

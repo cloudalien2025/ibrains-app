@@ -18,6 +18,10 @@ It is a stabilization contract, not a feature expansion plan.
    - generation had no explicit request abort budget.
 4. Product editor and PDP route supplier lookup risk:
    - supplier abstraction could trigger source refresh behavior if cache was cold/stale.
+5. Client runtime crash risk:
+   - nullable/invalid date + money rendering paths in dashboard/editor clients could trigger client-side exceptions on mobile hydration.
+6. Release metadata reliability gap:
+   - deploy metadata file writes were non-atomic, allowing intermittent partial/null reads during deploy windows.
 
 ## Route Performance Model
 
@@ -70,6 +74,7 @@ It is a stabilization contract, not a feature expansion plan.
 - Public.
 - File/env metadata only.
 - No external ingestion.
+- Must return non-null `git_sha` and `build_id` with explicit diagnostics when metadata is incomplete.
 
 ## Forbidden Synchronous Work
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getRocktomicSourceIngestionSnapshot } from "@/lib/ecomviper/dropshipping/rocktomic-source-ingestion";
 import { lookupRocktomicSupplierProductBySku } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
+import { safeIsoDate } from "@/lib/ui/safe-formatters";
 
 export const dynamic = "force-dynamic";
 
@@ -9,10 +10,7 @@ interface RocktomicDropshippingPageProps {
 }
 
 function asIso(value: string | null): string {
-  if (!value) return "Never";
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Date(parsed).toISOString();
+  return safeIsoDate(value, "Never");
 }
 
 export default async function RocktomicDropshippingPage({ searchParams }: RocktomicDropshippingPageProps) {

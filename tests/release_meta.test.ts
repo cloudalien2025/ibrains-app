@@ -97,4 +97,30 @@ describe("GET /api/meta/release", () => {
       },
     });
   });
+
+  it("returns non-null metadata fields with diagnostics when env/file are missing", async () => {
+    delete process.env.APP_NAME;
+    delete process.env.SERVICE_NAME;
+    delete process.env.APP_ENV;
+    delete process.env.NODE_ENV;
+    delete process.env.RELEASE_GIT_SHA;
+    delete process.env.GIT_SHA;
+    delete process.env.GITHUB_SHA;
+    delete process.env.RELEASE_BUILD_TIMESTAMP;
+    delete process.env.BUILD_TIMESTAMP;
+    delete process.env.RELEASE_BUILD_ID;
+    delete process.env.BUILD_ID;
+    delete process.env.GITHUB_RUN_ID;
+
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(typeof payload.git_sha).toBe("string");
+    expect(payload.git_sha.length).toBeGreaterThan(0);
+    expect(typeof payload.build_id).toBe("string");
+    expect(payload.build_id.length).toBeGreaterThan(0);
+    expect(payload.diagnostics.release_metadata_complete).toBe(false);
+    expect(payload.diagnostics.missing).toContain("build_timestamp");
+    expect(payload.diagnostics.missing).toContain("build_id");
+  });
 });

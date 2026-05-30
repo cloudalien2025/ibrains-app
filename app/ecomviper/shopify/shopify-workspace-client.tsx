@@ -7,6 +7,7 @@ import ShopifyKnowledgeBasePanel from "@/app/ecomviper/shopify/_components/shopi
 import ShopifyPromptMatchPanel from "@/app/ecomviper/shopify/_components/shopify-prompt-match-panel";
 import ShopifySidebar from "@/app/ecomviper/shopify/_components/shopify-sidebar";
 import ShopifyTrustSignalsPanel from "@/app/ecomviper/shopify/_components/shopify-trust-signals-panel";
+import { safeIsoDate } from "@/lib/ui/safe-formatters";
 import type {
   ShopifyAgenticWorkspaceState,
   ShopifyWorkspaceLaneId,
@@ -52,10 +53,7 @@ function laneDescription(lane: ShopifyWorkspaceLaneId): string {
 }
 
 function formatTimestamp(value: string | null): string {
-  if (!value) return "Never";
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Date(parsed).toISOString();
+  return safeIsoDate(value, "Never");
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {

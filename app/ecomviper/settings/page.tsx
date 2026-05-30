@@ -8,15 +8,13 @@ import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopi
 import { getShopifyImportStateForUser } from "@/lib/ecomviper/shopify/shopify-import";
 import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify/openai-connection";
 import { getSupplierMembershipTierSelectionForUser } from "@/lib/ecomviper/settings/supplier-membership";
+import { safeIsoDate } from "@/lib/ui/safe-formatters";
 import SupplierMembershipTierForm from "@/app/ecomviper/settings/supplier-membership-tier-form";
 
 export const dynamic = "force-dynamic";
 
 function asIso(value: string | null): string {
-  if (!value) return "Never";
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Date(parsed).toISOString();
+  return safeIsoDate(value, "Never");
 }
 
 export default async function EcomViperSettingsPage() {

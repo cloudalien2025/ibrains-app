@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BackToBrainsLink from "@/components/brains/back-to-brains-link";
 import type { EcomViperInventoryStatus, EcomViperProductInventoryRow } from "@/lib/ecomviper/shopify/shopify-inventory-foundation";
+import { safeIsoDate } from "@/lib/ui/safe-formatters";
 
 interface EcomViperDashboardClientProps {
   shopifyConnected: boolean;
@@ -27,10 +28,7 @@ type ScoreFilter = "all" | "0-49" | "50-74" | "75-100";
 type InventoryFilter = "all" | EcomViperInventoryStatus;
 
 function asIso(value: string | null): string {
-  if (!value) return "Never";
-  const parsed = Date.parse(value);
-  if (!Number.isFinite(parsed)) return value;
-  return new Date(parsed).toISOString();
+  return safeIsoDate(value, "Never");
 }
 
 function scoreMatches(value: number, filter: ScoreFilter): boolean {
@@ -62,6 +60,38 @@ export default function EcomViperDashboardClient({
   rocktomicLastCheckedAt,
 }: EcomViperDashboardClientProps) {
   const router = useRouter();
+  const safeRows = useMemo<EcomViperProductInventoryRow[]>(
+    () => {
+      const rawRows = Array.isArray(rows) ? rows : [];
+      return rawRows
+        .filter((row): row is EcomViperProductInventoryRow => Boolean(row))
+        .map((row, index) => {
+          const rowId = typeof row.id === "string" && row.id.trim().length ? row.id : `row-${index + 1}`;
+          const rowHref =
+            typeof row.productEditorHref === "string" && row.productEditorHref.startsWith("/ecomviper/products/")
+              ? row.productEditorHref
+              : "/ecomviper";
+          return {
+            ...row,
+            id: rowId,
+            productEditorHref: rowHref,
+            productName: row.productName || "Untitled product",
+            sku: row.sku || null,
+            vendor: row.vendor || "Unknown",
+            productType: row.productType || "Unknown",
+            shopifyStatus: row.shopifyStatus || "unknown",
+            supplierMatchedSku: row.supplierMatchedSku || null,
+            supplierMatchConfidence:
+              typeof row.supplierMatchConfidence === "number" && Number.isFinite(row.supplierMatchConfidence)
+                ? row.supplierMatchConfidence
+                : 0,
+            aiPdpScore: typeof row.aiPdpScore === "number" && Number.isFinite(row.aiPdpScore) ? row.aiPdpScore : 0,
+            lastUpdated: row.lastUpdated || "",
+          };
+        });
+    },
+    [rows]
+  );
   const [search, setSearch] = useState("");
   const [supplierFilter, setSupplierFilter] = useState<SupplierFilter>("all");
   const [shopifyStatusFilter, setShopifyStatusFilter] = useState<ShopifyStatusFilter>("all");
@@ -72,7 +102,7 @@ export default function EcomViperDashboardClient({
   const filteredRows = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
-    return rows.filter((row) => {
+    return safeRows.filter((row) => {
       const searchMatch =
         !normalizedSearch ||
         row.productName.toLowerCase().includes(normalizedSearch) ||
@@ -89,7 +119,7 @@ export default function EcomViperDashboardClient({
 
       return searchMatch && supplierMatch && shopifyMatch && publishedMatch && scoreMatch && inventoryMatch;
     });
-  }, [inventoryFilter, publishedFilter, rows, scoreFilter, search, shopifyStatusFilter, supplierFilter]);
+  }, [inventoryFilter, publishedFilter, safeRows, scoreFilter, search, shopifyStatusFilter, supplierFilter]);
 
   const navBaseClass =
     "rounded-lg border border-transparent px-3 py-2 text-left text-sm text-[#334155] hover:border-[#D9E4F0] hover:bg-[#F8FBFF]";
