@@ -33,6 +33,7 @@ const MAX_BINARY_PAYLOAD_BYTES = 8 * 1024 * 1024;
 const MAX_TRUSTED_CATALOG_PDF_PAYLOAD_BYTES = 32 * 1024 * 1024;
 const MAX_PDF_RAW_STRING_FALLBACK_SCAN_BYTES = 2 * 1024 * 1024;
 const MAX_PDF_EXTRACTED_LINES = 10_000;
+const MAX_PDF_TEXT_LAYER_EXTRACTION_BYTES = 12 * 1024 * 1024;
 
 interface CsvTable {
   rows: string[][];
@@ -531,9 +532,11 @@ function mapCatalogPdfFieldsBySku(input: {
   pdfBytes: ArrayBuffer;
   catalogRowsBySku: Map<string, CatalogRow>;
 }): Map<string, CatalogPdfSkuFields> {
-  const content = Buffer.from(input.pdfBytes).toString("latin1");
+  const contentBuffer = Buffer.from(input.pdfBytes);
+  const content = contentBuffer.toString("latin1");
   const links = parsePdfUriLinks(content);
-  const extractedLines = extractPdfTextContent(content);
+  const shouldExtractTextLayer = contentBuffer.byteLength <= MAX_PDF_TEXT_LAYER_EXTRACTION_BYTES;
+  const extractedLines = shouldExtractTextLayer ? extractPdfTextContent(content) : [];
   const normalizedText = extractedLines.join("\n");
   const templateLink = links.find((entry) => entry.toLowerCase().includes("templates.html")) || null;
 
@@ -572,6 +575,9 @@ function mapCatalogPdfFieldsBySku(input: {
 
     const coaUrl = coaBySku.get(sku) || null;
     const extractionErrors: string[] = [];
+    if (!shouldExtractTextLayer) {
+      extractionErrors.push("PDF text-layer extraction skipped due large payload guard; supplement facts may require OCR.");
+    }
     if (!coaUrl) extractionErrors.push("PDF hyperlink not found for matched SKU row");
     if (!supplementFactsPanel) extractionErrors.push("Supplement Facts panel not extracted from PDF text layer");
     if (!servingSize) extractionErrors.push("Serving Size not extracted from PDF text layer");
@@ -620,6 +626,7 @@ function mapCatalogPdfFieldsBySku(input: {
       coaLinkError,
       sourceDiagnostics: [
         "catalog_pdf_extraction_engine: universal_v1",
+        `catalog_pdf_text_layer_mode: ${shouldExtractTextLayer ? "full_parse" : "skip_large_payload_guard"}`,
         `catalog_pdf_links_detected: ${links.length}`,
         `catalog_pdf_text_anchor: ${blockResult.textAnchorFound ? "found" : "not_found"}`,
         `catalog_extraction_status: ${extractionStatus}`,
