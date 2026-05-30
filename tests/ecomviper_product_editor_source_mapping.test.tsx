@@ -1,0 +1,188 @@
+// @vitest-environment jsdom
+
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import EcomViperProductEditorClient from "@/app/ecomviper/products/[productId-or-handle]/product-editor-client";
+import { buildCurrentShopifyListingDocket } from "@/lib/ecomviper/shopify/shopify-product-docket";
+import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
+import type { ShopifyProductRecord } from "@/lib/ecomviper/shopify/shopify-types";
+
+function createProductRecord(): ShopifyProductRecord {
+  return {
+    id: "gid://shopify/Product/949",
+    storeDomain: "opanutrition.myshopify.com",
+    title: "Premium Magnesium Glycinate Gummies",
+    handle: "premium-magnesium-glycinate-gummies",
+    vendor: "OPA Nutrition",
+    productType: "Supplements",
+    status: "ACTIVE",
+    tags: [],
+    description: "Magnesium gummies",
+    descriptionHtml: "<p>Magnesium gummies</p>",
+    seoTitle: "Premium Magnesium Glycinate Gummies",
+    seoDescription: "Magnesium gummies",
+    metafields: [],
+    onlineStoreUrl: "https://opanutrition.myshopify.com/products/premium-magnesium-glycinate-gummies",
+    primaryImageUrl: "",
+    galleryImageUrls: [],
+    galleryImages: [],
+    createdAt: "2026-05-29T00:00:00.000Z",
+    updatedAt: "2026-05-30T00:00:00.000Z",
+    variants: [
+      {
+        id: "gid://shopify/ProductVariant/949",
+        productId: "gid://shopify/Product/949",
+        title: "Default",
+        sku: "ROC949",
+        barcode: "",
+        price: 39.99,
+        compareAtPrice: null,
+        inventoryQuantity: 4,
+        selectedOptions: [],
+        imageUrl: "",
+        imageAltText: null,
+        imageUrls: [],
+      },
+    ],
+  };
+}
+
+function createInitialState(): ShopifyProductEditorInitialState {
+  const current = buildCurrentShopifyListingDocket(createProductRecord(), {
+    source: "live_shopify",
+    sourceLabel: "Live Shopify API",
+    hydrationMode: "live",
+    lastSyncedAt: "2026-05-30T00:00:00.000Z",
+    collections: [],
+  });
+
+  return {
+    productReference: current.handle,
+    productFound: true,
+    notFoundMessage: null,
+    source: "live_shopify",
+    sourceLabel: "Live Shopify API",
+    hydrationMode: "live",
+    currentShopifyListing: current,
+    optimizedShopifyProposal: null,
+    editableShopifyDraft: null,
+    openAiConnected: true,
+    openAiStatusLabel: "Connected",
+    lastSyncedAt: "2026-05-30T00:00:00.000Z",
+    warnings: [],
+    pdpIntelligence: null,
+    supplierContext: {
+      matched: true,
+      matchedSku: "ROC949",
+      matchConfidence: 1,
+      matchReason: "exact_supplier_sku_match",
+      platform: "rocktomic",
+      inventoryAvailable: true,
+      lastSupplierCheckAt: "2026-05-30T00:00:00.000Z",
+      product: {
+        supplier: "Rocktomic",
+        sku: "ROC949",
+        productName: "Premium Magnesium Glycinate Gummies",
+        category: "Premium Gummies",
+        labelSize: "2.25",
+        containerSize: "60 gummies",
+        productWeight: "8 oz",
+        servingSize: "1 gummy",
+        servingsPerContainer: "60",
+        activeIngredients: ["Magnesium (as Magnesium Glycinate)"],
+        amountPerServing: "Magnesium (as Magnesium Glycinate) 30mg",
+        ingredientHighlights: ["Magnesium glycinate"],
+        productFeatures: ["Premium magnesium glycinate gummies"],
+        otherIngredients: "Glucose syrup, sugar",
+        allergenDietaryAttributes: ["Gluten-Free"],
+        sourceDiagnostics: ["coa_link_status: extracted"],
+        coaLinkStatus: "extracted",
+        coaLinkError: null,
+        coa: {
+          status: "available",
+          url: "https://example.com/ROC949-COA.pdf",
+          expiresAt: null,
+          testingCategories: [],
+          verificationStatus: "pending",
+        },
+        labelTemplate: { status: "available", url: "https://example.com/templates.html" },
+        mockup: { status: "available", url: "https://example.com/templates.html" },
+        certifications: ["GMP Facility"],
+        dietaryAttributes: ["Vegan"],
+        manufacturingClaims: ["Made in USA"],
+        supplementFacts: {
+          status: "available",
+          value:
+            "Serving Size: 1 gummy | Servings Per Container: 60 | Magnesium (as Magnesium Glycinate): 30mg",
+        },
+        suggestedUse: { status: "pending_source", value: null },
+        warnings: { status: "pending_source", value: null },
+        inventoryStatus: "in_stock",
+        discontinuedStatus: "active",
+        pricingStatus: "current",
+        policyStatus: "available",
+        pricing: {
+          wholesaleCost: 12.47,
+          msrp: 39.99,
+          estimatedProfit: 27.52,
+          marginPercent: 68.82,
+          currency: "USD",
+          sourceStatus: "available",
+        },
+        shipping: {
+          shipsFrom: "US",
+          processingTime: "1-3 business days",
+          shippingTime: "3-7 business days",
+          returnPolicy: "Configured",
+          fulfillmentStatus: "platform_managed",
+        },
+        lastSyncedAt: "2026-05-30T00:00:00.000Z",
+        sourceVersion: "test",
+        sourceUpdatedAt: "2026-05-30T00:00:00.000Z",
+      },
+    },
+  };
+}
+
+describe("ecomviper product editor supplier field mapping", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+  });
+
+  it("pre-populates ingredient model and COA link from supplier mapping", async () => {
+    await act(async () => {
+      root.render(<EcomViperProductEditorClient initialState={createInitialState()} />);
+    });
+
+    const ingredientsTab = Array.from(container.querySelectorAll("button")).find((node) =>
+      node.textContent?.includes("Ingredients")
+    ) as HTMLButtonElement;
+    await act(async () => {
+      ingredientsTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Magnesium (as Magnesium Glycinate)");
+    expect(container.textContent).toContain("Serving Size");
+    expect(container.querySelector('input[value="1 gummy"]')).not.toBeNull();
+    expect(container.querySelector('input[value="60"]')).not.toBeNull();
+    expect(container.textContent).toContain("Glucose syrup, sugar");
+    expect(container.textContent).toContain("coa_link_status: extracted");
+    expect(container.textContent).toContain("COA Link: Open");
+  });
+});
+

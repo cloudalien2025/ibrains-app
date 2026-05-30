@@ -39,13 +39,26 @@ function supplierFixture(): RocktomicSupplierProduct {
     labelSize: null,
     containerSize: "60 gummies",
     productWeight: null,
+    servingSize: "1 gummy",
+    servingsPerContainer: "60",
+    activeIngredients: ["Magnesium (as Magnesium Glycinate)"],
+    amountPerServing: "Magnesium (as Magnesium Glycinate) 30mg",
+    otherIngredients: "Glucose syrup, sugar",
+    ingredientHighlights: ["Magnesium glycinate"],
+    productFeatures: ["Premium magnesium glycinate gummies"],
+    sourceDiagnostics: ["catalog_pdf_field_model: deterministic_sku_block_v1"],
+    coaLinkStatus: "extracted",
+    coaLinkError: null,
     coa: { status: "pending_source", url: null },
     labelTemplate: { status: "configured", url: null },
     mockup: { status: "pending_source", url: null },
     certifications: ["GMP Facility"],
     dietaryAttributes: ["Gluten-Free"],
     manufacturingClaims: ["Third-party tested ingredients"],
-    supplementFacts: { status: "pending_source", value: null },
+    supplementFacts: {
+      status: "available",
+      value: "Serving Size: 1 gummy | Servings Per Container: 60 | Magnesium (as Magnesium Glycinate): 30mg",
+    },
     suggestedUse: { status: "pending_source", value: null },
     warnings: { status: "pending_source", value: null },
     inventoryStatus: "unknown",
@@ -130,6 +143,9 @@ describe("shopify PDP intelligence generation", () => {
     expect(result.ai_product_summary.toLowerCase()).not.toContain("cure");
     expect(result.ai_product_summary.toLowerCase()).not.toContain("rocktomic");
     expect(result.inventory_status).not.toContain("3248");
+    expect(result.serving_size).toBe("1 gummy");
+    expect(result.servings_per_container).toBe("60");
+    expect(result.ingredients.join(" ")).toContain("Magnesium (as Magnesium Glycinate)");
   });
 
   it("sanitizes supplier names from shopper-facing output fields", async () => {

@@ -1109,6 +1109,42 @@ Warning:
 
 ## Sprint Completion Updates
 
+- Sprint: `Hotfix Sprint 009.3` - `In Progress`
+- Title: `Deterministic Catalog Field Extraction + COA Link Mapping`
+- Branch: `hotfix-009-3-catalog-field-extraction-coa-mapping`
+- Root cause: `catalog_pdf` source was configured/fetch-checked only, but parsing was explicitly deferred (`parsed = reference.id !== "catalog_pdf"`), so Product Editor received sparse seeded supplier fields and showed `Unknown` for mapped ingredient/COA fields.
+- Route behavior: `no route change; ingestion + supplier mapping + Product Editor/PDP generation grounding fixes only`
+- Current implementation files:
+  - `lib/ecomviper/dropshipping/rocktomic-source-ingestion.ts`
+  - `lib/ecomviper/dropshipping/rocktomic-supplier-intelligence.ts`
+  - `lib/ecomviper/shopify/shopify-pdp-intelligence-generator.ts`
+  - `app/ecomviper/products/[productId-or-handle]/product-editor-client.tsx`
+  - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+  - `tests/ecomviper_pdp_intelligence_generation.test.ts`
+  - `tests/ecomviper_product_editor_source_mapping.test.tsx`
+  - `planning/apps/ecomviper/shopify/product-editor-architecture.md`
+  - `planning/apps/ecomviper/shopify/pdp-intelligence.md`
+  - `planning/apps/ecomviper/shopify/coa-architecture.md`
+  - `planning/apps/ecomviper/shopify/architecture.md`
+  - `planning/state.md`
+- Validation results (local):
+  - `focused tests passed`:
+    - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+    - `tests/ecomviper_pdp_intelligence_generation.test.ts`
+    - `tests/ecomviper_product_editor_source_mapping.test.tsx`
+  - `npm run build`: `passed`
+  - `git diff --check`: `passed`
+  - `npm test`: `failed on unrelated baseline suites (10 failing tests outside hotfix scope)`
+- MR URL: `pending`
+- Pipeline URL/status: `pending`
+- Merge commit SHA: `pending`
+- Deployed SHA: `pending`
+- Browser verification: `pending`
+- Final status: `awaiting commit + MR/pipeline + merge + production deploy + log/browser verification`
+- Risks/follow-ups:
+  - Deterministic ingredient facts currently include SKU model overlay for `ROC949` while PDF text OCR/table extraction remains out of scope for this hotfix.
+  - Complete GitLab/prod/browser closure steps require environment access and credentials.
+
 - Sprint: `Walmart Sprint 006` - `Completed`
 - Title: `Walmart AI Visibility Payload Fixture Contract`
 - MR: `!197 (https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/197)`
