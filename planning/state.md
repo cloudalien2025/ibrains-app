@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-05-29 (UTC)
+Last updated: 2026-05-30 (UTC)
 
 ## Program Status
 
@@ -34,7 +34,79 @@ Last updated: 2026-05-29 (UTC)
 - Hub Sprint 004: In progress (`sprint-004-ecomviper-hub-public-surface-architecture`, planning-only public/private surface and domain/infrastructure architecture update).
 - Shopify Sprint 009: Completed and merged (`sprint-009-source-grounded-product-editor`, source-grounded product intelligence + Product Editor redesign, production deployed).
 - Shopify Hotfix Sprint 009.1: Completed and merged (`hotfix-009-1-brains-auth-redirect`, production auth redirect stall fix for `/brains` blank page, production deployed).
-- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.1 closure).
+- Shopify Hotfix Sprint 009.2: Completed and merged (`hotfix-009-2-ibrains-dashboard-navigation`, restored `/brains` launcher and removed user-facing BrainOS branding, production deployed).
+- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.2 closure).
+
+## Sprint Completion Log: Shopify Hotfix Sprint 009.2 Production Closure
+
+- Sprint/lane: `Shopify Hotfix Sprint 009.2` (`hotfix-009-2-ibrains-dashboard-navigation`) - closed.
+- Branch: `hotfix-009-2-ibrains-dashboard-navigation`.
+- Root cause:
+  - Hotfix 009.1 temporarily redirected `/brains` to `/ecomviper`, which created a navigation loop when operators clicked the EcomViper back link to `/brains`.
+  - User-facing naming still exposed `BrainOS` branding (`iBrains BrainOS Dashboard`) instead of the intended launcher name.
+- Chosen fix:
+  - restored `/brains` as a real launcher route with rendered app cards and no `/ecomviper` redirect.
+  - standardized user-facing naming to `iBrains Dashboard` and updated back-link copy to `← iBrains Dashboard`.
+  - replaced merchant-facing Rocktomic wording in primary EcomViper dashboard UI with supplier-neutral labels (`Supplier Feed`, `Supplier Records`, `Open supplier diagnostics`, `Matched`).
+- Files changed:
+  - `app/(shell)/brains/page.tsx`
+  - `app/(shell)/brains/[id]/page.tsx`
+  - `app/(shell)/error.tsx`
+  - `app/ecomviper/ecomviper-dashboard-client.tsx`
+  - `app/ecomviper/page.tsx`
+  - `app/ecomviper/products/[productId-or-handle]/product-editor-client.tsx`
+  - `components/brains/back-to-brains-link.tsx`
+  - `lib/brains/brainCatalog.ts`
+  - `docs/AUTH_CLERK_FOUNDATION.md`
+  - `planning/design.md`
+  - `planning/decisions.md`
+  - tests listed below.
+- Tests added/updated:
+  - updated:
+    - `tests/brains_route_redirect.test.ts`
+    - `tests/brains_index_contract.test.ts`
+    - `tests/brains_table_hydration_resilience.test.tsx`
+    - `tests/brain_console_ui_contract.test.ts`
+    - `tests/ecomviper_inventory_foundation_dashboard.test.tsx`
+    - `tests/ecomviper_walmart_route_contract.test.tsx`
+    - `tests/ecomviper_ebay_command_center_shell.test.tsx`
+- Validation summary:
+  - focused hotfix suites passed:
+    - `tests/brains_index_contract.test.ts`
+    - `tests/brains_route_redirect.test.ts`
+    - `tests/brains_table_hydration_resilience.test.tsx`
+    - `tests/brain_console_ui_contract.test.ts`
+    - `tests/ecomviper_inventory_foundation_dashboard.test.tsx`
+    - `tests/ecomviper_walmart_route_contract.test.tsx`
+    - `tests/proxy_apps_auth_protection.test.ts`
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+  - `npm test`: failed on unrelated pre-existing baseline suites outside hotfix scope (CasaFlix/SiteForge/Walmart/frontdoor baseline families); hotfix-focused suites passed.
+- MR: `!236` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/236`).
+- MR pipeline: `2563038331` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2563038331`).
+- Main/deploy pipeline: `2563041020` (status: `success`, includes `build_release` + `deploy_production`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2563041020`).
+- Merge commit SHA: `62e8242d47f4c06a670139c5bbb413cbc1426b34`.
+- Production deployed commit SHA: `62e8242d47f4c06a670139c5bbb413cbc1426b34`.
+- Production/runtime status:
+  - `GET https://app.ibrains.ai/api/meta/release` reports `git_sha=62e8242d47f4c06a670139c5bbb413cbc1426b34`, `build_id=2563041020`.
+  - `GET https://app.ibrains.ai/api/health` returned `200` with `ok: true`.
+  - `systemctl is-active ibrains-app` returned `active`.
+- Log inspection summary:
+  - `journalctl -u ibrains-app` shows clean restart aligned with deploy window (`2026-05-30 00:40 UTC`).
+  - app log tail shows normal `next start` startup and ready output.
+  - nginx error log tail shows no new hotfix-specific auth/runtime faults.
+- Browser verification status:
+  - signed-out checks (`2026-05-30 00:41 UTC`):
+    - `https://app.ibrains.ai/brains` -> `307` to sign-in with preserved `redirect_url`.
+    - `https://app.ibrains.ai/ecomviper` -> `307` to sign-in with preserved `redirect_url`.
+    - `https://app.ibrains.ai/ecomviper/products/does-not-exist` -> `307` to sign-in with preserved `redirect_url`.
+  - authenticated browser verification remains follow-up for a signed-in session:
+    - confirm `/brains` launcher renders cards and does not redirect to `/ecomviper`.
+    - confirm `/ecomviper` back-link returns to `/brains` without loop.
+    - confirm no browser console errors.
+- Final status: closed (MR merged + green pipelines + production deploy + runtime/log checks + signed-out browser verification + closure metadata recorded).
+- Risks/follow-ups:
+  - signed-in production browser walkthrough remains required to capture visual/no-console-error verification of launcher and no-loop navigation.
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 009.1 Production Closure
 
