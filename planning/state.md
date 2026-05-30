@@ -44,7 +44,7 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Sprint 010: Completed and merged (`sprint-010-ecomviper-regression-hardening`, `/ecomviper` load-path optimization + CI verify guardrail expansion).
 - Shopify Hotfix Sprint 010.1: Completed and merged (`hotfix-010-1-ecomviper-saturation-swr`, Rocktomic stale-while-revalidate cache + duplicate-source fetch dedupe + disconnected-workspace ingestion skip, production deployed).
 - Shopify Stabilization Sprint 011: In progress (`stabilization-ecomviper-performance-architecture-audit`, end-to-end performance/architecture/production-safety audit and hardening).
-- Current recommended sprint: `Shopify Sprint 011 planning` (next scoped execution after Sprint 010 closure).
+- Current recommended sprint: `Manual signed-in desktop/mobile verification for Emergency Auth Runtime Recovery`, then resume `Shopify Sprint 011 planning`.
 
 ## Active Sprint Note: Shopify Stabilization Sprint 011 (In Progress)
 
@@ -104,15 +104,85 @@ Last updated: 2026-05-30 (UTC)
   - added safe formatter helpers:
     - `lib/ui/safe-formatters.ts`
     - applied to dashboard/settings/rocktomic/product-editor client rendering.
-  - hardened `/ecomviper` supplier snapshot call to cache-safe mode with async background refresh:
+  - hardened `/ecomviper` supplier snapshot call to cache-only mode during navigation:
     - `allowRefresh: false`
-    - `triggerBackgroundRefresh: true`
+    - `triggerBackgroundRefresh: false`
   - hardened `/api/meta/release` non-null fallback behavior + diagnostics.
   - switched release metadata writes to atomic script in CI/deploy:
     - `scripts/write_release_metadata.sh`
     - `.gitlab-ci.yml` updated to call script.
   - added production watchdog script:
     - `scripts/production_smoke_check.sh`.
+
+
+## Emergency Auth Runtime Recovery Deployment Log
+
+- Sprint/lane: `Emergency Auth Runtime Recovery` (`emergency-auth-runtime-recovery-no-feature-work`) - deployed; manual signed-in browser verification still required before operational closure.
+- Date: `2026-05-30 (UTC)`.
+- Incident/root cause findings:
+  - `/brains` still imported a client `BrainsTable` that hydrated `/api/brains/*/stats` after render, violating the launcher-only route contract and adding protected API/client hydration risk to the post-auth path.
+  - `/ecomviper` had top-level imports for DB-backed Shopify status/import/OpenAI modules and supplier ingestion diagnostics; production logs showed Turbopack runtime failures around missing external package alias `pg-587764f78a6c7a9c`, which could crash signed-in server render paths instead of rendering a safe fallback.
+  - production logs also showed stale/partial Turbopack client manifest boundary errors; deploy builds were not explicitly cleaning `.next` before rebuild.
+  - signed-out redirects were preserving absolute `redirect_url` values; recovery changed them to relative app paths such as `/brains` and `/ecomviper` to reduce host/loop drift.
+- Fixes shipped:
+  - made `/brains` a server-rendered static iBrains Dashboard launcher with no client hooks, stats fetch, storage access, supplier imports, EcomViper dashboard imports, or product editor imports.
+  - added `/brains` route error boundary.
+  - changed protected-route sign-in redirects to relative `redirect_url` values.
+  - guarded `/ecomviper` Shopify/OpenAI/product imports and calls with soft timeouts and safe fallback warnings.
+  - changed `/ecomviper` supplier diagnostics to cache-only during navigation (`allowRefresh: false`, `triggerBackgroundRefresh: false`).
+  - added clean `.next` rebuild in GitLab build/deploy jobs.
+  - strengthened `/api/meta/release` with `deployed_at` and git commit timestamp fallback, plus smoke checks for non-null `git_sha`/`build_id`.
+  - updated auth, deployment, production hardening, launcher design, and supplier/performance docs.
+- Files changed in MR:
+  - `.gitlab-ci.yml`
+  - `app/(shell)/brains/_components/BrainsTable.tsx`
+  - `app/(shell)/brains/error.tsx`
+  - `app/api/meta/release/route.ts`
+  - `app/ecomviper/page.tsx`
+  - `proxy.ts`
+  - `scripts/prod_smoke.sh`
+  - `scripts/production_smoke_check.sh`
+  - docs/planning/tests listed in MR `!255`.
+- Validation summary:
+  - focused emergency suites: passed (`38` tests across brains/proxy/ecomviper/formatters/release/smoke/deploy contracts).
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+  - `npm test`: run; failed in unrelated baseline suites outside emergency scope (`ecomviper_walmart_products_persistence`, `studio_casahud_media_planning_engine`, `casahud_ai_channel_engine`, `studio_casahud_youtube_package_engine`, `siteforge_command_center_shell`, `walmart/compliance`, `homepage_layout_contract`, `frontdoor_env_copy_contract`).
+- MR: `!255` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/255`).
+- MR pipeline: `2564194408` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2564194408`).
+- Merge commit SHA: `f8c5a4d82a15f2b029ef23386b2a69d85d2dff2a`.
+- Main/deploy pipeline: `2564196790` (status: `success`, includes `deploy_production`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2564196790`).
+- Deployed SHA/build verification (`2026-05-30 18:31 UTC`):
+  - `/api/meta/release` returned `git_sha=f8c5a4d82a15f2b029ef23386b2a69d85d2dff2a`, `build_id=2564196790`, `deployed_at=2026-05-30T18:29:22Z`, `release_metadata_complete=true`.
+- Production route timings after deploy (`2026-05-30 18:31 UTC`):
+  - `/` -> `200`, `0.089s`.
+  - `/sign-in` -> `200`, `0.076s`.
+  - `/api/health` -> `200`, `0.067s`.
+  - `/api/meta/release` -> `200`, `0.071s`.
+  - `/brains` -> `307` to `/sign-in?redirect_url=%2Fbrains`, `0.070s` signed-out.
+  - `/ecomviper` -> `307` to `/sign-in?redirect_url=%2Fecomviper`, `0.068s` signed-out.
+  - `/ecomviper/settings` -> `307`, `0.074s` signed-out.
+  - `/ecomviper/dropshipping/rocktomic` -> `307`, `0.080s` signed-out.
+- Production smoke/log/socket inspection after deploy:
+  - `scripts/production_smoke_check.sh app.ibrains.ai` passed.
+  - service active.
+  - `CLOSE-WAIT=0`; socket states after route checks: `1 LISTEN`, `18 TIME-WAIT`, no CLOSE-WAIT growth.
+  - app log after the post-deploy `next start` contained no new error matches.
+  - journal since deploy showed clean stop/start.
+  - nginx generic error log had no entries after deploy.
+- Branch deletion status:
+  - remote source branch: deleted by GitLab merge.
+  - local source branch: deleted via `git branch -d emergency-auth-runtime-recovery-no-feature-work`.
+- Final local branch/status before state-update branch:
+  - `git switch main`
+  - `git pull --ff-only`
+  - `git status`: `## main...origin/main` clean.
+- Browser verification status:
+  - Desktop signed-in path `/sign-in -> /brains -> /ecomviper -> /brains`: pending manual verification; no production signed-in browser session is provisioned in this execution environment.
+  - Mobile signed-in path: pending manual verification; no mobile Safari/Chrome access is available in this execution environment.
+  - This emergency lane must not be considered operationally closed until those manual checks are recorded.
+- Recommended next action:
+  - complete and record signed-in desktop/mobile browser verification, then resume Shopify Sprint 011 planning/hardening.
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 010.1 EcomViper Saturation SWR Guard
 
