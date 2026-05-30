@@ -203,6 +203,8 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
   const pricingStatusLabel = supplierProduct?.pricing?.pricingStatusLabel || "unknown";
   const hasSelectedTierWholesale =
     Boolean(selectedMembershipTier) && typeof supplierProduct?.pricing?.wholesaleCost === "number";
+  const supplierSyncRequired = initialState.supplierContext.syncRequired;
+  const supplierSyncMessage = initialState.supplierContext.syncMessage;
 
   async function postAction(action: "generate" | "save", nextRecord?: ShopifyPdpIntelligenceRecord) {
     const payload =
@@ -314,6 +316,11 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
           <p className="mt-2 text-xs text-[#64748B]">
             Last generated: {asIso(record.last_generated_at)} · Last edited: {asIso(record.last_edited_at)} · Last supplier check: {asIso(initialState.supplierContext.lastSupplierCheckAt)}
           </p>
+          {supplierSyncRequired ? (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {supplierSyncMessage || "Supplier data has not been synced for this SKU. Run source sync."}
+            </p>
+          ) : null}
           {statusMessage ? <p className="mt-2 text-sm text-[#334155]">{statusMessage}</p> : null}
         </section>
 
@@ -477,6 +484,11 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                     Select membership tier in Settings to calculate cost and profit.
                   </p>
                 ) : null}
+                {supplierSyncRequired ? (
+                  <p className="text-sm text-amber-800 md:col-span-2">
+                    Supplier data has not been synced for this SKU. Run source sync.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -618,6 +630,9 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 <p>Last Inventory Sync: {asIso(initialState.supplierContext.lastSupplierCheckAt)}</p>
                 {!hasSelectedTierWholesale ? (
                   <p>Select membership tier in Settings to calculate cost and profit.</p>
+                ) : null}
+                {supplierSyncRequired ? (
+                  <p>Supplier data has not been synced for this SKU. Run source sync.</p>
                 ) : null}
               </div>
             </section>

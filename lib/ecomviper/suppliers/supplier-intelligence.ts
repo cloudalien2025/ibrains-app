@@ -15,6 +15,7 @@ export interface SupplierCatalogSnapshot {
   products: RocktomicSupplierProduct[];
   inventoryAvailable: boolean;
   lastCheckedAt: string;
+  syncStatus: string;
 }
 
 export interface SupplierSkuMatchResult {
@@ -23,6 +24,7 @@ export interface SupplierSkuMatchResult {
   match: RocktomicSkuMatchResult;
   inventoryAvailable: boolean;
   lastCheckedAt: string;
+  syncStatus: string;
 }
 
 export async function getPrimarySupplierCatalogSnapshot(options?: {
@@ -39,6 +41,7 @@ export async function getPrimarySupplierCatalogSnapshot(options?: {
     products: snapshot.products,
     inventoryAvailable: snapshot.inventoryAvailable,
     lastCheckedAt: snapshot.lastCheckedAt,
+    syncStatus: snapshot.syncStatus,
   };
 }
 
@@ -57,5 +60,6 @@ export async function matchPrimarySupplierBySkus(
     match: matchRocktomicBySkus(skus, snapshot.products),
     inventoryAvailable: snapshot.inventoryAvailable,
     lastCheckedAt: snapshot.lastCheckedAt,
+    syncStatus: snapshot.syncStatus,
   };
 }

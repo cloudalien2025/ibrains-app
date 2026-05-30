@@ -44,6 +44,7 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Sprint 010: Completed and merged (`sprint-010-ecomviper-regression-hardening`, `/ecomviper` load-path optimization + CI verify guardrail expansion).
 - Shopify Hotfix Sprint 010.1: Completed and merged (`hotfix-010-1-ecomviper-saturation-swr`, Rocktomic stale-while-revalidate cache + duplicate-source fetch dedupe + disconnected-workspace ingestion skip, production deployed).
 - Shopify Stabilization Sprint 011: In progress (`stabilization-ecomviper-performance-architecture-audit`, end-to-end performance/architecture/production-safety audit and hardening).
+- Shopify Stabilization Sprint 009.6: In progress (`stabilization-009-6-supplier-data-pipeline-normalized-sku-intelligence`, normalized supplier sync pipeline + SKU intelligence persistence hardening).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Emergency Auth Runtime Recovery`, then resume `Shopify Sprint 011 planning`.
 
 ## Active Sprint Note: Shopify Stabilization Sprint 011 (In Progress)

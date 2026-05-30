@@ -25,3 +25,8 @@ Last updated: 2026-05-29 (UTC)
 - `out_of_stock` -> `Currently Unavailable`
 - `unknown` -> `Availability Unknown`
 - `source_unavailable` -> `Inventory Status Unavailable`
+
+## Stabilization 009.6 Sync Dependency
+
+- Inventory status is persisted from sync runs into `supplier_inventory_normalized`.
+- Route render reads qualitative status only and never infers unit quantities.

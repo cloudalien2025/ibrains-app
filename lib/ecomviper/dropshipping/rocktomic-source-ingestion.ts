@@ -11,6 +11,20 @@ import {
   type RocktomicSupplierProduct,
 } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
 import { getSupplierMembershipTierSelectionForUser } from "@/lib/ecomviper/settings/supplier-membership";
+import {
+  acquireSupplierSyncLock,
+  clearRocktomicNormalizedStoreForTests,
+  getSupplierNormalizedSnapshot,
+  persistSupplierNormalizedSnapshot,
+  releaseSupplierSyncLock,
+  type PersistedSupplierAssetsNormalized,
+  type PersistedSupplierInventoryNormalized,
+  type PersistedSupplierPricingNormalized,
+  type PersistedSupplierProductNormalized,
+  type PersistedSupplierSourceStatus,
+  type PersistedSupplierSyncRun,
+  type SupplierSourceSyncStatus,
+} from "@/lib/ecomviper/dropshipping/rocktomic-normalized-store";
 
 const ROCKTOMIC_INGESTION_TTL_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 12_000;
@@ -74,7 +88,9 @@ export interface RocktomicSourceIngestionDiagnostic {
   fetchable: boolean;
   parsed: boolean;
   recordCount: number;
+  syncStatus: SupplierSourceSyncStatus;
   lastCheckedAt: string;
+  lastSuccessfulSyncAt: string | null;
   lastError: string | null;
   sourceUrl: string | null;
   fetchUrl: string | null;
@@ -92,6 +108,16 @@ export interface RocktomicSourceIngestionSnapshot {
   membershipTiersDetected: string[];
   sourceDiagnostics: RocktomicSourceIngestionDiagnostic[];
   lastCheckedAt: string;
+  lastSuccessfulSyncAt: string | null;
+  lastAttemptedSyncAt: string | null;
+  syncStatus: SupplierSourceSyncStatus;
+  lastSyncError: string | null;
+  syncRunSummary: {
+    productsParsedCount: number;
+    inventoryRecordsParsedCount: number;
+    pricingRecordsParsedCount: number;
+    assetRecordsParsedCount: number;
+  } | null;
   cacheState?: "fresh" | "stale" | "seed_fallback";
   refreshState?: "idle" | "refreshing";
 }
@@ -148,13 +174,29 @@ function mapInventoryStatus(value: string): RocktomicInventoryStatus {
   return "unknown";
 }
 
-function toGoogleSheetCsvUrl(url: string): string | null {
+export function toInventoryAvailabilityDisplay(status: string): string {
+  if (status === "in_stock") return "Available";
+  if (status === "low_stock") return "Limited Availability";
+  if (status === "out_of_stock") return "Currently Unavailable";
+  if (status === "source_unavailable") return "Inventory Status Unavailable";
+  return "Availability Unknown";
+}
+
+function parseGoogleSheetGid(parsed: URL): string {
+  const direct = parsed.searchParams.get("gid");
+  if (direct?.trim()) return direct.trim();
+  const hashMatch = parsed.hash.match(/gid=([0-9]+)/i);
+  if (hashMatch?.[1]) return hashMatch[1];
+  return "0";
+}
+
+export function toGoogleSheetCsvUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
     const match = parsed.pathname.match(/\/spreadsheets\/d\/([^/]+)/i);
     if (!match?.[1]) return null;
-    const gid = parsed.searchParams.get("gid") || "0";
-    return `https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq?tqx=out:csv&gid=${encodeURIComponent(gid)}`;
+    const gid = parseGoogleSheetGid(parsed);
+    return `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv&gid=${encodeURIComponent(gid)}`;
   } catch {
     return null;
   }
@@ -637,7 +679,7 @@ function buildProduct(input: {
     dietaryAttributes: pdfFields?.dietaryAttributes ?? [],
     manufacturingClaims: pdfFields?.manufacturingClaims ?? [],
     supplementFacts: {
-      status: pdfFields?.supplementFactsPanel ? "available" : "pending_source",
+      status: pdfFields?.supplementFactsPanel ? "available" : pdfFields ? "ocr_required" : "pending_source",
       value: pdfFields?.supplementFactsPanel ?? null,
     },
     suggestedUse: { status: "pending_source", value: null },
@@ -711,8 +753,13 @@ function buildSeedFallbackSnapshot(input: {
   selectedMembershipTier: string | null;
   refreshScheduled: boolean;
   reason: string;
+  syncStatus?: SupplierSourceSyncStatus;
+  lastAttemptedSyncAt?: string | null;
+  lastSuccessfulSyncAt?: string | null;
+  lastSyncError?: string | null;
 }): RocktomicSourceIngestionSnapshot {
   const products = listRocktomicSupplierProducts();
+  const syncStatus = input.syncStatus || "never_synced";
   return {
     supplier: "Rocktomic",
     products,
@@ -730,14 +777,371 @@ function buildSeedFallbackSnapshot(input: {
       fetchable: false,
       parsed: false,
       recordCount: 0,
+      syncStatus,
       lastCheckedAt: input.lastCheckedAt,
+      lastSuccessfulSyncAt: input.lastSuccessfulSyncAt || null,
       lastError: input.reason,
       sourceUrl: reference.sourceUrl,
       fetchUrl: null,
     })),
     lastCheckedAt: input.lastCheckedAt,
+    lastSuccessfulSyncAt: input.lastSuccessfulSyncAt || null,
+    lastAttemptedSyncAt: input.lastAttemptedSyncAt || null,
+    syncStatus,
+    lastSyncError: input.lastSyncError || input.reason,
+    syncRunSummary: null,
     cacheState: "seed_fallback",
     refreshState: input.refreshScheduled ? "refreshing" : "idle",
+  };
+}
+
+function asFallbackUserKey(userId: string | null | undefined): string {
+  const normalized = (userId || "").trim();
+  return normalized || "__global__";
+}
+
+function toSourceSyncStatus(input: {
+  configured: boolean;
+  fetchable: boolean;
+  parsed: boolean;
+  lastError: string | null;
+  extractionStatusHint?: string | null;
+}): SupplierSourceSyncStatus {
+  if (!input.configured) return "never_synced";
+  if (input.lastError) {
+    const normalized = input.lastError.toLowerCase();
+    if (normalized.includes("403") || normalized.includes("401")) return "source_auth_required";
+    if (normalized.includes("404") || normalized.includes("not found")) return "source_inaccessible";
+    return "sync_failed";
+  }
+  if (input.extractionStatusHint === "ocr_required") return "ocr_required";
+  if (input.parsed && input.fetchable) return "synced";
+  if (input.fetchable && !input.parsed) return "parsing_partial";
+  if (!input.fetchable) return "source_inaccessible";
+  return "never_synced";
+}
+
+function toPersistedSourceStatuses(input: {
+  diagnostics: RocktomicSourceIngestionDiagnostic[];
+  lastSuccessfulSyncAt: string | null;
+}): PersistedSupplierSourceStatus[] {
+  return input.diagnostics.map((diagnostic) => ({
+    sourceId: diagnostic.id,
+    sourceLabel: diagnostic.label,
+    configured: diagnostic.configured,
+    fetchable: diagnostic.fetchable,
+    parsed: diagnostic.parsed,
+    recordCount: diagnostic.recordCount,
+    syncStatus: diagnostic.syncStatus,
+    sourceUrl: diagnostic.sourceUrl,
+    fetchUrl: diagnostic.fetchUrl,
+    lastCheckedAt: diagnostic.lastCheckedAt,
+    lastSuccessfulSyncAt: input.lastSuccessfulSyncAt,
+    lastError: diagnostic.lastError,
+    metadata: {},
+  }));
+}
+
+function toPersistedProducts(input: {
+  products: RocktomicSupplierProduct[];
+  lastSyncedAt: string;
+}): PersistedSupplierProductNormalized[] {
+  return input.products.map((product) => ({
+    sku: product.sku,
+    productName: product.productName,
+    category: product.category || null,
+    labelSize: product.labelSize ?? null,
+    containerSize: product.containerSize ?? null,
+    productWeight: product.productWeight ?? null,
+    productForm: null,
+    supplementFactsRaw: product.supplementFacts.value ?? null,
+    supplementFactsText: product.supplementFacts.value ?? null,
+    servingSize: product.servingSize ?? null,
+    servingsPerContainer: product.servingsPerContainer ?? null,
+    activeIngredients: product.activeIngredients ?? [],
+    amountPerServing: product.amountPerServing ?? null,
+    otherIngredients: product.otherIngredients ?? null,
+    ingredientHighlightsSource: product.ingredientHighlights ?? [],
+    keyProductFeatures: product.productFeatures ?? [],
+    dietaryAttributes: product.dietaryAttributes ?? [],
+    manufacturingClaims: product.manufacturingClaims ?? [],
+    certifications: product.certifications ?? [],
+    warnings: product.warnings?.value ?? null,
+    suggestedUse: product.suggestedUse?.value ?? null,
+    coaUrl: product.coa.url ?? null,
+    coaStatus: product.coa.status ?? null,
+    coaExtractionStatus:
+      product.coaLinkStatus === "extraction_failed" ? "extraction_failed" : product.coaLinkStatus === "extracted" ? "extracted" : "not_present",
+    coaExtractionError: product.coaLinkError ?? null,
+    labelTemplateUrl: product.labelTemplate.url ?? null,
+    mockupUrl: product.mockup.url ?? null,
+    sourceCatalogPage: null,
+    sourceVersion: product.sourceVersion ?? null,
+    extractionStatus: product.supplementFacts.status === "ocr_required" ? "ocr_required" : product.coaLinkStatus || "unknown",
+    extractionErrors: product.sourceDiagnostics?.filter((entry) => entry.toLowerCase().includes("error")) ?? [],
+    lastSyncedAt: input.lastSyncedAt,
+    rawPayload: product as unknown as Record<string, unknown>,
+  }));
+}
+
+function toPersistedInventory(input: {
+  products: RocktomicSupplierProduct[];
+  sourceUpdatedAt: string;
+  lastSyncedAt: string;
+}): PersistedSupplierInventoryNormalized[] {
+  return input.products.map((product) => ({
+    sku: product.sku,
+    inventoryStatusRaw: product.inventoryStatus,
+    inventoryStatusNormalized: product.inventoryStatus || "unknown",
+    availabilityDisplay: toInventoryAvailabilityDisplay(product.inventoryStatus || "unknown"),
+    sourceReport: "Inventory Report",
+    sourceUpdatedAt: input.sourceUpdatedAt,
+    lastSyncedAt: input.lastSyncedAt,
+    extractionStatus: "synced",
+    extractionErrors: [],
+  }));
+}
+
+function toPersistedPricing(input: {
+  products: RocktomicSupplierProduct[];
+  lastSyncedAt: string;
+}): PersistedSupplierPricingNormalized[] {
+  return input.products.map((product) => ({
+    sku: product.sku,
+    productName: product.productName,
+    category: product.category,
+    detectedMembershipTiers: product.pricing?.membershipTiersDetected ?? [],
+    costsByMembershipTier: product.pricing?.membershipTierCosts ?? {},
+    msrp: product.pricing?.msrp ?? null,
+    sourceSheet: product.pricing?.sourceSheet ?? "PLDS/MSRP",
+    sourceTab: null,
+    sourceRow: null,
+    sourceVersion: product.sourceVersion,
+    lastSyncedAt: input.lastSyncedAt,
+    extractionStatus:
+      product.pricing?.pricingStatusLabel === "source_unavailable_for_selected_membership_tier"
+        ? "parsing_partial"
+        : "synced",
+    extractionErrors:
+      product.pricing?.pricingStatusLabel === "source_unavailable_for_selected_membership_tier"
+        ? ["Cost not found for selected membership tier."]
+        : [],
+  }));
+}
+
+function toPersistedAssets(input: {
+  products: RocktomicSupplierProduct[];
+  lastSyncedAt: string;
+}): PersistedSupplierAssetsNormalized[] {
+  return input.products.map((product) => ({
+    sku: product.sku,
+    labelTemplateUrl: product.labelTemplate.url ?? null,
+    mockupUrl: product.mockup.url ?? null,
+    supplementFactsAssetUrl: null,
+    coaUrl: product.coa.url ?? null,
+    assetStatus: product.labelTemplate.url || product.mockup.url || product.coa.url ? "available" : "pending_source",
+    lastSyncedAt: input.lastSyncedAt,
+    extractionStatus:
+      product.supplementFacts.status === "ocr_required"
+        ? "ocr_required"
+        : product.coaLinkStatus === "extraction_failed"
+          ? "parsing_partial"
+          : "synced",
+    extractionErrors: product.coaLinkError ? [product.coaLinkError] : [],
+  }));
+}
+
+function toSyncSummary(snapshot: RocktomicSourceIngestionSnapshot): PersistedSupplierSyncRun {
+  const syncStatus = snapshot.sourceDiagnostics.some((entry) => entry.syncStatus === "sync_failed")
+    ? "sync_failed"
+    : snapshot.sourceDiagnostics.some((entry) => entry.syncStatus === "source_auth_required")
+      ? "source_auth_required"
+      : snapshot.sourceDiagnostics.some((entry) => entry.syncStatus === "source_inaccessible")
+        ? "source_inaccessible"
+        : snapshot.sourceDiagnostics.some((entry) => entry.syncStatus === "parsing_partial")
+          ? "parsing_partial"
+          : snapshot.sourceDiagnostics.some((entry) => entry.syncStatus === "ocr_required")
+            ? "ocr_required"
+            : "synced";
+
+  return {
+    syncStatus,
+    productsParsedCount: snapshot.productCount,
+    inventoryRecordsParsedCount: snapshot.inventorySkuCount,
+    pricingRecordsParsedCount: snapshot.catalogSkuCount,
+    assetRecordsParsedCount: snapshot.catalogExtractedSkuCount,
+    sourceDiagnostics: toPersistedSourceStatuses({
+      diagnostics: snapshot.sourceDiagnostics,
+      lastSuccessfulSyncAt: snapshot.lastSuccessfulSyncAt,
+    }),
+    attemptedAt: snapshot.lastAttemptedSyncAt || snapshot.lastCheckedAt,
+    completedAt: snapshot.lastCheckedAt,
+    lastError: snapshot.lastSyncError,
+  };
+}
+
+function snapshotFromPersisted(input: {
+  persisted: Awaited<ReturnType<typeof getSupplierNormalizedSnapshot>>;
+  selectedMembershipTier: string | null;
+}): RocktomicSourceIngestionSnapshot | null {
+  if (!input.persisted) return null;
+  const persisted = input.persisted;
+  const products: RocktomicSupplierProduct[] = persisted.products.map((product) => {
+    const inventory = persisted.inventoryBySku.get(product.sku);
+    const pricing = persisted.pricingBySku.get(product.sku);
+    const assets = persisted.assetsBySku.get(product.sku);
+    const payload = product.rawPayload as unknown as Partial<RocktomicSupplierProduct>;
+    const supplementFactsStatus = product.extractionStatus === "ocr_required" ? "ocr_required" : product.supplementFactsText ? "available" : "pending_source";
+    const selectedCostFromTier =
+      input.selectedMembershipTier && pricing?.costsByMembershipTier
+        ? pricing.costsByMembershipTier[input.selectedMembershipTier] ?? null
+        : null;
+    const firstTierCost =
+      pricing && Object.values(pricing.costsByMembershipTier).length
+        ? Object.values(pricing.costsByMembershipTier)[0] ?? null
+        : null;
+    return {
+      supplier: "Rocktomic",
+      sku: product.sku,
+      productName: product.productName,
+      category: product.category || "Uncategorized",
+      labelSize: product.labelSize,
+      containerSize: product.containerSize,
+      productWeight: product.productWeight,
+      servingSize: product.servingSize,
+      servingsPerContainer: product.servingsPerContainer,
+      activeIngredients: product.activeIngredients,
+      amountPerServing: product.amountPerServing,
+      ingredientHighlights: product.ingredientHighlightsSource,
+      productFeatures: product.keyProductFeatures,
+      otherIngredients: product.otherIngredients,
+      allergenDietaryAttributes: product.dietaryAttributes,
+      sourceDiagnostics: Array.isArray(payload.sourceDiagnostics) ? (payload.sourceDiagnostics as string[]) : [],
+      coaLinkStatus:
+        product.coaExtractionStatus === "extraction_failed"
+          ? "extraction_failed"
+          : product.coaExtractionStatus === "extracted"
+            ? "extracted"
+            : "not_present",
+      coaLinkError: product.coaExtractionError,
+      coa: {
+        status: (product.coaStatus as RocktomicSupplierProduct["coa"]["status"]) || "pending_source",
+        url: product.coaUrl,
+        expiresAt: null,
+        testingCategories: [],
+        verificationStatus: product.coaUrl ? "pending" : "unavailable",
+      },
+      labelTemplate: {
+        status: assets?.labelTemplateUrl ? "available" : "configured",
+        url: assets?.labelTemplateUrl || product.labelTemplateUrl,
+      },
+      mockup: {
+        status: assets?.mockupUrl ? "available" : "pending_source",
+        url: assets?.mockupUrl || product.mockupUrl,
+      },
+      certifications: product.certifications,
+      dietaryAttributes: product.dietaryAttributes,
+      manufacturingClaims: product.manufacturingClaims,
+      supplementFacts: {
+        status: supplementFactsStatus,
+        value: product.supplementFactsText,
+      },
+      suggestedUse: {
+        status: product.suggestedUse ? "available" : "pending_source",
+        value: product.suggestedUse,
+      },
+      warnings: {
+        status: product.warnings ? "available" : "pending_source",
+        value: product.warnings,
+      },
+      inventoryStatus: (inventory?.inventoryStatusNormalized as RocktomicInventoryStatus) || "unknown",
+      discontinuedStatus: "unknown",
+      pricingStatus: pricing?.detectedMembershipTiers?.length ? "current" : "pending_source",
+      policyStatus: "available",
+      pricing: {
+        wholesaleCost: selectedCostFromTier ?? firstTierCost ?? null,
+        msrp: pricing?.msrp ?? null,
+        estimatedProfit: null,
+        marginPercent: null,
+        currency: "USD",
+        sourceStatus: pricing?.detectedMembershipTiers?.length ? "available" : "unknown",
+        membershipTier: input.selectedMembershipTier,
+        membershipTiersDetected: pricing?.detectedMembershipTiers || [],
+        membershipTierCosts: pricing?.costsByMembershipTier || {},
+        sourceSheet: pricing?.sourceSheet || null,
+        sourceColumn: input.selectedMembershipTier || null,
+        lastCheckedAt: product.lastSyncedAt,
+        pricingStatusLabel:
+          input.selectedMembershipTier &&
+          (!pricing?.costsByMembershipTier || pricing.costsByMembershipTier[input.selectedMembershipTier] == null)
+            ? "source_unavailable_for_selected_membership_tier"
+            : input.selectedMembershipTier
+              ? "tier_pricing_mapped"
+              : "membership_tier_not_selected",
+      },
+      shipping: payload.shipping || {
+        shipsFrom: "US",
+        processingTime: "1-3 business days",
+        shippingTime: "3-7 business days",
+        returnPolicy: "Configured supplier order/refund policy available in internal diagnostics.",
+        fulfillmentStatus: "platform_managed",
+      },
+      lastSyncedAt: product.lastSyncedAt,
+      sourceVersion: product.sourceVersion || "rocktomic_normalized",
+      sourceUpdatedAt: product.lastSyncedAt,
+    };
+  });
+
+  const sourceDiagnostics: RocktomicSourceIngestionDiagnostic[] = persisted.sourceStatuses.map((status) => ({
+    id: status.sourceId as RocktomicSourceReference["id"],
+    label: status.sourceLabel,
+    configured: status.configured,
+    fetchable: status.fetchable,
+    parsed: status.parsed,
+    recordCount: status.recordCount,
+    syncStatus: status.syncStatus,
+    lastCheckedAt: status.lastCheckedAt || new Date().toISOString(),
+    lastSuccessfulSyncAt: status.lastSuccessfulSyncAt,
+    lastError: status.lastError,
+    sourceUrl: status.sourceUrl,
+    fetchUrl: status.fetchUrl,
+  }));
+
+  const latestRun = persisted.latestRun;
+  const lastCheckedAt =
+    latestRun?.completedAt ||
+    latestRun?.attemptedAt ||
+    sourceDiagnostics[0]?.lastCheckedAt ||
+    new Date().toISOString();
+
+  return {
+    supplier: "Rocktomic",
+    products,
+    productCount: products.length,
+    catalogSkuCount: products.length,
+    catalogExtractedSkuCount: products.filter((entry) => entry.coaLinkStatus === "extracted").length,
+    inventorySkuCount: persisted.inventoryBySku.size,
+    inventoryAvailable: persisted.inventoryBySku.size > 0,
+    usedSeedFallback: false,
+    membershipTiersDetected: Array.from(
+      new Set(
+        Array.from(persisted.pricingBySku.values()).flatMap((entry) => entry.detectedMembershipTiers)
+      )
+    ),
+    sourceDiagnostics,
+    lastCheckedAt,
+    lastSuccessfulSyncAt: sourceDiagnostics.find((entry) => entry.lastSuccessfulSyncAt)?.lastSuccessfulSyncAt || null,
+    lastAttemptedSyncAt: latestRun?.attemptedAt || null,
+    syncStatus: latestRun?.syncStatus || "never_synced",
+    lastSyncError: latestRun?.lastError || null,
+    syncRunSummary: latestRun
+      ? {
+          productsParsedCount: latestRun.productsParsedCount,
+          inventoryRecordsParsedCount: latestRun.inventoryRecordsParsedCount,
+          pricingRecordsParsedCount: latestRun.pricingRecordsParsedCount,
+          assetRecordsParsedCount: latestRun.assetRecordsParsedCount,
+        }
+      : null,
   };
 }
 
@@ -837,6 +1241,7 @@ export async function getRocktomicSourceIngestionSnapshot(
   const allowRefresh = options?.allowRefresh ?? true;
   const triggerBackgroundRefresh = options?.triggerBackgroundRefresh ?? true;
   const cacheKey = selectedMembershipTierKey || "__default__";
+  const fallbackUserId = asFallbackUserKey(options?.userId);
   const createSnapshotPromise = async (): Promise<RocktomicSourceIngestionSnapshot> => {
     const now = Date.now();
     const config = getRocktomicSourceConfigSnapshot();
@@ -864,7 +1269,9 @@ export async function getRocktomicSourceIngestionSnapshot(
         fetchable: false,
         parsed: false,
         recordCount: 0,
+        syncStatus: "never_synced",
         lastCheckedAt,
+        lastSuccessfulSyncAt: null,
         lastError: null,
         sourceUrl: reference.sourceUrl,
         fetchUrl: null,
@@ -934,6 +1341,13 @@ export async function getRocktomicSourceIngestionSnapshot(
         diagnostic.lastError = redactError(error);
       }
 
+      diagnostic.syncStatus = toSourceSyncStatus({
+        configured: diagnostic.configured,
+        fetchable: diagnostic.fetchable,
+        parsed: diagnostic.parsed,
+        lastError: diagnostic.lastError,
+      });
+
       sourceDiagnostics.push(diagnostic);
     }
 
@@ -948,6 +1362,16 @@ export async function getRocktomicSourceIngestionSnapshot(
         catalogPdfDiagnostic.parsed = parsed.size > 0;
         catalogPdfDiagnostic.recordCount = parsed.size;
         catalogPdfDiagnostic.lastError = parsed.size > 0 ? null : "No deterministic catalog SKU blocks parsed from PDF.";
+        const hasOcrRequired = Array.from(parsed.values()).some(
+          (entry) => !entry.supplementFactsPanel && entry.extractionStatus !== "failed"
+        );
+        catalogPdfDiagnostic.syncStatus = toSourceSyncStatus({
+          configured: catalogPdfDiagnostic.configured,
+          fetchable: catalogPdfDiagnostic.fetchable,
+          parsed: catalogPdfDiagnostic.parsed,
+          lastError: catalogPdfDiagnostic.lastError,
+          extractionStatusHint: hasOcrRequired ? "ocr_required" : null,
+        });
       }
     }
 
@@ -1026,6 +1450,46 @@ export async function getRocktomicSourceIngestionSnapshot(
         };
         });
 
+    const normalizedDiagnostics = sourceDiagnostics.map((diagnostic) => {
+      if (diagnostic.lastError) return diagnostic;
+      const reference = config.references.find((entry) => entry.id === diagnostic.id);
+      if (!reference) return diagnostic;
+      const normalizedError = diagnostic.parsed ? null : reference.status === "pending" ? "Source pending." : null;
+      return {
+        ...diagnostic,
+        lastError: normalizedError,
+        syncStatus: toSourceSyncStatus({
+          configured: reference.status === "configured" && !!reference.sourceUrl,
+          fetchable: diagnostic.fetchable,
+          parsed: diagnostic.parsed,
+          lastError: normalizedError,
+        }),
+        fetchUrl: diagnostic.fetchUrl,
+        sourceUrl: reference.sourceUrl,
+        lastCheckedAt,
+        configured: reference.status === "configured" && !!reference.sourceUrl,
+      };
+    });
+
+    const syncStatus = normalizedDiagnostics.some((entry) => entry.syncStatus === "sync_failed")
+      ? "sync_failed"
+      : normalizedDiagnostics.some((entry) => entry.syncStatus === "source_auth_required")
+        ? "source_auth_required"
+        : normalizedDiagnostics.some((entry) => entry.syncStatus === "source_inaccessible")
+          ? "source_inaccessible"
+          : normalizedDiagnostics.some((entry) => entry.syncStatus === "ocr_required")
+            ? "ocr_required"
+            : normalizedDiagnostics.some((entry) => entry.syncStatus === "parsing_partial")
+              ? "parsing_partial"
+              : "synced";
+    const lastSyncError = normalizedDiagnostics.find((entry) => entry.lastError)?.lastError || null;
+    const summary = {
+      productsParsedCount: products.length,
+      inventoryRecordsParsedCount: inventoryBySku.size,
+      pricingRecordsParsedCount: catalogRows.length,
+      assetRecordsParsedCount: catalogPdfFieldsBySku.size,
+    };
+
     const snapshot: RocktomicSourceIngestionSnapshot = {
       supplier: "Rocktomic",
       products,
@@ -1036,21 +1500,32 @@ export async function getRocktomicSourceIngestionSnapshot(
       inventoryAvailable,
       usedSeedFallback: catalogRows.length === 0,
       membershipTiersDetected: Array.from(membershipTiersDetected.values()),
-      sourceDiagnostics: sourceDiagnostics.map((diagnostic) => {
-        if (diagnostic.lastError) return diagnostic;
-        const reference = config.references.find((entry) => entry.id === diagnostic.id);
-        if (!reference) return diagnostic;
-        return {
-          ...diagnostic,
-          lastError: diagnostic.parsed ? null : reference.status === "pending" ? "Source pending." : null,
-          fetchUrl: diagnostic.fetchUrl,
-          sourceUrl: reference.sourceUrl,
-          lastCheckedAt,
-          configured: reference.status === "configured" && !!reference.sourceUrl,
-        };
-      }),
+      sourceDiagnostics: normalizedDiagnostics,
       lastCheckedAt,
+      lastSuccessfulSyncAt: syncStatus === "synced" || syncStatus === "parsing_partial" || syncStatus === "ocr_required" ? lastCheckedAt : null,
+      lastAttemptedSyncAt: lastCheckedAt,
+      syncStatus,
+      lastSyncError,
+      syncRunSummary: summary,
     };
+
+    await persistSupplierNormalizedSnapshot({
+      userId: fallbackUserId,
+      supplierId: "rocktomic",
+      products: toPersistedProducts({ products, lastSyncedAt: lastCheckedAt }),
+      inventoryRows: toPersistedInventory({
+        products,
+        sourceUpdatedAt: sourceUpdatedAt || lastCheckedAt,
+        lastSyncedAt: lastCheckedAt,
+      }),
+      pricingRows: toPersistedPricing({ products, lastSyncedAt: lastCheckedAt }),
+      assetRows: toPersistedAssets({ products, lastSyncedAt: lastCheckedAt }),
+      sourceStatuses: toPersistedSourceStatuses({
+        diagnostics: normalizedDiagnostics,
+        lastSuccessfulSyncAt: snapshot.lastSuccessfulSyncAt,
+      }),
+      run: toSyncSummary(snapshot),
+    }).catch(() => undefined);
 
     cache.set(cacheKey, {
       snapshot,
@@ -1088,6 +1563,27 @@ export async function getRocktomicSourceIngestionSnapshot(
     });
   }
 
+  if (!options?.forceRefresh) {
+    const persisted = await getSupplierNormalizedSnapshot({
+      userId: fallbackUserId,
+      supplierId: "rocktomic",
+    }).catch(() => null);
+    const persistedSnapshot = snapshotFromPersisted({
+      persisted,
+      selectedMembershipTier,
+    });
+    if (persistedSnapshot) {
+      cache.set(cacheKey, {
+        snapshot: persistedSnapshot,
+        expiresAt: now + ROCKTOMIC_INGESTION_TTL_MS,
+      });
+      return withRuntimeSnapshotState(persistedSnapshot, {
+        cacheState: "fresh",
+        refreshState: "idle",
+      });
+    }
+  }
+
   if (!options?.forceRefresh && !allowRefresh) {
     const refreshInFlight = inFlightByCacheKey.get(cacheKey);
     const shouldStartBackgroundRefresh = triggerBackgroundRefresh && !refreshInFlight;
@@ -1105,6 +1601,10 @@ export async function getRocktomicSourceIngestionSnapshot(
       lastCheckedAt: new Date(now).toISOString(),
       selectedMembershipTier,
       refreshScheduled: shouldStartBackgroundRefresh || Boolean(refreshInFlight),
+      syncStatus: "never_synced",
+      lastAttemptedSyncAt: null,
+      lastSuccessfulSyncAt: null,
+      lastSyncError: null,
       reason: shouldStartBackgroundRefresh
         ? "Source refresh scheduled in background."
         : "Source refresh deferred for request safety.",
@@ -1130,7 +1630,46 @@ export async function getRocktomicSourceIngestionSnapshot(
   }
 }
 
+export async function runRocktomicSourceSync(input: {
+  userId: string;
+  triggerKind?: "manual" | "api" | "cli";
+}): Promise<RocktomicSourceIngestionSnapshot> {
+  const lock = await acquireSupplierSyncLock({
+    userId: asFallbackUserKey(input.userId),
+    supplierId: "rocktomic",
+    ttlMs: 180_000,
+  });
+  if (!lock.acquired || !lock.token) {
+    const existing = await getRocktomicSourceIngestionSnapshot({
+      userId: input.userId,
+      allowRefresh: false,
+      triggerBackgroundRefresh: false,
+    });
+    return {
+      ...existing,
+      syncStatus: "sync_in_progress",
+      lastSyncError: "A supplier source sync is already in progress.",
+    };
+  }
+
+  try {
+    return await getRocktomicSourceIngestionSnapshot({
+      userId: input.userId,
+      forceRefresh: true,
+      allowRefresh: true,
+      triggerBackgroundRefresh: false,
+    });
+  } finally {
+    await releaseSupplierSyncLock({
+      userId: asFallbackUserKey(input.userId),
+      supplierId: "rocktomic",
+      token: lock.token,
+    }).catch(() => undefined);
+  }
+}
+
 export function clearRocktomicSourceIngestionCache(): void {
   cache = new Map<string, { expiresAt: number; snapshot: RocktomicSourceIngestionSnapshot }>();
   inFlightByCacheKey = new Map<string, Promise<RocktomicSourceIngestionSnapshot>>();
+  void clearRocktomicNormalizedStoreForTests().catch(() => undefined);
 }

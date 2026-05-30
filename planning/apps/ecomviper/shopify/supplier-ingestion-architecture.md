@@ -72,3 +72,19 @@ Current expected modes:
 2. Inventory quantity is never fabricated.
 3. Membership pricing is source-derived only.
 4. COA and supplement facts remain source-backed only.
+
+## Stabilization 009.6 Normalized Pipeline
+
+Supplier ingestion now has an explicit durable pipeline:
+
+1. Source sync trigger (`POST /api/ecomviper/supplier-sources/sync` or `scripts/ecomviper_sync_supplier_sources.sh`)
+2. Bounded fetch + parse during sync only
+3. Normalization/persistence in:
+   - `supplier_products_normalized`
+   - `supplier_inventory_normalized`
+   - `supplier_pricing_normalized`
+   - `supplier_assets_normalized`
+4. Route reads from normalized snapshot only (`allowRefresh: false`, `triggerBackgroundRefresh: false`)
+5. Product Editor + PDP generation consume normalized facts and show explicit sync-required diagnostics when missing
+
+`/ecomviper`, `/ecomviper/settings`, `/ecomviper/dropshipping/rocktomic`, Product Editor, and PDP generation remain forbidden from triggering live source downloads/parsing during page render.

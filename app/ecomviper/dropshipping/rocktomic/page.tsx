@@ -1,4 +1,6 @@
 import Link from "next/link";
+import RocktomicSourceSyncTrigger from "@/app/ecomviper/dropshipping/rocktomic/source-sync-trigger";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getRocktomicSourceIngestionSnapshot } from "@/lib/ecomviper/dropshipping/rocktomic-source-ingestion";
 import { lookupRocktomicSupplierProductBySku } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
 import { safeIsoDate } from "@/lib/ui/safe-formatters";
@@ -14,7 +16,9 @@ function asIso(value: string | null): string {
 }
 
 export default async function RocktomicDropshippingPage({ searchParams }: RocktomicDropshippingPageProps) {
+  const auth = await requireSignedInUser().catch(() => ({ userId: null, unauthorizedResponse: null }));
   const snapshot = await getRocktomicSourceIngestionSnapshot({
+    userId: auth.userId || null,
     allowRefresh: false,
     triggerBackgroundRefresh: false,
   });
@@ -39,6 +43,9 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
               Open EcomViper Settings
             </Link>
           </div>
+          <div className="mt-3">
+            <RocktomicSourceSyncTrigger />
+          </div>
         </header>
 
         <section className="grid gap-4 md:grid-cols-2">
@@ -50,6 +57,10 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
             <p className="text-sm text-[#475569]">Inventory availability: {snapshot.inventoryAvailable ? "Available" : "Unavailable"}</p>
             <p className="text-sm text-[#475569]">Fallback mode: {snapshot.usedSeedFallback ? "Enabled" : "Disabled"}</p>
             <p className="text-sm text-[#475569]">Last source check: {asIso(snapshot.lastCheckedAt)}</p>
+            <p className="text-sm text-[#475569]">Last attempted sync: {asIso(snapshot.lastAttemptedSyncAt)}</p>
+            <p className="text-sm text-[#475569]">Last successful sync: {asIso(snapshot.lastSuccessfulSyncAt)}</p>
+            <p className="text-sm text-[#475569]">Sync status: {snapshot.syncStatus}</p>
+            <p className="text-sm text-[#475569]">Last sync error: {snapshot.lastSyncError || "-"}</p>
             <p className="text-sm text-[#475569]">Cache state: {snapshot.cacheState || "unknown"}</p>
             <p className="text-sm text-[#475569]">Refresh state: {snapshot.refreshState || "idle"}</p>
           </article>
@@ -93,8 +104,10 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
                   <th className="py-2 pr-3">Configured</th>
                   <th className="py-2 pr-3">Fetchable</th>
                   <th className="py-2 pr-3">Parsed</th>
+                  <th className="py-2 pr-3">Sync status</th>
                   <th className="py-2 pr-3">Record count</th>
                   <th className="py-2 pr-3">Last checked</th>
+                  <th className="py-2 pr-3">Last successful sync</th>
                   <th className="py-2 pr-3">Last error</th>
                   <th className="py-2 pr-3">Source</th>
                 </tr>
@@ -106,8 +119,10 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
                     <td className="py-3 pr-3">{reference.configured ? "Yes" : "No"}</td>
                     <td className="py-3 pr-3">{reference.fetchable ? "Yes" : "No"}</td>
                     <td className="py-3 pr-3">{reference.parsed ? "Yes" : "No"}</td>
+                    <td className="py-3 pr-3">{reference.syncStatus}</td>
                     <td className="py-3 pr-3">{reference.recordCount}</td>
                     <td className="py-3 pr-3">{asIso(reference.lastCheckedAt)}</td>
+                    <td className="py-3 pr-3">{asIso(reference.lastSuccessfulSyncAt)}</td>
                     <td className="py-3 pr-3">{reference.lastError || "-"}</td>
                     <td className="py-3 pr-3">
                       {reference.sourceUrl ? (

@@ -34,3 +34,9 @@ Per matched SKU, compute:
 - If tier selected but no cost in that column:
   - pricing status should indicate source unavailable for selected tier.
 - Never fabricate cost/profit/margin values when source inputs are missing.
+
+## Stabilization 009.6 Sync Dependency
+
+- Membership tiers and SKU cost maps are persisted in `supplier_pricing_normalized` during source sync.
+- If pricing source has not been synced, settings should prompt `Run source sync to detect membership tiers.`
+- Product Editor must show `Cost not found for selected tier.` when tier cost is unavailable.
