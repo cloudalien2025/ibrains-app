@@ -57,15 +57,12 @@ Snapshot includes route-facing diagnostics fields:
 
 ## Background Refresh Policy
 
-Use background refresh only where explicitly intended (dashboard ingestion path).  
+Use background refresh only from explicit operator refresh or background job paths, not normal dashboard navigation.
 Product editor, PDP generation, settings diagnostics, and Rocktomic diagnostics route run in cache-only mode by default.
 
 Current expected modes:
 
-1. `/ecomviper`:
-   - `allowRefresh: false`
-   - `triggerBackgroundRefresh: true`
-2. `/ecomviper/settings`, `/ecomviper/dropshipping/rocktomic`, PDP generation, product editor:
+1. `/ecomviper`, `/ecomviper/settings`, `/ecomviper/dropshipping/rocktomic`, PDP generation, product editor:
    - `allowRefresh: false`
    - `triggerBackgroundRefresh: false`
 

@@ -51,6 +51,39 @@ check_route_timing() {
   fi
 }
 
+check_release_metadata_non_null() {
+  local body
+  body=$(curl -sS --max-time "${MAX_TIME}" "${curl_host_args[@]}" "${BASE_URL}/api/meta/release" || true)
+  if [ -z "${body}" ]; then
+    fail "release metadata response is empty"
+    return
+  fi
+
+  if python3 - "${body}" <<'PY'
+import json
+import sys
+
+try:
+    data = json.loads(sys.argv[1])
+except Exception:
+    sys.exit(1)
+
+for field in ("git_sha", "build_id"):
+    value = data.get(field)
+    if not isinstance(value, str) or not value.strip() or value == "unavailable":
+        sys.exit(2)
+
+if "deployed_at" in data and data.get("deployed_at") is not None and not str(data.get("deployed_at")).strip():
+    sys.exit(3)
+PY
+  then
+    pass "release metadata git_sha/build_id are non-null"
+  else
+    fail "release metadata git_sha/build_id are missing or unavailable"
+    note "release metadata body: ${body}"
+  fi
+}
+
 check_close_wait_count() {
   if ! command -v ss >/dev/null 2>&1; then
     note "ss not available; skipping CLOSE-WAIT check"
@@ -71,6 +104,7 @@ run_log_tails() {
   tail -n "${TAIL_LINES}" /var/log/ibrains-app/app.log 2>/dev/null || note "app log unavailable"
 
   note "recent nginx error tail:"
+  tail -n "${TAIL_LINES}" /var/log/nginx/error.log 2>/dev/null || note "nginx generic error log unavailable"
   tail -n "${TAIL_LINES}" /var/log/nginx/app.ibrains.ai.error.log 2>/dev/null || note "nginx app error log unavailable"
 
   note "recent systemd journal tail:"
@@ -84,6 +118,7 @@ main() {
 
   check_route_timing "/api/health" '^200$' "/api/health"
   check_route_timing "/api/meta/release" '^200$' "/api/meta/release"
+  check_release_metadata_non_null
   check_route_timing "/brains" '^(200|307)$' "/brains"
   check_route_timing "/ecomviper" '^(200|307)$' "/ecomviper"
   check_route_timing "/ecomviper/settings" '^(200|307)$' "/ecomviper/settings"

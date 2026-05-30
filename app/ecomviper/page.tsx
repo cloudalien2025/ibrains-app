@@ -1,14 +1,34 @@
 import EcomViperDashboardClient from "@/app/ecomviper/ecomviper-dashboard-client";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
-import { getRocktomicSourceIngestionSnapshot } from "@/lib/ecomviper/dropshipping/rocktomic-source-ingestion";
-import { toEcomViperProductInventoryRows } from "@/lib/ecomviper/shopify/shopify-inventory-foundation";
-import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopify-connection";
-import { getShopifyImportStateForUser, listShopifyProductsForUser } from "@/lib/ecomviper/shopify/shopify-import";
-import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify/openai-connection";
+import {
+  toEcomViperProductInventoryRows,
+  type EcomViperProductInventoryRow,
+} from "@/lib/ecomviper/shopify/shopify-inventory-foundation";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 const ROCKTOMIC_SOFT_TIMEOUT_MS = 3_500;
+const SHOPIFY_SOFT_TIMEOUT_MS = 3_500;
+
+type AsyncResult<T> = { ok: true; value: T } | { ok: false; error: unknown };
+
+function timeoutResult(label: string): Promise<never> {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`${label} timed out.`)), SHOPIFY_SOFT_TIMEOUT_MS);
+  });
+}
+
+async function guarded<T>(label: string, work: () => Promise<T>): Promise<AsyncResult<T>> {
+  try {
+    return { ok: true, value: await Promise.race([work(), timeoutResult(label)]) };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+function warningMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.trim().length ? error.message : fallback;
+}
 
 export default async function EcomViperDashboardPage() {
   let userId: string;
@@ -27,56 +47,62 @@ export default async function EcomViperDashboardPage() {
   let shopifyStatusLabel = "Not connected";
   let openAiStatusLabel = "Not connected";
   let lastImportAt: string | null = null;
-  let rows = [] as ReturnType<typeof toEcomViperProductInventoryRows>;
+  let rows: EcomViperProductInventoryRow[] = [];
   const sourceWarnings: string[] = [];
 
   const [connectionResult, importStateResult, openAiStatusResult] = await Promise.all([
-    getShopifyConnectionStatusForUser(userId)
-      .then((connection) => ({ ok: true as const, connection }))
-      .catch((error) => ({ ok: false as const, error })),
-    getShopifyImportStateForUser(userId)
-      .then((importState) => ({ ok: true as const, importState }))
-      .catch((error) => ({ ok: false as const, error })),
-    getShopifyOpenAiConnectionStatusForUser(userId)
-      .then((openAiStatus) => ({ ok: true as const, openAiStatus }))
-      .catch((error) => ({ ok: false as const, error })),
+    guarded("Shopify connection status", async () => {
+      const mod = await import("@/lib/ecomviper/shopify/shopify-connection");
+      return mod.getShopifyConnectionStatusForUser(userId);
+    }),
+    guarded("Shopify import state", async () => {
+      const mod = await import("@/lib/ecomviper/shopify/shopify-import");
+      return mod.getShopifyImportStateForUser(userId);
+    }),
+    guarded("OpenAI connection status", async () => {
+      const mod = await import("@/lib/ecomviper/shopify/openai-connection");
+      return mod.getShopifyOpenAiConnectionStatusForUser(userId);
+    }),
   ]);
 
   if (connectionResult.ok) {
-    shopifyConnected = connectionResult.connection.connected;
-    storeDomain = connectionResult.connection.storeDomain;
-    shopifyStatusLabel = connectionResult.connection.connected ? "Connected" : "Not connected";
+    shopifyConnected = connectionResult.value.connected;
+    storeDomain = connectionResult.value.storeDomain;
+    shopifyStatusLabel = connectionResult.value.connected ? "Connected" : "Not connected";
   } else {
     sourceWarnings.push(
-      connectionResult.error instanceof Error
-        ? connectionResult.error.message
-        : "Could not load Shopify connection status."
+      warningMessage(connectionResult.error, "Could not load Shopify connection status.")
     );
   }
 
   if (importStateResult.ok) {
-    lastImportAt = importStateResult.importState.lastImportAt;
+    lastImportAt = importStateResult.value.lastImportAt;
   } else {
     sourceWarnings.push(
-      importStateResult.error instanceof Error
-        ? importStateResult.error.message
-        : "Could not load Shopify import state."
+      warningMessage(importStateResult.error, "Could not load Shopify import state.")
     );
   }
 
   if (openAiStatusResult.ok) {
-    openAiStatusLabel = openAiStatusResult.openAiStatus.connected ? "Connected" : "Not connected";
+    openAiStatusLabel = openAiStatusResult.value.connected ? "Connected" : "Not connected";
   } else {
     openAiStatusLabel = "Not connected";
   }
 
-  let rocktomicSnapshot: Awaited<ReturnType<typeof getRocktomicSourceIngestionSnapshot>> | null = null;
+  let rocktomicSnapshot: Awaited<
+    ReturnType<
+      (typeof import("@/lib/ecomviper/dropshipping/rocktomic-source-ingestion"))["getRocktomicSourceIngestionSnapshot"]
+    >
+  > | null = null;
   if (shopifyConnected) {
-    const rocktomicResultPromise = getRocktomicSourceIngestionSnapshot({
-      userId,
-      allowRefresh: false,
-      triggerBackgroundRefresh: true,
-    })
+    const rocktomicResultPromise = import("@/lib/ecomviper/dropshipping/rocktomic-source-ingestion")
+      .then((mod) =>
+        mod.getRocktomicSourceIngestionSnapshot({
+          userId,
+          allowRefresh: false,
+          triggerBackgroundRefresh: false,
+        })
+      )
       .then((snapshot) => ({ kind: "ok" as const, snapshot }))
       .catch((error) => ({ kind: "error" as const, error }));
     const rocktomicSoftTimeout = new Promise<{ kind: "timeout" }>((resolve) => {
@@ -87,9 +113,7 @@ export default async function EcomViperDashboardPage() {
       rocktomicSnapshot = rocktomicResult.snapshot;
     } else if (rocktomicResult.kind === "error") {
       sourceWarnings.push(
-        rocktomicResult.error instanceof Error
-          ? rocktomicResult.error.message
-          : "Could not load supplier source diagnostics."
+        warningMessage(rocktomicResult.error, "Could not load supplier source diagnostics.")
       );
     } else {
       sourceWarnings.push("Supplier source diagnostics timed out. Showing Shopify inventory without supplier enrichment.");
@@ -97,14 +121,17 @@ export default async function EcomViperDashboardPage() {
   }
 
   if (shopifyConnected) {
-    try {
-      const products = await listShopifyProductsForUser(userId);
-      rows = toEcomViperProductInventoryRows(products, {
+    const productsResult = await guarded("Shopify product listing", async () => {
+      const mod = await import("@/lib/ecomviper/shopify/shopify-import");
+      return mod.listShopifyProductsForUser(userId);
+    });
+    if (productsResult.ok) {
+      rows = toEcomViperProductInventoryRows(productsResult.value, {
         supplierProducts: rocktomicSnapshot?.products,
         rocktomicInventoryAvailable: rocktomicSnapshot?.inventoryAvailable ?? false,
       });
-    } catch (error) {
-      sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify products.");
+    } else {
+      sourceWarnings.push(warningMessage(productsResult.error, "Could not load Shopify products."));
     }
   }
 

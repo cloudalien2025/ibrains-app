@@ -44,13 +44,35 @@ describe("brains index contract", () => {
     expect(source).toContain("iBrains Dashboard");
     expect(source).toContain("BrainsTable");
     expect(source).not.toContain('redirect("/ecomviper")');
+    expect(source).not.toContain("BrainOS");
   });
 
-  it("does not server-render fetch protected /api/brains endpoints", () => {
+  it("keeps /brains free of route-coupled runtime fetches and risky imports", () => {
     const brainsPagePath = path.join(process.cwd(), "app", "(shell)", "brains", "page.tsx");
+    const brainsTablePath = path.join(process.cwd(), "app", "(shell)", "brains", "_components", "BrainsTable.tsx");
     const source = fs.readFileSync(brainsPagePath, "utf8");
+    const tableSource = fs.readFileSync(brainsTablePath, "utf8");
+    const combined = `${source}\n${tableSource}`;
 
-    expect(source).not.toContain('fetch("/api/brains');
-    expect(source).not.toContain("fetch(`/api/brains");
+    expect(combined).not.toContain('"use client"');
+    expect(combined).not.toContain("useEffect");
+    expect(combined).not.toContain("useState");
+    expect(combined).not.toContain("fetch(");
+    expect(combined).not.toContain("/api/brains");
+    expect(combined).not.toContain("localStorage");
+    expect(combined).not.toContain("sessionStorage");
+    expect(combined).not.toContain("rocktomic-source-ingestion");
+    expect(combined).not.toContain("ecomviper-dashboard-client");
+    expect(combined).not.toContain("product-editor-client");
+    expect(combined).not.toContain("shopify-product-editor");
+  });
+
+  it("keeps app catalog icons/logos in the supported safe set", () => {
+    const allowedIconKeys = new Set(["map", "zap", "clapperboard"]);
+    for (const brain of brainCatalog) {
+      expect(allowedIconKeys.has(brain.iconKey)).toBe(true);
+      expect(brain.name.trim().length).toBeGreaterThan(0);
+      expect(brain.shortDescription.trim().length).toBeGreaterThan(0);
+    }
   });
 });

@@ -68,7 +68,7 @@ describe("ecomviper dashboard auth guard", () => {
     expect(mocks.getRocktomicSourceIngestionSnapshot).not.toHaveBeenCalled();
   });
 
-  it("loads ingestion for signed-in users", async () => {
+  it("uses cache-only supplier diagnostics for signed-in users", async () => {
     mocks.requireSignedInUser.mockResolvedValue({
       userId: "user_1",
       unauthorizedResponse: null,
@@ -114,7 +114,7 @@ describe("ecomviper dashboard auth guard", () => {
     expect(mocks.getRocktomicSourceIngestionSnapshot).toHaveBeenCalledWith({
       userId: "user_1",
       allowRefresh: false,
-      triggerBackgroundRefresh: true,
+      triggerBackgroundRefresh: false,
     });
     expect(mocks.listShopifyProductsForUser).toHaveBeenCalledTimes(1);
   });

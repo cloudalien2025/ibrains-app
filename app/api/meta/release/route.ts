@@ -69,7 +69,19 @@ export async function GET() {
     const envBuildTimestamp =
       cleanValue(env.RELEASE_BUILD_TIMESTAMP) || cleanValue(env.BUILD_TIMESTAMP);
     const fileBuildTimestamp = cleanValue(releaseFile?.build_timestamp);
-    const buildTimestamp = envBuildTimestamp || fileBuildTimestamp || null;
+    let gitCommitTimestamp: string | null = null;
+    if (!envBuildTimestamp && !fileBuildTimestamp) {
+      try {
+        const result = await execFileAsync("git", ["log", "-1", "--format=%cI"], {
+          cwd: process.cwd(),
+          timeout: 900,
+        });
+        gitCommitTimestamp = cleanValue(result.stdout);
+      } catch {
+        gitCommitTimestamp = null;
+      }
+    }
+    const buildTimestamp = envBuildTimestamp || fileBuildTimestamp || gitCommitTimestamp || null;
 
     const envBuildId =
       cleanValue(env.RELEASE_BUILD_ID) || cleanValue(env.BUILD_ID) || cleanValue(env.GITHUB_RUN_ID);
@@ -86,6 +98,7 @@ export async function GET() {
       git_sha: gitSha || "unavailable",
       git_sha_short: gitShaShort || "unavailable",
       build_timestamp: buildTimestamp,
+      deployed_at: buildTimestamp,
       build_id: buildId,
       local: environment === "local" || environment === "development" || environment === "test",
       diagnostics: {
@@ -94,7 +107,7 @@ export async function GET() {
       },
       sources: {
         git_sha: envGitSha ? "env" : fileGitSha ? "file" : gitSha ? "git" : "missing",
-        build_timestamp: envBuildTimestamp ? "env" : fileBuildTimestamp ? "file" : "missing",
+        build_timestamp: envBuildTimestamp ? "env" : fileBuildTimestamp ? "file" : gitCommitTimestamp ? "git" : "missing",
         build_id: envBuildId ? "env" : fileBuildId ? "file" : gitShaShort ? "sha_fallback" : "missing",
         environment: envEnvironmentExplicit ? "env" : fileEnvironment ? "file" : envEnvironmentFallback ? "env" : "default",
         service: envService ? "env" : fileService ? "file" : "default",

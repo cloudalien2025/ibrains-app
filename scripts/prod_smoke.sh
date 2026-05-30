@@ -314,6 +314,7 @@ except Exception:
 print('RELEASE_FILE_TRUE' if data.get('release_file') is True else 'RELEASE_FILE_FALSE')
 print(f"BUILD_ID={data.get('build_id') or ''}")
 print(f"GIT_SHA={data.get('git_sha') or ''}")
+print(f"DEPLOYED_AT={data.get('deployed_at') or data.get('build_timestamp') or ''}")
 PY
 
   if grep -q '^BADJSON$' /tmp/release_meta_parse.txt; then
@@ -327,6 +328,18 @@ PY
     else
       fail "release meta missing release.json"
     fi
+  fi
+
+  if grep -q '^BUILD_ID=$' /tmp/release_meta_parse.txt || grep -q '^BUILD_ID=unavailable$' /tmp/release_meta_parse.txt; then
+    fail "release build_id is missing or unavailable"
+  else
+    pass "release build_id is non-null"
+  fi
+
+  if grep -q '^GIT_SHA=$' /tmp/release_meta_parse.txt || grep -q '^GIT_SHA=unavailable$' /tmp/release_meta_parse.txt; then
+    fail "release git_sha is missing or unavailable"
+  else
+    pass "release git_sha is non-null"
   fi
 
   if [ -n "${EXPECT_BUILD_ID}" ]; then

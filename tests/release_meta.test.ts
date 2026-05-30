@@ -35,6 +35,7 @@ describe("GET /api/meta/release", () => {
       git_sha: "abc1234567890defabc1234567890defabc12345",
       git_sha_short: "abc1234",
       build_timestamp: "2026-03-08T00:00:00Z",
+      deployed_at: "2026-03-08T00:00:00Z",
       build_id: "run-777",
       local: false,
       sources: {
@@ -120,7 +121,7 @@ describe("GET /api/meta/release", () => {
     expect(typeof payload.build_id).toBe("string");
     expect(payload.build_id.length).toBeGreaterThan(0);
     expect(payload.diagnostics.release_metadata_complete).toBe(false);
-    expect(payload.diagnostics.missing).toContain("build_timestamp");
+    expect(typeof payload.deployed_at === "string" || payload.deployed_at === null).toBe(true);
     expect(payload.diagnostics.missing).toContain("build_id");
   });
 });

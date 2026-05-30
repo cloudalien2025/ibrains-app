@@ -22,11 +22,14 @@
 ```bash
 cd /root/ibrains-app
 npm ci
+rm -rf .next
 npm run build
 bash scripts/apply_directoryiq_schema.sh
 sudo systemctl restart ibrains-app
 sudo systemctl status ibrains-app --no-pager
 ```
+
+Clean `.next` before production builds. Next/Turbopack can leave stale client-manifest or external-package artifacts after repeated hotfix builds; a clean build prevents blank-screen/client-manifest failures after deploy.
 
 ## Service Management
 ```bash
@@ -88,6 +91,8 @@ BASE_URL=http://127.0.0.1 HOST_HEADER=app.ibrains.ai /root/ibrains-app/scripts/p
 
 `prod_smoke.sh` now validates `/_next/static/*` assets referenced by `/`, `/dashboard`, and `/sign-in`. It fails on non-`200` responses and on wrong JS/CSS content types so HTML/chunk mismatch deploys cannot pass smoke.
 
+Release metadata smoke also requires non-empty `git_sha` and `build_id` from `/api/meta/release`.
+
 ## Production Runtime Watchdog Script
 ```bash
 # full runtime + logs + timing checks
@@ -99,6 +104,24 @@ BASE_URL=http://127.0.0.1:3001 HOST_HEADER=app.ibrains.ai RUN_DETAILED_SMOKE=0 \
 ```
 
 `production_smoke_check.sh` adds service-state checks, CLOSE-WAIT socket trend checks, route timing probes, and recent `journalctl`/nginx/app log tails for 504 diagnosis.
+
+Emergency auth/navigation verification:
+
+```bash
+systemctl is-active ibrains-app
+curl -I --max-time 10 https://app.ibrains.ai/
+curl -I --max-time 10 https://app.ibrains.ai/sign-in
+curl -I --max-time 10 https://app.ibrains.ai/brains
+curl -I --max-time 10 https://app.ibrains.ai/ecomviper
+curl --max-time 10 https://app.ibrains.ai/api/health
+curl --max-time 10 https://app.ibrains.ai/api/meta/release
+tail -n 300 /var/log/ibrains-app/app.log
+tail -n 300 /var/log/nginx/error.log
+ss -tanp | grep ':3001' | head -50
+ss -tanp | grep ':3001' | awk '{print $1}' | sort | uniq -c
+```
+
+Signed-in browser verification after deploy must cover `/sign-in -> /brains -> /ecomviper -> /brains` on desktop and mobile with no blank page, flicker loop, console error, client exception, 504, or repeated reload.
 
 ## TLS (Let’s Encrypt)
 Only run after DNS A record for app.ibrains.ai points to 104.236.44.185.

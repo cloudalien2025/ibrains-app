@@ -56,8 +56,9 @@ Set a Clerk secret key for server-side auth and middleware protection:
 
 - `/brains` is the canonical iBrains Dashboard launcher and must render from local canonical brain inventory.
 - `/brains` server render must not call protected `/api/brains/*` endpoints.
-- Optional brain stats may hydrate client-side after the cards render and must fail safely.
+- `/brains` must not perform client-side stats hydration, supplier refresh, Shopify fetches, OpenAI calls, PDF parsing, Google Sheets parsing, or product-editor imports during initial render.
 - `/brains` must not hard-redirect to `/ecomviper`; app workspaces link back to `/brains`.
+- Signed-out protected shell routes redirect to `/sign-in` with a relative `redirect_url` such as `/brains` or `/ecomviper`; `/brains` and `/ecomviper` must never redirect to each other.
 - Signed-out protected API routes such as `/api/brains` and `/api/brains/:id/stats` must return clean non-500 auth responses.
 
 ## Production smoke checklist

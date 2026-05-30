@@ -44,3 +44,11 @@ Date: 2026-02-27
 ## Pending
 - TLS cert for app.ibrains.ai (certbot) once DNS points to 104.236.44.185
 - HTTPS validation + cert auto-renew verification
+
+## Emergency Auth Runtime Recovery Notes (2026-05-30)
+
+- `/brains` is a minimal iBrains Dashboard launcher. It renders static canonical app cards only.
+- `/brains` forbidden imports/work: supplier ingestion, Shopify data, OpenAI, PDF parsing, Google Sheets parsing, EcomViper dashboard internals, product editor internals, and browser storage during first render.
+- `/ecomviper` navigation must not trigger supplier ingestion. Supplier diagnostics are cache-only during page render.
+- Deploy builds must remove `.next` before `npm run build` to avoid stale Turbopack client-manifest or external-package artifacts.
+- Production smoke must verify `/api/health`, `/api/meta/release`, `/brains`, `/ecomviper`, service status, recent logs, and 3001 socket states.
