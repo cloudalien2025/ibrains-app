@@ -26,7 +26,7 @@ verify_frontdoor_integrity:
   script:
     - npm ci
     - bash scripts/check_route_signatures.sh
-    - npm test -- --run tests/clerk_env_contract_shared_logic.test.ts tests/clerk_layout_env_contract.test.ts tests/frontdoor_layout_chain_contract.test.ts tests/frontdoor_public_route_auth_isolation.test.ts tests/clerk_auth_routes_contract.test.ts tests/clerk_auth_route_runtime.test.tsx tests/proxy_clerk_env_guard_contract.test.ts tests/gitlab_deploy_pipeline_contract.test.ts
+    - npm test -- --run tests/clerk_env_contract_shared_logic.test.ts tests/clerk_layout_env_contract.test.ts tests/frontdoor_layout_chain_contract.test.ts tests/frontdoor_public_route_auth_isolation.test.ts tests/frontdoor_auth_state.test.ts tests/require_signed_in_user_auth_unavailable.test.ts tests/clerk_auth_routes_contract.test.ts tests/clerk_auth_route_runtime.test.tsx tests/proxy_clerk_env_guard_contract.test.ts tests/proxy_apps_auth_protection.test.ts tests/ecomviper_dashboard_auth_guard.test.tsx tests/ecomviper_rocktomic_source_ingestion.test.ts tests/gitlab_deploy_pipeline_contract.test.ts
     - npm run build
 
 build_release:
