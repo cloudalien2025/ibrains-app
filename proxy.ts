@@ -117,8 +117,10 @@ function maybeHandleDirectoryIqCors(req: NextRequest): NextResponse | null {
   return response;
 }
 
-function hasClerkSessionCookie(req: NextRequest): boolean {
-  return Boolean(req.cookies.get("__session")?.value?.trim());
+function hasLikelyJwtSessionCookie(req: NextRequest): boolean {
+  const token = req.cookies.get("__session")?.value?.trim();
+  if (!token) return false;
+  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
 }
 
 function isEcomviperApiRoute(req: NextRequest): boolean {
@@ -210,7 +212,7 @@ export default e2eMockGraph
       if (directoryIqCorsResponse) return directoryIqCorsResponse;
       if (isSiteforgeApiRoute(req)) return NextResponse.next();
       if (isEcomviperApiRoute(req)) {
-        if (!hasClerkSessionCookie(req)) {
+        if (!hasLikelyJwtSessionCookie(req)) {
           return buildSignInRedirect(req);
         }
         return NextResponse.next();
@@ -218,7 +220,7 @@ export default e2eMockGraph
       if (isBrainsApiRoute(req)) return NextResponse.next();
       if (isPublicClerkPassthroughRoute(req)) return NextResponse.next();
       if (isProtectedShellRoute(req)) {
-        if (!hasClerkSessionCookie(req)) {
+        if (!hasLikelyJwtSessionCookie(req)) {
           return buildSignInRedirect(req);
         }
         // Prevent Clerk middleware from issuing protected-route self-rewrites

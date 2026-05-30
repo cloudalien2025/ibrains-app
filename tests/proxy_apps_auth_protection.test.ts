@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   denyProtect: false,
   throwAuth: false,
 }));
+const VALID_SESSION_TOKEN = "header.payload.signature";
 
 function toPathRegex(pattern: string): RegExp {
   const prefix = pattern.replace("(.*)", "");
@@ -115,7 +116,7 @@ describe("proxy app/auth protection", () => {
       new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/connect/save", {
         method: "POST",
         headers: {
-          cookie: "__session=valid_cookie",
+          cookie: `__session=${VALID_SESSION_TOKEN}`,
         },
       })
     );
@@ -131,7 +132,7 @@ describe("proxy app/auth protection", () => {
     const response = await handler(
       new NextRequest("https://app.ibrains.ai/optiwal/connect", {
         headers: {
-          cookie: "__session=valid_cookie",
+          cookie: `__session=${VALID_SESSION_TOKEN}`,
         },
       })
     );
@@ -147,12 +148,30 @@ describe("proxy app/auth protection", () => {
     const response = await handler(
       new NextRequest("https://app.ibrains.ai/brains", {
         headers: {
-          cookie: "__session=valid_cookie",
+          cookie: `__session=${VALID_SESSION_TOKEN}`,
         },
       })
     );
 
     expect(response.status).toBe(200);
+    expect(state.clerkProxyCalls).toBe(0);
+  });
+
+  it("redirects malformed session-cookie requests on protected shell routes", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const response = await handler(
+      new NextRequest("https://app.ibrains.ai/ecomviper", {
+        headers: {
+          cookie: "__session=not-a-jwt-token",
+        },
+      })
+    );
+
+    expect(response.status).toBe(307);
+    const location = response.headers.get("location");
+    expect(location).toContain("/sign-in");
     expect(state.clerkProxyCalls).toBe(0);
   });
 

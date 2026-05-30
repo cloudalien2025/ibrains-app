@@ -16,6 +16,7 @@ import type { WalmartConnectionHealth } from "@/lib/ecomviper/walmart/walmart-ty
 const walmartRouteMocks = vi.hoisted(() => ({
   requireSignedInUser: vi.fn(),
   getWalmartConnectionHealthForUser: vi.fn(),
+  getRocktomicSourceIngestionSnapshot: vi.fn(),
 }));
 
 vi.mock("next/link", async () => {
@@ -42,6 +43,10 @@ vi.mock("@/components/frontdoor/frontdoor-header-actions", () => ({
 
 vi.mock("@/lib/auth/requireSignedInUser", () => ({
   requireSignedInUser: walmartRouteMocks.requireSignedInUser,
+}));
+
+vi.mock("@/lib/ecomviper/dropshipping/rocktomic-source-ingestion", () => ({
+  getRocktomicSourceIngestionSnapshot: walmartRouteMocks.getRocktomicSourceIngestionSnapshot,
 }));
 
 vi.mock("@/lib/ecomviper/walmart/walmart-auth", async () => {
@@ -131,6 +136,19 @@ describe("EcomViper Walmart route contracts", () => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_product_tables_checked__ = undefined;
     walmartRouteMocks.requireSignedInUser.mockResolvedValue({ userId: "user_ibrains", unauthorizedResponse: null });
     walmartRouteMocks.getWalmartConnectionHealthForUser.mockResolvedValue(buildConnectionHealth());
+    walmartRouteMocks.getRocktomicSourceIngestionSnapshot.mockResolvedValue({
+      supplier: "Rocktomic",
+      products: [],
+      productCount: 0,
+      catalogSkuCount: 0,
+      catalogExtractedSkuCount: 0,
+      inventorySkuCount: 0,
+      inventoryAvailable: false,
+      usedSeedFallback: true,
+      membershipTiersDetected: [],
+      sourceDiagnostics: [],
+      lastCheckedAt: "2026-05-30T00:00:00.000Z",
+    });
   });
 
   it("shows EcomViper in brain dashboard launcher", () => {

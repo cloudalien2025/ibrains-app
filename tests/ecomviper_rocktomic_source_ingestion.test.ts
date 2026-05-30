@@ -180,4 +180,44 @@ describe("rocktomic source ingestion", () => {
     expect(roc949?.coaLinkError).toContain("PDF hyperlink not found for matched SKU row");
     expect(roc949?.sourceDiagnostics).toContain("coa_link_status: extraction_failed");
   });
+
+  it("deduplicates concurrent refreshes for the same cache key", async () => {
+    let catalogCsvFetchCount = 0;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (init?.method === "HEAD") {
+          return new Response(null, { status: 200 });
+        }
+
+        if (url.includes("1oOjqXsaCAjSOkA1lXrasNtUVtrsxvyxcFcolD8n6YXY")) {
+          return new Response(INVENTORY_CSV, { status: 200 });
+        }
+
+        if (url.includes("15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU")) {
+          catalogCsvFetchCount += 1;
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return new Response(CATALOG_CSV, { status: 200 });
+        }
+
+        if (url.includes("Supplement-&-Apparel-Catalog.pdf")) {
+          return new Response(PDF_WITH_ROC949_COA, { status: 200 });
+        }
+
+        return new Response("", { status: 200 });
+      })
+    );
+
+    const [first, second] = await Promise.all([
+      getRocktomicSourceIngestionSnapshot({ forceRefresh: true }),
+      getRocktomicSourceIngestionSnapshot({ forceRefresh: true }),
+    ]);
+
+    expect(first.productCount).toBeGreaterThan(0);
+    expect(second.productCount).toBeGreaterThan(0);
+    expect(catalogCsvFetchCount).toBe(2);
+  });
 });
