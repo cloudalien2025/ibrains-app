@@ -41,7 +41,40 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 009.6: Completed and merged (`hotfix-009-6-brains-open-brain-navigation`, launcher CTA navigation reliability fix for `/brains` Open Brain buttons).
 - Shopify Hotfix Sprint 009.7: Completed and merged (`hotfix-009-7-frontdoor-auth-saturation-guard`, frontdoor anonymous auth saturation guard + production recovery deployment).
 - Shopify Hotfix Sprint 009.8: Completed and merged (`hotfix-009-8-ecomviper-saturation-guard`, `/ecomviper` unauthenticated saturation guard + Rocktomic ingestion single-flight + protected-route malformed-session hardening, production deployed).
-- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.8 closure).
+- Shopify Sprint 010: Completed and merged (`sprint-010-ecomviper-regression-hardening`, `/ecomviper` load-path optimization + CI verify guardrail expansion).
+- Current recommended sprint: `Shopify Sprint 011 planning` (next scoped execution after Sprint 010 closure).
+
+## Sprint Completion Log: Shopify Sprint 010 EcomViper Regression Hardening
+
+- Sprint/lane: `Shopify Sprint 010` (`sprint-010-ecomviper-regression-hardening`) - closed.
+- Root cause:
+  - signed-in `/ecomviper` server render fetched multiple dependencies sequentially, increasing stall risk under transient provider latency.
+  - dashboard attempted Shopify product listing fetches even when Shopify connection was disconnected.
+  - CI verify stage did not always enforce the newly added auth/saturation regression suites for `/ecomviper`.
+- Chosen fix:
+  - parallelized `/ecomviper` status fetches (Shopify connection/import/OpenAI + supplier diagnostics).
+  - added soft timeout handling for Rocktomic diagnostics so dashboard render can proceed with explicit warning when supplier diagnostics are slow.
+  - gated product listing fetch to run only when Shopify connection is active.
+  - expanded GitLab `verify_frontdoor_integrity` test command to include focused frontdoor/auth and ecomviper/proxy saturation guard suites.
+- Files changed:
+  - `.gitlab-ci.yml`
+  - `app/ecomviper/page.tsx`
+  - `tests/ecomviper_dashboard_auth_guard.test.tsx`
+- Validation summary:
+  - `bash scripts/check_route_signatures.sh`
+  - `npm test -- --run tests/ecomviper_dashboard_auth_guard.test.tsx tests/proxy_apps_auth_protection.test.ts tests/ecomviper_rocktomic_source_ingestion.test.ts tests/frontdoor_auth_state.test.ts tests/require_signed_in_user_auth_unavailable.test.ts`
+  - `npm run build`
+- MR: `!249` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/249`).
+- MR pipeline: `2564052799` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2564052799`).
+- Merge commit SHA: `84e241957dfa4fb10eb9f58934097d39c6b1683d`.
+- Branch deletion status:
+  - remote: deleted on merge (`sprint-010-ecomviper-regression-hardening` no longer present on `origin`).
+  - local: deleted via `git branch -d sprint-010-ecomviper-regression-hardening`.
+- Final local branch/status:
+  - `git switch main`
+  - `git pull`
+  - final status `## main...origin/main` (clean) before state closure update branch.
+- Recommended next sprint: `Shopify Sprint 011 planning`.
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 009.8 EcomViper Saturation Guard
 
