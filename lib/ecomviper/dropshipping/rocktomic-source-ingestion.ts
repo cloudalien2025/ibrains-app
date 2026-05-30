@@ -30,6 +30,7 @@ const ROCKTOMIC_INGESTION_TTL_MS = 10 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 12_000;
 const MAX_TEXT_PAYLOAD_BYTES = 4 * 1024 * 1024;
 const MAX_BINARY_PAYLOAD_BYTES = 8 * 1024 * 1024;
+const MAX_TRUSTED_CATALOG_PDF_PAYLOAD_BYTES = 32 * 1024 * 1024;
 
 interface CsvTable {
   rows: string[][];
@@ -729,6 +730,29 @@ function parseContentLength(header: string | null): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function isTrustedCatalogPdfSourceUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    if (parsed.hostname !== "rocktomicplatform.blob.core.windows.net") return false;
+    const pathname = parsed.pathname.toLowerCase();
+    if (!pathname.startsWith("/client-resources/")) return false;
+    return pathname.endsWith("/supplement-&-apparel-catalog.pdf");
+  } catch {
+    return false;
+  }
+}
+
+function resolveBinaryPayloadLimit(input: {
+  referenceId: RocktomicSourceReference["id"];
+  sourceUrl: string;
+}): number {
+  if (input.referenceId === "catalog_pdf" && isTrustedCatalogPdfSourceUrl(input.sourceUrl)) {
+    return MAX_TRUSTED_CATALOG_PDF_PAYLOAD_BYTES;
+  }
+  return MAX_BINARY_PAYLOAD_BYTES;
+}
+
 function assertPayloadLimit(input: { sizeBytes: number; maxBytes: number; sourceUrl: string }): void {
   if (input.sizeBytes <= input.maxBytes) return;
   throw new Error(
@@ -1177,7 +1201,7 @@ async function fetchWithTimeout(url: string): Promise<string> {
   }
 }
 
-async function fetchBinaryWithTimeout(url: string): Promise<ArrayBuffer> {
+async function fetchBinaryWithTimeout(url: string, maxBytes: number): Promise<ArrayBuffer> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -1193,14 +1217,14 @@ async function fetchBinaryWithTimeout(url: string): Promise<ArrayBuffer> {
     if (contentLength != null) {
       assertPayloadLimit({
         sizeBytes: contentLength,
-        maxBytes: MAX_BINARY_PAYLOAD_BYTES,
+        maxBytes,
         sourceUrl: url,
       });
     }
     const bytes = await response.arrayBuffer();
     assertPayloadLimit({
       sizeBytes: bytes.byteLength,
-      maxBytes: MAX_BINARY_PAYLOAD_BYTES,
+      maxBytes,
       sourceUrl: url,
     });
     return bytes;
@@ -1320,7 +1344,13 @@ export async function getRocktomicSourceIngestionSnapshot(
           diagnostic.fetchUrl = reference.sourceUrl;
           let pdfBytesPromise = fetchedBinaryByUrl.get(reference.sourceUrl);
           if (!pdfBytesPromise) {
-            pdfBytesPromise = fetchBinaryWithTimeout(reference.sourceUrl);
+            pdfBytesPromise = fetchBinaryWithTimeout(
+              reference.sourceUrl,
+              resolveBinaryPayloadLimit({
+                referenceId: reference.id,
+                sourceUrl: reference.sourceUrl,
+              })
+            );
             fetchedBinaryByUrl.set(reference.sourceUrl, pdfBytesPromise);
           }
           const pdfBytes = await pdfBytesPromise;

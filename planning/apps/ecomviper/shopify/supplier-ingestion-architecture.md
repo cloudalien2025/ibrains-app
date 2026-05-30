@@ -24,7 +24,8 @@ Keep supplier ingestion as internal/background intelligence only and prevent ori
 
 ### Payload Limits
 - Max text payload (CSV/export): `4MB`.
-- Max binary payload (PDF): `8MB`.
+- Max binary payload (default): `8MB`.
+- Trusted Rocktomic catalog PDF (`https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf`) sync cap: `32MB`.
 - Oversize payloads are rejected with safe diagnostics.
 
 ### Dedupe / Anti-Storm
