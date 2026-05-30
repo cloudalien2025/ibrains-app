@@ -40,7 +40,43 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 009.5: Completed and merged (`hotfix-009-5-production-504-proxy-timeout`, production 504 timeout diagnosis + middleware/public-route proxy loop fix, production proxy timeout guard shipped).
 - Shopify Hotfix Sprint 009.6: Completed and merged (`hotfix-009-6-brains-open-brain-navigation`, launcher CTA navigation reliability fix for `/brains` Open Brain buttons).
 - Shopify Hotfix Sprint 009.7: Completed and merged (`hotfix-009-7-frontdoor-auth-saturation-guard`, frontdoor anonymous auth saturation guard + production recovery deployment).
-- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.7 closure).
+- Shopify Hotfix Sprint 009.8: Completed and merged (`hotfix-009-8-ecomviper-saturation-guard`, `/ecomviper` unauthenticated saturation guard + Rocktomic ingestion single-flight + protected-route malformed-session hardening, production deployed).
+- Current recommended sprint: `Shopify Sprint 010 planning` (next scoped execution after Hotfix Sprint 009.8 closure).
+
+## Sprint Completion Log: Shopify Hotfix Sprint 009.8 EcomViper Saturation Guard
+
+- Sprint/lane: `Shopify Hotfix Sprint 009.8` (`hotfix-009-8-ecomviper-saturation-guard`) - closed.
+- Root cause:
+  - unauthenticated or malformed-session requests could still execute heavy `/ecomviper` server work, including Rocktomic ingestion and external source processing.
+  - concurrent refreshes of Rocktomic source ingestion did not dedupe in-flight execution per cache key, allowing refresh stampede behavior under burst traffic.
+- Chosen fix:
+  - `/ecomviper` page now redirects to `/sign-in` immediately when `requireSignedInUser()` is unauthorized/missing user id, before any ingestion or Shopify work starts.
+  - Rocktomic ingestion now uses per-cache-key in-flight single-flight dedupe and clears in-flight state on completion/failure.
+  - middleware protected-route pass-through now requires JWT-shaped `__session` cookies for `/ecomviper` API routes and protected shell routes.
+  - added focused regression tests for auth short-circuit, proxy malformed cookie handling, and concurrent ingestion dedupe.
+- Files changed:
+  - `app/ecomviper/page.tsx`
+  - `lib/ecomviper/dropshipping/rocktomic-source-ingestion.ts`
+  - `proxy.ts`
+  - `tests/ecomviper_dashboard_auth_guard.test.tsx`
+  - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+  - `tests/proxy_apps_auth_protection.test.ts`
+  - `tests/ecomviper_walmart_route_contract.test.tsx`
+- Validation summary:
+  - `npm test -- tests/ecomviper_dashboard_auth_guard.test.tsx tests/proxy_apps_auth_protection.test.ts tests/ecomviper_rocktomic_source_ingestion.test.ts tests/ecomviper_walmart_route_contract.test.tsx`
+  - `npm test -- tests/ecomviper_walmart_route_contract.test.tsx tests/require_signed_in_user_auth_unavailable.test.ts`
+  - `npm run build`
+- MR: `!247` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/247`).
+- MR pipeline: `2564040489` (status: `success`, `https://gitlab.com/cloudalien-technologies/ibrains-app/-/pipelines/2564040489`).
+- Merge commit SHA: `7f6992cea0d13d84aca87dea55b4edfdfd5b343b`.
+- Branch deletion status:
+  - remote: deleted on merge (`hotfix-009-8-ecomviper-saturation-guard` no longer present on `origin`).
+  - local: deleted via `git branch -d hotfix-009-8-ecomviper-saturation-guard`.
+- Final local branch/status:
+  - `git switch main`
+  - `git pull`
+  - final status `## main...origin/main` (clean) before state closure update branch.
+- Recommended next sprint: `Shopify Sprint 010 planning`.
 
 ## Sprint Completion Log: Shopify Hotfix Sprint 009.7 Frontdoor Auth Saturation Guard
 
