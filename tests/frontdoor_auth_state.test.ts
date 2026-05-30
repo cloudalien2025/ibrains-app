@@ -51,7 +51,7 @@ describe("frontdoor auth state", () => {
     authMock.mockRejectedValue(new Error("Clerk middleware unavailable"));
 
     await expect(resolveFrontdoorAuthState()).resolves.toEqual({ status: "signed-out" });
-    expect(authMock).toHaveBeenCalledTimes(1);
+    expect(authMock).not.toHaveBeenCalled();
   });
 
   it("treats the frontdoor as signed in when auth throws but a clerk session cookie is present", async () => {
@@ -83,12 +83,24 @@ describe("frontdoor auth state", () => {
   it("returns a signed-in frontdoor state when clerk resolves a user session", async () => {
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_frontdoor";
     process.env.CLERK_SECRET_KEY = "sk_test_frontdoor";
+    cookieGetMock.mockReturnValue({ value: "session_cookie_value" });
     authMock.mockResolvedValue({ userId: "user_frontdoor" });
+    verifyTokenMock.mockResolvedValue(undefined);
 
     await expect(resolveFrontdoorAuthState()).resolves.toEqual({
       status: "signed-in",
       userId: "user_frontdoor",
     });
+  });
+
+  it("short-circuits frontdoor auth calls when no clerk session cookie is present", async () => {
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_frontdoor";
+    process.env.CLERK_SECRET_KEY = "sk_test_frontdoor";
+    authMock.mockResolvedValue({ userId: "user_frontdoor" });
+
+    await expect(resolveFrontdoorAuthState()).resolves.toEqual({ status: "signed-out" });
+    expect(authMock).not.toHaveBeenCalled();
+    expect(verifyTokenMock).not.toHaveBeenCalled();
   });
 
   it("supports e2e frontdoor auth without calling clerk", async () => {

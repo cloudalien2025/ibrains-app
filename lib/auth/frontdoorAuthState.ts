@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { resolveClerkRuntimeContract } from "@/lib/auth/clerkEnvContract";
-import { resolveVerifiedClerkSessionUserId } from "@/lib/auth/clerkSessionToken";
+import { hasClerkSessionCookie, resolveVerifiedClerkSessionUserId } from "@/lib/auth/clerkSessionToken";
 
 export type FrontdoorAuthState =
   | {
@@ -24,6 +24,19 @@ export async function resolveFrontdoorAuthState(): Promise<FrontdoorAuthState> {
     return { status: "signed-out" };
   }
 
+  const hasSessionCookie = await hasClerkSessionCookie();
+  if (!hasSessionCookie) {
+    return { status: "signed-out" };
+  }
+
+  const verifiedUserId = await resolveVerifiedClerkSessionUserId();
+  if (verifiedUserId) {
+    return {
+      status: "signed-in",
+      userId: verifiedUserId,
+    };
+  }
+
   try {
     const { userId } = await auth();
     if (userId) {
@@ -32,24 +45,8 @@ export async function resolveFrontdoorAuthState(): Promise<FrontdoorAuthState> {
         userId,
       };
     }
-
-    const verifiedUserId = await resolveVerifiedClerkSessionUserId();
-    if (verifiedUserId) {
-      return {
-        status: "signed-in",
-        userId: verifiedUserId,
-      };
-    }
-
     return { status: "signed-out" };
   } catch {
-    const verifiedUserId = await resolveVerifiedClerkSessionUserId();
-    if (verifiedUserId) {
-      return {
-        status: "signed-in",
-        userId: verifiedUserId,
-      };
-    }
     return { status: "signed-out" };
   }
 }
