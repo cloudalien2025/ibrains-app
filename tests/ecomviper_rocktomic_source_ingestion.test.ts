@@ -218,6 +218,6 @@ describe("rocktomic source ingestion", () => {
 
     expect(first.productCount).toBeGreaterThan(0);
     expect(second.productCount).toBeGreaterThan(0);
-    expect(catalogCsvFetchCount).toBe(2);
+    expect(catalogCsvFetchCount).toBe(1);
   });
 });

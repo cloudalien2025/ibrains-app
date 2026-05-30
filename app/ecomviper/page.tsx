@@ -30,14 +30,7 @@ export default async function EcomViperDashboardPage() {
   let rows = [] as ReturnType<typeof toEcomViperProductInventoryRows>;
   const sourceWarnings: string[] = [];
 
-  const rocktomicResultPromise = getRocktomicSourceIngestionSnapshot({ userId })
-    .then((snapshot) => ({ kind: "ok" as const, snapshot }))
-    .catch((error) => ({ kind: "error" as const, error }));
-  const rocktomicSoftTimeout = new Promise<{ kind: "timeout" }>((resolve) => {
-    setTimeout(() => resolve({ kind: "timeout" }), ROCKTOMIC_SOFT_TIMEOUT_MS);
-  });
-
-  const [connectionResult, importStateResult, openAiStatusResult, rocktomicResult] = await Promise.all([
+  const [connectionResult, importStateResult, openAiStatusResult] = await Promise.all([
     getShopifyConnectionStatusForUser(userId)
       .then((connection) => ({ ok: true as const, connection }))
       .catch((error) => ({ ok: false as const, error })),
@@ -47,7 +40,6 @@ export default async function EcomViperDashboardPage() {
     getShopifyOpenAiConnectionStatusForUser(userId)
       .then((openAiStatus) => ({ ok: true as const, openAiStatus }))
       .catch((error) => ({ ok: false as const, error })),
-    Promise.race([rocktomicResultPromise, rocktomicSoftTimeout]),
   ]);
 
   if (connectionResult.ok) {
@@ -78,19 +70,26 @@ export default async function EcomViperDashboardPage() {
     openAiStatusLabel = "Not connected";
   }
 
-  const rocktomicSnapshot =
-    rocktomicResult.kind === "ok"
-      ? rocktomicResult.snapshot
-      : null;
-  if (rocktomicResult.kind === "error") {
-    sourceWarnings.push(
-      rocktomicResult.error instanceof Error
-        ? rocktomicResult.error.message
-        : "Could not load supplier source diagnostics."
-    );
-  }
-  if (rocktomicResult.kind === "timeout") {
-    sourceWarnings.push("Supplier source diagnostics timed out. Showing Shopify inventory without supplier enrichment.");
+  let rocktomicSnapshot: Awaited<ReturnType<typeof getRocktomicSourceIngestionSnapshot>> | null = null;
+  if (shopifyConnected) {
+    const rocktomicResultPromise = getRocktomicSourceIngestionSnapshot({ userId })
+      .then((snapshot) => ({ kind: "ok" as const, snapshot }))
+      .catch((error) => ({ kind: "error" as const, error }));
+    const rocktomicSoftTimeout = new Promise<{ kind: "timeout" }>((resolve) => {
+      setTimeout(() => resolve({ kind: "timeout" }), ROCKTOMIC_SOFT_TIMEOUT_MS);
+    });
+    const rocktomicResult = await Promise.race([rocktomicResultPromise, rocktomicSoftTimeout]);
+    if (rocktomicResult.kind === "ok") {
+      rocktomicSnapshot = rocktomicResult.snapshot;
+    } else if (rocktomicResult.kind === "error") {
+      sourceWarnings.push(
+        rocktomicResult.error instanceof Error
+          ? rocktomicResult.error.message
+          : "Could not load supplier source diagnostics."
+      );
+    } else {
+      sourceWarnings.push("Supplier source diagnostics timed out. Showing Shopify inventory without supplier enrichment.");
+    }
   }
 
   if (shopifyConnected) {
