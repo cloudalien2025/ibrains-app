@@ -8,6 +8,7 @@ import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+const ROCKTOMIC_SOFT_TIMEOUT_MS = 3_500;
 
 export default async function EcomViperDashboardPage() {
   let userId: string;
@@ -29,42 +30,79 @@ export default async function EcomViperDashboardPage() {
   let rows = [] as ReturnType<typeof toEcomViperProductInventoryRows>;
   const sourceWarnings: string[] = [];
 
-  const rocktomicSnapshot = await getRocktomicSourceIngestionSnapshot({ userId }).catch((error) => {
-    sourceWarnings.push(error instanceof Error ? error.message : "Could not load supplier source diagnostics.");
-    return null;
+  const rocktomicResultPromise = getRocktomicSourceIngestionSnapshot({ userId })
+    .then((snapshot) => ({ kind: "ok" as const, snapshot }))
+    .catch((error) => ({ kind: "error" as const, error }));
+  const rocktomicSoftTimeout = new Promise<{ kind: "timeout" }>((resolve) => {
+    setTimeout(() => resolve({ kind: "timeout" }), ROCKTOMIC_SOFT_TIMEOUT_MS);
   });
 
-  try {
-    const connection = await getShopifyConnectionStatusForUser(userId);
-    shopifyConnected = connection.connected;
-    storeDomain = connection.storeDomain;
-    shopifyStatusLabel = connection.connected ? "Connected" : "Not connected";
-  } catch (error) {
-    sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify connection status.");
+  const [connectionResult, importStateResult, openAiStatusResult, rocktomicResult] = await Promise.all([
+    getShopifyConnectionStatusForUser(userId)
+      .then((connection) => ({ ok: true as const, connection }))
+      .catch((error) => ({ ok: false as const, error })),
+    getShopifyImportStateForUser(userId)
+      .then((importState) => ({ ok: true as const, importState }))
+      .catch((error) => ({ ok: false as const, error })),
+    getShopifyOpenAiConnectionStatusForUser(userId)
+      .then((openAiStatus) => ({ ok: true as const, openAiStatus }))
+      .catch((error) => ({ ok: false as const, error })),
+    Promise.race([rocktomicResultPromise, rocktomicSoftTimeout]),
+  ]);
+
+  if (connectionResult.ok) {
+    shopifyConnected = connectionResult.connection.connected;
+    storeDomain = connectionResult.connection.storeDomain;
+    shopifyStatusLabel = connectionResult.connection.connected ? "Connected" : "Not connected";
+  } else {
+    sourceWarnings.push(
+      connectionResult.error instanceof Error
+        ? connectionResult.error.message
+        : "Could not load Shopify connection status."
+    );
   }
 
-  try {
-    const importState = await getShopifyImportStateForUser(userId);
-    lastImportAt = importState.lastImportAt;
-  } catch (error) {
-    sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify import state.");
+  if (importStateResult.ok) {
+    lastImportAt = importStateResult.importState.lastImportAt;
+  } else {
+    sourceWarnings.push(
+      importStateResult.error instanceof Error
+        ? importStateResult.error.message
+        : "Could not load Shopify import state."
+    );
   }
 
-  try {
-    const openAiStatus = await getShopifyOpenAiConnectionStatusForUser(userId);
-    openAiStatusLabel = openAiStatus.connected ? "Connected" : "Not connected";
-  } catch {
+  if (openAiStatusResult.ok) {
+    openAiStatusLabel = openAiStatusResult.openAiStatus.connected ? "Connected" : "Not connected";
+  } else {
     openAiStatusLabel = "Not connected";
   }
 
-  try {
-    const products = await listShopifyProductsForUser(userId);
-    rows = toEcomViperProductInventoryRows(products, {
-      supplierProducts: rocktomicSnapshot?.products,
-      rocktomicInventoryAvailable: rocktomicSnapshot?.inventoryAvailable ?? false,
-    });
-  } catch (error) {
-    sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify products.");
+  const rocktomicSnapshot =
+    rocktomicResult.kind === "ok"
+      ? rocktomicResult.snapshot
+      : null;
+  if (rocktomicResult.kind === "error") {
+    sourceWarnings.push(
+      rocktomicResult.error instanceof Error
+        ? rocktomicResult.error.message
+        : "Could not load supplier source diagnostics."
+    );
+  }
+  if (rocktomicResult.kind === "timeout") {
+    sourceWarnings.push("Supplier source diagnostics timed out. Showing Shopify inventory without supplier enrichment.");
+  }
+
+  if (shopifyConnected) {
+    try {
+      const products = await listShopifyProductsForUser(userId);
+      rows = toEcomViperProductInventoryRows(products, {
+        supplierProducts: rocktomicSnapshot?.products,
+        rocktomicInventoryAvailable: rocktomicSnapshot?.inventoryAvailable ?? false,
+      });
+    } catch (error) {
+      sourceWarnings.push(error instanceof Error ? error.message : "Could not load Shopify products.");
+    }
   }
 
   return (
