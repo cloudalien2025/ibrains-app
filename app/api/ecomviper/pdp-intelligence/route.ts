@@ -16,7 +16,6 @@ import {
   savePersistedShopifyPdpIntelligence,
 } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence-repository";
 import { buildShopifyProductEditorStateForUser } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
-import { matchPrimarySupplierBySkus } from "@/lib/ecomviper/suppliers/supplier-intelligence";
 
 interface PdpIntelligenceRequestBody {
   action?: unknown;
@@ -39,7 +38,7 @@ function asErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unexpected PDP intelligence error.";
 }
 
-async function resolveCurrentProduct(input: { userId: string; productReference: string }) {
+async function resolveCurrentEditorState(input: { userId: string; productReference: string }) {
   const initialState = await buildShopifyProductEditorStateForUser({
     userId: input.userId,
     productReference: input.productReference,
@@ -48,7 +47,7 @@ async function resolveCurrentProduct(input: { userId: string; productReference: 
   if (!initialState.currentShopifyListing) {
     return null;
   }
-  return initialState.currentShopifyListing;
+  return initialState;
 }
 
 async function resolvePersistedRecord(input: {
@@ -77,10 +76,11 @@ export async function GET(req: NextRequest) {
       return fail(400, "productReference is required.", "VALIDATION_ERROR");
     }
 
-    const product = await resolveCurrentProduct({ userId, productReference });
-    if (!product) {
+    const editorState = await resolveCurrentEditorState({ userId, productReference });
+    if (!editorState?.currentShopifyListing) {
       return fail(404, "Product not found for this workspace.", "NOT_FOUND");
     }
+    const product = editorState.currentShopifyListing;
 
     const record = await resolvePersistedRecord({
       userId,
@@ -117,10 +117,13 @@ export async function POST(req: NextRequest) {
       return fail(400, "action must be generate or save.", "VALIDATION_ERROR");
     }
 
-    const product = await resolveCurrentProduct({ userId, productReference });
-    if (!product) {
+    const editorState = await resolveCurrentEditorState({ userId, productReference });
+    if (!editorState?.currentShopifyListing) {
       return fail(404, "Product not found for this workspace.", "NOT_FOUND");
     }
+    const product = editorState.currentShopifyListing;
+    const sourceFacts = editorState.sourceFacts ?? null;
+    const supplierProduct = editorState.supplierContext?.product ?? null;
 
     const existing = await resolvePersistedRecord({
       userId,
@@ -166,32 +169,20 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const skuList = product.variants.map((entry) => entry.sku.trim()).filter(Boolean);
-    const supplierSnapshot = await matchPrimarySupplierBySkus(skuList, {
-      userId,
-      allowRefresh: false,
-      triggerBackgroundRefresh: false,
-    }).catch(() => null);
-    const supplierMatch = supplierSnapshot?.match;
-    const supplierFactsSynced =
-      Boolean(supplierMatch?.product) &&
-      Boolean(
-        supplierSnapshot?.syncStatus === "synced" ||
-          supplierSnapshot?.syncStatus === "parsing_partial" ||
-          supplierSnapshot?.syncStatus === "ocr_required"
-      );
+    const supplierFactsSynced = Boolean(sourceFacts?.supplierProductRecordFound && supplierProduct);
     const openAiApiKey = await getShopifyOpenAiApiKeyForUser(userId);
 
     const generated = await generateShopifyPdpIntelligence({
       product,
       supplierMatch: {
-        supplier: supplierMatch?.product?.supplier ?? null,
-        supplierSku: supplierMatch?.matchedSku ?? null,
-        product: supplierMatch?.product ?? null,
-        inventoryAvailable: supplierSnapshot?.inventoryAvailable ?? false,
-        syncStatus: supplierSnapshot?.syncStatus ?? null,
+        supplier: supplierProduct?.supplier ?? null,
+        supplierSku: sourceFacts?.normalizedSku || editorState.supplierContext?.matchedSku || null,
+        product: supplierProduct,
+        inventoryAvailable: sourceFacts?.inventoryRecordFound ?? false,
+        syncStatus: editorState.supplierContext?.syncStatus ?? null,
         supplierFactsSynced,
       },
+      sourceFacts,
       existing,
       openAiApiKey,
     });
@@ -207,12 +198,25 @@ export async function POST(req: NextRequest) {
       ok: true,
       action: "generate",
       intelligence: persisted,
+      diagnostics: {
+        normalized_sku: sourceFacts?.normalizedSku || null,
+        supplier_product_record_status: sourceFacts?.supplierProductRecordFound ? "synced" : "missing",
+        pricing_record_status: sourceFacts?.pricingRecordFound ? "synced" : "missing",
+        inventory_record_status: sourceFacts?.inventoryRecordFound ? "synced" : "missing",
+        asset_record_status: sourceFacts?.assetsRecordFound ? "synced" : "missing",
+        selected_membership_tier: sourceFacts?.selectedMembershipTier || null,
+        source_facts_used: supplierFactsSynced,
+        supplement_facts_status: sourceFacts?.supplementFacts?.status || "missing",
+        generated_from_source_version: supplierProduct?.sourceVersion || "shopify_limited",
+        stale_intelligence_before_generation: sourceFacts?.staleIntelligence || false,
+      },
       sourceFactsUsed: supplierFactsSynced,
-      supplierProductRecordStatus: supplierMatch?.product ? "synced" : "missing",
-      pricingRecordStatus: supplierMatch?.product?.pricing ? "synced" : "missing",
-      inventoryRecordStatus: supplierMatch?.product ? "synced" : "missing",
-      supplementFactsStatus: supplierMatch?.product?.supplementFacts?.status ?? "missing",
-      coaStatus: supplierMatch?.product?.coa?.status ?? "missing",
+      supplierProductRecordStatus: sourceFacts?.supplierProductRecordFound ? "synced" : "missing",
+      pricingRecordStatus: sourceFacts?.pricingRecordFound ? "synced" : "missing",
+      inventoryRecordStatus: sourceFacts?.inventoryRecordFound ? "synced" : "missing",
+      assetRecordStatus: sourceFacts?.assetsRecordFound ? "synced" : "missing",
+      supplementFactsStatus: sourceFacts?.supplementFacts?.status ?? "missing",
+      coaStatus: sourceFacts?.assets?.coaStatus ?? "missing",
       generationUnavailable: persisted.generation_status === "generation_unavailable",
       message:
         !supplierFactsSynced

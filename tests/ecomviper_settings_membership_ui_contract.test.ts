@@ -9,6 +9,7 @@ describe("ecomviper settings membership tier ui contract", () => {
 
     expect(source).toContain("Supplier Membership Tier");
     expect(source).toContain("Select membership tier in Settings to calculate cost and profit.");
+    expect(source).toContain("Run source sync to detect membership tiers.");
     expect(source).toContain("/api/ecomviper/settings/supplier-membership");
   });
 });

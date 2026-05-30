@@ -14,6 +14,7 @@ export async function GET() {
       userId: auth.userId,
       allowRefresh: false,
       triggerBackgroundRefresh: false,
+      includeSeedFallbackProducts: false,
     });
 
     return ok({

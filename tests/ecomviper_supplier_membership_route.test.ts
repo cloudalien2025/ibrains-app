@@ -9,8 +9,8 @@ vi.mock("@/lib/auth/requireSignedInUser", () => ({
 }));
 
 vi.mock("@/lib/ecomviper/settings/supplier-membership", () => ({
-  getSupplierMembershipTierSelectionForUser: (...args: unknown[]) => getTierMock(...args),
-  saveSupplierMembershipTierSelectionForUser: (...args: unknown[]) => saveTierMock(...args),
+  getMerchantSupplierMembershipTier: (...args: unknown[]) => getTierMock(...args),
+  setMerchantSupplierMembershipTier: (...args: unknown[]) => saveTierMock(...args),
 }));
 
 describe("ecomviper supplier membership settings route", () => {
@@ -29,6 +29,7 @@ describe("ecomviper supplier membership settings route", () => {
     const json = (await response.json()) as { ok?: boolean; membershipTier?: string | null };
 
     expect(response.status).toBe(200);
+    expect(getTierMock).toHaveBeenCalledWith({ userId: "user-1", supplierKey: "rocktomic" });
     expect(json.ok).toBe(true);
     expect(json.membershipTier).toBe("VIP");
   });
@@ -48,7 +49,7 @@ describe("ecomviper supplier membership settings route", () => {
     const json = (await response.json()) as { ok?: boolean; membershipTier?: string | null };
 
     expect(response.status).toBe(200);
-    expect(saveTierMock).toHaveBeenCalledWith({ userId: "user-2", membershipTier: "Starter" });
+    expect(saveTierMock).toHaveBeenCalledWith({ userId: "user-2", supplierKey: "rocktomic", tier: "Starter" });
     expect(json.ok).toBe(true);
     expect(json.membershipTier).toBe("Starter");
   });

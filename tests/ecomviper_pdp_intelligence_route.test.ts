@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   requireSignedInUser: vi.fn(),
   buildShopifyProductEditorStateForUser: vi.fn(),
   getShopifyOpenAiApiKeyForUser: vi.fn(),
-  matchPrimarySupplierBySkus: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/requireSignedInUser", () => ({
@@ -18,10 +17,6 @@ vi.mock("@/lib/ecomviper/shopify/shopify-product-editor-state", () => ({
 
 vi.mock("@/lib/ecomviper/shopify/openai-connection", () => ({
   getShopifyOpenAiApiKeyForUser: mocks.getShopifyOpenAiApiKeyForUser,
-}));
-
-vi.mock("@/lib/ecomviper/suppliers/supplier-intelligence", () => ({
-  matchPrimarySupplierBySkus: mocks.matchPrimarySupplierBySkus,
 }));
 
 function listingFixture() {
@@ -51,6 +46,38 @@ function listingFixture() {
   };
 }
 
+function supplierProductFixture() {
+  return {
+    supplier: "Rocktomic",
+    sku: "ROC817",
+    productName: "Sleep Formula",
+    category: "Sleep",
+    supplementFacts: { status: "ocr_required", value: null },
+    inventoryStatus: "in_stock",
+    pricing: {
+      wholesaleCost: 5.25,
+      msrp: 39.99,
+      currency: "USD",
+      membershipTier: "Scale Plan $497/mo",
+      membershipTiersDetected: ["Scale Plan $497/mo"],
+      membershipTierCosts: { "Scale Plan $497/mo": 5.25 },
+    },
+    coa: { status: "available", url: "https://example.com/ROC817-COA.pdf" },
+    labelTemplate: { status: "available", url: "https://example.com/templates.html" },
+    mockup: { status: "available", url: "https://example.com/mockup.html" },
+    certifications: [],
+    dietaryAttributes: [],
+    manufacturingClaims: [],
+    activeIngredients: [],
+    ingredientHighlights: [],
+    productFeatures: [],
+    sourceDiagnostics: ["normalized_product_record_status: found"],
+    lastSyncedAt: "2026-05-30T00:00:00.000Z",
+    sourceVersion: "global-test-source",
+    sourceUpdatedAt: "2026-05-30T00:00:00.000Z",
+  };
+}
+
 describe("ecomviper PDP intelligence route", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -62,21 +89,6 @@ describe("ecomviper PDP intelligence route", () => {
       currentShopifyListing: listingFixture(),
     });
     mocks.getShopifyOpenAiApiKeyForUser.mockResolvedValue(null);
-    mocks.matchPrimarySupplierBySkus.mockResolvedValue({
-      platform: "rocktomic",
-      supplierName: "Rocktomic",
-      match: {
-        status: "rocktomic",
-        skuInput: "ROC817",
-        normalizedSku: "ROC817",
-        matchedSku: "ROC817",
-        matchReason: "exact_sku",
-        matchConfidence: 1,
-        product: null,
-      },
-      inventoryAvailable: false,
-      lastCheckedAt: "2026-05-30T00:00:00.000Z",
-    });
   });
 
   it("returns 401 for unauthorized requests", async () => {
@@ -187,10 +199,70 @@ describe("ecomviper PDP intelligence route", () => {
     expect(response.status).toBe(200);
     expect(payload.generationUnavailable).toBe(true);
     expect(payload.intelligence?.generation_status).toBe("generation_unavailable");
-    expect(mocks.matchPrimarySupplierBySkus).toHaveBeenCalledWith(["ROC817"], {
+    expect(mocks.buildShopifyProductEditorStateForUser).toHaveBeenCalledWith({
       userId: "user_a",
-      allowRefresh: false,
-      triggerBackgroundRefresh: false,
+      productReference: "sleep-formula-gummies",
+      demoMode: false,
+    });
+  });
+
+  it("returns generation diagnostics from product editor sourceFacts", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_a",
+      unauthorizedResponse: null,
+    });
+    mocks.getShopifyOpenAiApiKeyForUser.mockResolvedValue(null);
+    mocks.buildShopifyProductEditorStateForUser.mockResolvedValue({
+      currentShopifyListing: listingFixture(),
+      sourceFacts: {
+        normalizedSku: "ROC817",
+        supplierProductRecordFound: true,
+        pricingRecordFound: true,
+        inventoryRecordFound: true,
+        assetsRecordFound: true,
+        selectedMembershipTier: "Scale Plan $497/mo",
+        supplementFacts: {
+          status: "ocr_required",
+          value: "",
+          displayText: "Supplement Facts require OCR extraction from catalog label image.",
+        },
+        staleIntelligence: true,
+        inventory: { status: "in_stock", displayText: "Available" },
+        commerce: { wholesaleCost: 5.25, msrp: 39.99, estimatedProfit: 14.75, marginPercent: 73.75 },
+        assets: { coaStatus: "available", coaUrl: "https://example.com/ROC817-COA.pdf" },
+      },
+      supplierContext: {
+        matchedSku: "ROC817",
+        syncStatus: "synced",
+        product: supplierProductFixture(),
+      },
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/pdp-intelligence/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/pdp-intelligence", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "generate",
+          productReference: "sleep-formula-gummies",
+        }),
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.diagnostics).toMatchObject({
+      normalized_sku: "ROC817",
+      supplier_product_record_status: "synced",
+      pricing_record_status: "synced",
+      inventory_record_status: "synced",
+      asset_record_status: "synced",
+      selected_membership_tier: "Scale Plan $497/mo",
+      source_facts_used: true,
+      supplement_facts_status: "ocr_required",
+      generated_from_source_version: "global-test-source",
+      stale_intelligence_before_generation: true,
     });
   });
 });

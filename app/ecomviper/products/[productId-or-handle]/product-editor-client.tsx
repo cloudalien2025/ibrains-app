@@ -72,6 +72,16 @@ function availabilityFromInventoryStatus(status: string): string {
   return "Availability Unknown";
 }
 
+function meaningfulList(values: string[]): string[] {
+  return values
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0 && entry.toLowerCase() !== "unknown");
+}
+
+function sourceFieldText(value: string | undefined, displayText: string | undefined): string {
+  return value?.trim() || displayText?.trim() || "";
+}
+
 export default function EcomViperProductEditorClient({ initialState }: { initialState: ShopifyProductEditorInitialState }) {
   const product = initialState.currentShopifyListing;
 
@@ -90,6 +100,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
   }
 
   const supplierProduct = initialState.supplierContext.product;
+  const sourceFacts = initialState.sourceFacts ?? null;
   const baseRecord = useMemo(() => {
     const fallback = createEmptyShopifyPdpIntelligenceRecord({
       shopifyProductId: product.productId,
@@ -100,6 +111,39 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     const seeded = initialState.pdpIntelligence
       ? sanitizeShopifyPdpIntelligenceRecord(initialState.pdpIntelligence, fallback)
       : fallback;
+    const sourceIngredients = sourceFacts?.activeIngredients.values.length
+      ? sourceFacts.activeIngredients.values
+      : supplierProduct?.activeIngredients || [];
+    const sourceDietary = sourceFacts?.dietaryAllergenAttributes.values.length
+      ? sourceFacts.dietaryAllergenAttributes.values
+      : supplierProduct?.dietaryAttributes || [];
+    const sourceSupplementFacts = sourceFacts
+      ? sourceFieldText(sourceFacts.supplementFacts.value, sourceFacts.supplementFacts.displayText)
+      : supplierProduct?.supplementFacts?.value || "";
+    const sourceServingSize = sourceFacts
+      ? sourceFieldText(sourceFacts.servingSize.value, sourceFacts.servingSize.displayText)
+      : supplierProduct?.servingSize || "";
+    const sourceServingsPerContainer = sourceFacts
+      ? sourceFieldText(sourceFacts.servingsPerContainer.value, sourceFacts.servingsPerContainer.displayText)
+      : supplierProduct?.servingsPerContainer || "";
+    const sourceOtherIngredients = sourceFacts
+      ? sourceFieldText(sourceFacts.otherIngredients.value, sourceFacts.otherIngredients.displayText)
+      : supplierProduct?.otherIngredients || "";
+    const sourceAmountPerServing = sourceFacts
+      ? sourceFieldText(sourceFacts.amountPerServing.value, sourceFacts.amountPerServing.displayText)
+      : supplierProduct?.amountPerServing || "";
+    const sourceIngredientHighlights =
+      meaningfulList(seeded.ingredient_highlights).length > 0
+        ? meaningfulList(seeded.ingredient_highlights)
+        : supplierProduct?.ingredientHighlights || [];
+    const sourcePrice = sourceFacts?.commerce.shopifyPrice ?? seeded.price ?? null;
+    const sourceCompareAt = sourceFacts?.commerce.compareAtPrice ?? seeded.compare_at_price ?? null;
+    const sourceWholesale = sourceFacts?.commerce.wholesaleCost ?? null;
+    const sourceMsrp = sourceFacts?.commerce.msrp ?? null;
+    const sourceProfit = sourceFacts?.commerce.estimatedProfit ?? null;
+    const sourceMargin = sourceFacts?.commerce.marginPercent ?? null;
+    const sourceInventoryStatus = sourceFacts?.inventory.status || supplierProduct?.inventoryStatus || "unknown";
+    const sourceAvailabilityStatus = sourceFacts?.inventory.displayText || availabilityFromInventoryStatus(sourceInventoryStatus);
 
     return {
       ...seeded,
@@ -108,29 +152,22 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
       supplier: supplierProduct?.supplier ?? seeded.supplier,
       supplier_sku: initialState.supplierContext.matchedSku ?? seeded.supplier_sku,
       certifications:
-        seeded.certifications.length > 0
-          ? seeded.certifications
+        meaningfulList(seeded.certifications).length > 0
+          ? meaningfulList(seeded.certifications)
           : supplierProduct?.certifications?.length
             ? supplierProduct.certifications
             : [],
-      dietary_attributes:
-        seeded.dietary_attributes.length > 0
-          ? seeded.dietary_attributes
-          : supplierProduct?.dietaryAttributes?.length
-            ? supplierProduct.dietaryAttributes
-            : [],
+      dietary_attributes: sourceDietary,
       manufacturing_claims:
-        seeded.manufacturing_claims.length > 0
-          ? seeded.manufacturing_claims
+        meaningfulList(seeded.manufacturing_claims).length > 0
+          ? meaningfulList(seeded.manufacturing_claims)
           : supplierProduct?.manufacturingClaims?.length
             ? supplierProduct.manufacturingClaims
             : [],
-      inventory_status: seeded.inventory_status || supplierProduct?.inventoryStatus || "unknown",
-      availability_status:
-        seeded.availability_status ||
-        availabilityFromInventoryStatus(seeded.inventory_status || supplierProduct?.inventoryStatus || "unknown"),
-      coa_status: seeded.coa_status || supplierProduct?.coa?.status || "unknown",
-      coa_link: seeded.coa_link || supplierProduct?.coa?.url || "",
+      inventory_status: sourceInventoryStatus,
+      availability_status: sourceAvailabilityStatus,
+      coa_status: sourceFacts?.assets.coaStatus || seeded.coa_status || supplierProduct?.coa?.status || "unknown",
+      coa_link: sourceFacts?.assets.coaUrl || seeded.coa_link || supplierProduct?.coa?.url || "",
       coa_testing_categories:
         seeded.coa_testing_categories.length > 0
           ? seeded.coa_testing_categories
@@ -141,45 +178,28 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
       shipping_time: seeded.shipping_time || supplierProduct?.shipping?.shippingTime || "Unknown",
       return_policy: seeded.return_policy || supplierProduct?.shipping?.returnPolicy || "Unknown",
       fulfillment_status: seeded.fulfillment_status || supplierProduct?.shipping?.fulfillmentStatus || "unknown",
-      wholesale_cost: seeded.wholesale_cost ?? supplierProduct?.pricing?.wholesaleCost ?? null,
-      msrp: seeded.msrp ?? supplierProduct?.pricing?.msrp ?? null,
-      estimated_profit: seeded.estimated_profit ?? supplierProduct?.pricing?.estimatedProfit ?? null,
-      margin_percent:
-        seeded.margin_percent ??
-        supplierProduct?.pricing?.marginPercent ??
-        (seeded.price != null && (seeded.wholesale_cost ?? supplierProduct?.pricing?.wholesaleCost) != null && seeded.price > 0
-          ? Number(
-              ((((seeded.price ?? 0) - (seeded.wholesale_cost ?? supplierProduct?.pricing?.wholesaleCost ?? 0)) /
-                (seeded.price ?? 1)) *
-                100).toFixed(2)
-            )
-          : null),
+      price: sourcePrice,
+      compare_at_price: sourceCompareAt,
+      wholesale_cost: sourceWholesale,
+      msrp: sourceMsrp,
+      estimated_profit: sourceProfit,
+      margin_percent: sourceMargin,
       currency: seeded.currency || supplierProduct?.pricing?.currency || "USD",
-      supplement_facts: seeded.supplement_facts || supplierProduct?.supplementFacts?.value || "",
-      ingredients:
-        seeded.ingredients.length > 0
-          ? seeded.ingredients
-          : supplierProduct?.activeIngredients?.length
-            ? supplierProduct.activeIngredients
-            : [],
-      serving_size: seeded.serving_size || supplierProduct?.servingSize || "",
-      servings_per_container: seeded.servings_per_container || supplierProduct?.servingsPerContainer || "",
-      other_ingredients: seeded.other_ingredients || supplierProduct?.otherIngredients || "",
+      supplement_facts: sourceSupplementFacts,
+      ingredients: sourceIngredients,
+      serving_size: sourceServingSize,
+      servings_per_container: sourceServingsPerContainer,
+      other_ingredients: sourceOtherIngredients,
       key_features:
-        seeded.key_features.length > 0
-          ? seeded.key_features
+        meaningfulList(seeded.key_features).length > 0
+          ? meaningfulList(seeded.key_features)
           : supplierProduct?.productFeatures?.length
             ? supplierProduct.productFeatures
             : [],
-      ingredient_highlights:
-        seeded.ingredient_highlights.length > 0
-          ? seeded.ingredient_highlights
-          : supplierProduct?.ingredientHighlights?.length
-            ? supplierProduct.ingredientHighlights
-            : [],
+      ingredient_highlights: sourceIngredientHighlights,
       source_diagnostics:
-        seeded.source_diagnostics.length > 0
-          ? seeded.source_diagnostics
+        sourceFacts?.diagnostics.length
+          ? sourceFacts.diagnostics
           : [
               initialState.supplierContext.matched ? `Matched SKU: ${initialState.supplierContext.matchedSku}` : "Matched SKU: Unknown",
               `Inventory source: ${initialState.supplierContext.inventoryAvailable ? "Available" : "Unavailable"}`,
@@ -187,10 +207,11 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
               `coa_link_error: ${supplierProduct?.coaLinkError || "none"}`,
               `membership_tier_selected: ${supplierProduct?.pricing?.membershipTier || "none"}`,
               `pricing_status: ${supplierProduct?.pricing?.pricingStatusLabel || "unknown"}`,
+              `amount_per_serving: ${sourceAmountPerServing || "not_extracted"}`,
               ...(supplierProduct?.sourceDiagnostics || []),
             ],
     };
-  }, [initialState.pdpIntelligence, initialState.supplierContext, product.handle, product.productId, supplierProduct]);
+  }, [initialState.pdpIntelligence, initialState.supplierContext, product.handle, product.productId, sourceFacts, supplierProduct]);
 
   const [record, setRecord] = useState<ShopifyPdpIntelligenceRecord>(baseRecord);
   const [generationStatus, setGenerationStatus] = useState<AsyncStatus>("idle");
@@ -199,10 +220,11 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
   const [activeTab, setActiveTab] = useState<EditorTab>("overview");
 
   const productReference = initialState.productReference || product.handle || product.productId;
-  const selectedMembershipTier = supplierProduct?.pricing?.membershipTier || null;
-  const pricingStatusLabel = supplierProduct?.pricing?.pricingStatusLabel || "unknown";
+  const selectedMembershipTier = sourceFacts?.selectedMembershipTier ?? supplierProduct?.pricing?.membershipTier ?? null;
+  const pricingStatusLabel = sourceFacts?.commerce.pricingStatusLabel || supplierProduct?.pricing?.pricingStatusLabel || "unknown";
+  const pricingMessage = sourceFacts?.commerce.message || "Select membership tier in Settings to calculate cost and profit.";
   const hasSelectedTierWholesale =
-    Boolean(selectedMembershipTier) && typeof supplierProduct?.pricing?.wholesaleCost === "number";
+    Boolean(selectedMembershipTier) && typeof sourceFacts?.commerce.wholesaleCost === "number";
   const supplierSyncRequired = initialState.supplierContext.syncRequired;
   const supplierSyncMessage = initialState.supplierContext.syncMessage;
 
@@ -321,6 +343,11 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
               {supplierSyncMessage || "Supplier data has not been synced for this SKU. Run source sync."}
             </p>
           ) : null}
+          {sourceFacts?.staleIntelligence ? (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Source data has changed since this intelligence was generated. Regenerate to use latest source facts.
+            </p>
+          ) : null}
           {statusMessage ? <p className="mt-2 text-sm text-[#334155]">{statusMessage}</p> : null}
         </section>
 
@@ -403,11 +430,11 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 <label className="grid gap-1 text-sm md:col-span-2">Supplement Facts
                   <textarea value={record.supplement_facts} onChange={(e) => setRecord((s) => ({ ...s, supplement_facts: e.target.value }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
-                <label className="grid gap-1 text-sm">Ingredient Highlights
-                  <textarea value={listToTextarea(record.ingredient_highlights)} onChange={(e) => setRecord((s) => ({ ...s, ingredient_highlights: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
-                </label>
-                <label className="grid gap-1 text-sm">Ingredients
+                <label className="grid gap-1 text-sm">Active Ingredients
                   <textarea value={listToTextarea(record.ingredients)} onChange={(e) => setRecord((s) => ({ ...s, ingredients: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                <label className="grid gap-1 text-sm">Amount Per Serving
+                  <input value={sourceFacts?.amountPerServing.displayText || ""} readOnly className="rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-[#475569]" />
                 </label>
                 <label className="grid gap-1 text-sm">Serving Size
                   <input value={record.serving_size} onChange={(e) => setRecord((s) => ({ ...s, serving_size: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
@@ -418,6 +445,15 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 <label className="grid gap-1 text-sm md:col-span-2">Other Ingredients
                   <textarea value={record.other_ingredients} onChange={(e) => setRecord((s) => ({ ...s, other_ingredients: e.target.value }))} rows={2} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
+                <label className="grid gap-1 text-sm md:col-span-2">Dietary / Allergen Attributes
+                  <textarea value={sourceFacts?.dietaryAllergenAttributes.displayText || ""} readOnly rows={2} className="rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-[#475569]" />
+                </label>
+                <label className="grid gap-1 text-sm md:col-span-2">Ingredient Highlights
+                  <textarea value={listToTextarea(record.ingredient_highlights)} onChange={(e) => setRecord((s) => ({ ...s, ingredient_highlights: textareaToList(e.target.value) }))} rows={3} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
+                </label>
+                {sourceFacts && sourceFacts.activeIngredients.status !== "extracted" ? (
+                  <p className="text-sm text-amber-800 md:col-span-2">Ingredient Highlights generation is limited because source ingredients are missing or require extraction.</p>
+                ) : null}
                 <label className="grid gap-1 text-sm md:col-span-2">Source Diagnostics
                   <textarea value={listToTextarea(record.source_diagnostics)} onChange={(e) => setRecord((s) => ({ ...s, source_diagnostics: textareaToList(e.target.value) }))} rows={3} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
@@ -481,7 +517,12 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 </label>
                 {!selectedMembershipTier ? (
                   <p className="text-sm text-[#475569] md:col-span-2">
-                    Select membership tier in Settings to calculate cost and profit.
+                    {pricingMessage}
+                  </p>
+                ) : null}
+                {selectedMembershipTier && !hasSelectedTierWholesale ? (
+                  <p className="text-sm text-amber-800 md:col-span-2">
+                    {pricingMessage}
                   </p>
                 ) : null}
                 {supplierSyncRequired ? (
@@ -568,6 +609,11 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
 
             {activeTab === "assets" ? (
               <div className="grid gap-3 md:grid-cols-2">
+                <div className="md:col-span-2 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-sm text-[#334155]">
+                  <p>COA: {sourceFacts?.assets.coaUrl ? <a href={sourceFacts.assets.coaUrl} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">View COA</a> : sourceFacts?.assets.message || "COA repository pending"}</p>
+                  <p>Label Template: {sourceFacts?.assets.labelTemplateUrl ? <a href={sourceFacts.assets.labelTemplateUrl} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">Open label template</a> : "Not available"}</p>
+                  <p>Mockup: {sourceFacts?.assets.mockupUrl ? <a href={sourceFacts.assets.mockupUrl} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">Open mockup</a> : "Not available"}</p>
+                </div>
                 <label className="grid gap-1 text-sm">Product Images
                   <textarea value={listToTextarea(record.product_images)} onChange={(e) => setRecord((s) => ({ ...s, product_images: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
@@ -619,17 +665,17 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
               <div className="mt-2 space-y-1 text-xs text-[#475569]">
                 <p>Price: {asMoney(record.price, record.currency)}</p>
                 <p>Compare At: {asMoney(record.compare_at_price, record.currency)}</p>
-                <p>Wholesale Cost: {asMoney(record.wholesale_cost, record.currency)}</p>
+                <p>Wholesale Cost: {hasSelectedTierWholesale ? asMoney(record.wholesale_cost, record.currency) : pricingMessage}</p>
                 <p>MSRP: {asMoney(record.msrp, record.currency)}</p>
-                <p>Margin: {record.margin_percent != null ? `${record.margin_percent}%` : "Unknown"}</p>
-                <p>Estimated Profit: {asMoney(record.estimated_profit, record.currency)}</p>
+                <p>Margin: {hasSelectedTierWholesale && record.margin_percent != null ? `${record.margin_percent}%` : pricingMessage}</p>
+                <p>Estimated Profit: {hasSelectedTierWholesale ? asMoney(record.estimated_profit, record.currency) : pricingMessage}</p>
                 <p>Selected Membership Tier: {selectedMembershipTier || "Not selected"}</p>
                 <p>Pricing Status: {pricingStatusLabel}</p>
                 <p>Inventory: {record.inventory_status || "unknown"}</p>
                 <p>Availability: {record.availability_status || "Availability Unknown"}</p>
                 <p>Last Inventory Sync: {asIso(initialState.supplierContext.lastSupplierCheckAt)}</p>
                 {!hasSelectedTierWholesale ? (
-                  <p>Select membership tier in Settings to calculate cost and profit.</p>
+                  <p>{pricingMessage}</p>
                 ) : null}
                 {supplierSyncRequired ? (
                   <p>Supplier data has not been synced for this SKU. Run source sync.</p>
@@ -652,11 +698,20 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
               <h2 className="text-sm font-semibold">COA</h2>
               <div className="mt-2 space-y-1 text-xs text-[#475569]">
                 <p>COA Status: {record.coa_status || "unknown"}</p>
-                <p>COA Link: {record.coa_link ? <a className="text-[#1D4ED8] hover:underline" href={record.coa_link} target="_blank" rel="noreferrer">Open</a> : supplierProduct?.coaLinkStatus === "extraction_failed" ? "Extraction failed" : "Not available"}</p>
+                <p>COA Link: {record.coa_link ? <a className="text-[#1D4ED8] hover:underline" href={record.coa_link} target="_blank" rel="noreferrer">View COA</a> : sourceFacts?.assets.message || (supplierProduct?.coaLinkStatus === "extraction_failed" ? "Extraction failed" : "COA repository pending")}</p>
                 <p>Expiration Date: {record.coa_expiration_date || "Unknown"}</p>
                 <p>Testing Categories: {record.coa_testing_categories.join(", ") || "Unknown"}</p>
                 <p>Verification Status: {record.coa_verification_status || "unknown"}</p>
                 {supplierProduct?.coaLinkError ? <p>Diagnostic: {supplierProduct.coaLinkError}</p> : null}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4" data-testid="ecomviper-source-diagnostics-card">
+              <h2 className="text-sm font-semibold">Source Diagnostics</h2>
+              <div className="mt-2 space-y-1 text-xs text-[#475569]">
+                {(sourceFacts?.diagnostics || record.source_diagnostics).slice(0, 18).map((entry, index) => (
+                  <p key={`${index}-${entry}`}>{entry}</p>
+                ))}
               </div>
             </section>
           </aside>

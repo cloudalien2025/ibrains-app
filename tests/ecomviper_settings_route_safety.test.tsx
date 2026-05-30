@@ -2,19 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireSignedInUser: vi.fn(),
-  getRocktomicSourceIngestionSnapshot: vi.fn(),
+  getGlobalSupplierSyncSummary: vi.fn(),
   getShopifyConnectionStatusForUser: vi.fn(),
   getShopifyImportStateForUser: vi.fn(),
   getShopifyOpenAiConnectionStatusForUser: vi.fn(),
-  getSupplierMembershipTierSelectionForUser: vi.fn(),
+  getMerchantSupplierMembershipTier: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/requireSignedInUser", () => ({
   requireSignedInUser: mocks.requireSignedInUser,
 }));
 
-vi.mock("@/lib/ecomviper/dropshipping/rocktomic-source-ingestion", () => ({
-  getRocktomicSourceIngestionSnapshot: mocks.getRocktomicSourceIngestionSnapshot,
+vi.mock("@/lib/ecomviper/suppliers/global-supplier-data", () => ({
+  getGlobalSupplierSyncSummary: mocks.getGlobalSupplierSyncSummary,
 }));
 
 vi.mock("@/lib/ecomviper/shopify/shopify-connection", () => ({
@@ -30,7 +30,7 @@ vi.mock("@/lib/ecomviper/shopify/openai-connection", () => ({
 }));
 
 vi.mock("@/lib/ecomviper/settings/supplier-membership", () => ({
-  getSupplierMembershipTierSelectionForUser: mocks.getSupplierMembershipTierSelectionForUser,
+  getMerchantSupplierMembershipTier: mocks.getMerchantSupplierMembershipTier,
 }));
 
 vi.mock("@/app/ecomviper/settings/supplier-membership-tier-form", () => ({
@@ -43,10 +43,26 @@ describe("ecomviper settings route safety", () => {
     Object.values(mocks).forEach((fn) => fn.mockReset());
     mocks.getShopifyImportStateForUser.mockResolvedValue({ lastImportAt: null, importedCount: 0, updatedAt: null });
     mocks.getShopifyOpenAiConnectionStatusForUser.mockResolvedValue({ connected: false, maskedKey: "", updatedAt: null });
-    mocks.getSupplierMembershipTierSelectionForUser.mockResolvedValue(null);
+    mocks.getMerchantSupplierMembershipTier.mockResolvedValue(null);
+    mocks.getGlobalSupplierSyncSummary.mockResolvedValue({
+      supplierKey: "rocktomic",
+      globalScopeKey: "__global__",
+      productCount: 145,
+      pricingRecordCount: 145,
+      inventoryRecordCount: 145,
+      assetRecordCount: 145,
+      sourceStatuses: [],
+      latestRun: null,
+      detectedMembershipTiers: ["Non Member Pricing"],
+      syncStatus: "synced",
+      lastCheckedAt: "2026-05-30T00:00:00.000Z",
+      lastSuccessfulSyncAt: "2026-05-30T00:00:00.000Z",
+      lastAttemptedSyncAt: "2026-05-30T00:00:00.000Z",
+      lastSyncError: null,
+    });
   });
 
-  it("does not trigger supplier ingestion when Shopify is disconnected", async () => {
+  it("reads global supplier diagnostics even when Shopify is disconnected", async () => {
     mocks.requireSignedInUser.mockResolvedValue({ userId: "user_1", unauthorizedResponse: null });
     mocks.getShopifyConnectionStatusForUser.mockResolvedValue({
       connected: false,
@@ -67,10 +83,10 @@ describe("ecomviper settings route safety", () => {
 
     const mod = await import("@/app/ecomviper/settings/page");
     await expect(mod.default()).resolves.toBeTruthy();
-    expect(mocks.getRocktomicSourceIngestionSnapshot).not.toHaveBeenCalled();
+    expect(mocks.getGlobalSupplierSyncSummary).toHaveBeenCalledWith("rocktomic");
   });
 
-  it("uses cache-only supplier snapshot when Shopify is connected", async () => {
+  it("uses global supplier summary when Shopify is connected", async () => {
     mocks.requireSignedInUser.mockResolvedValue({ userId: "user_1", unauthorizedResponse: null });
     mocks.getShopifyConnectionStatusForUser.mockResolvedValue({
       connected: true,
@@ -88,28 +104,8 @@ describe("ecomviper settings route safety", () => {
       status: "connected",
       saveSupported: false,
     });
-    mocks.getRocktomicSourceIngestionSnapshot.mockResolvedValue({
-      supplier: "Rocktomic",
-      products: [],
-      productCount: 0,
-      catalogSkuCount: 0,
-      catalogExtractedSkuCount: 0,
-      inventorySkuCount: 0,
-      inventoryAvailable: false,
-      usedSeedFallback: true,
-      membershipTiersDetected: [],
-      sourceDiagnostics: [],
-      lastCheckedAt: "2026-05-30T00:00:00.000Z",
-      cacheState: "stale",
-      refreshState: "refreshing",
-    });
-
     const mod = await import("@/app/ecomviper/settings/page");
     await expect(mod.default()).resolves.toBeTruthy();
-    expect(mocks.getRocktomicSourceIngestionSnapshot).toHaveBeenCalledWith({
-      userId: "user_1",
-      allowRefresh: false,
-      triggerBackgroundRefresh: false,
-    });
+    expect(mocks.getGlobalSupplierSyncSummary).toHaveBeenCalledWith("rocktomic");
   });
 });

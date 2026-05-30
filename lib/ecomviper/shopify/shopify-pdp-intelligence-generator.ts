@@ -9,6 +9,7 @@ import {
 } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence-compliance";
 import type { ShopifyCurrentListingDocket } from "@/lib/ecomviper/shopify/shopify-product-docket";
 import type { RocktomicSupplierProduct } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
+import type { ShopifyProductEditorSourceFacts } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
 
 const OPENAI_MODEL = process.env.ECOMVIPER_PDP_OPENAI_MODEL?.trim() || "gpt-4.1-mini";
 const OPENAI_TIMEOUT_MS = (() => {
@@ -29,6 +30,7 @@ interface GenerateOptions {
     syncStatus?: string | null;
     supplierFactsSynced?: boolean;
   };
+  sourceFacts?: ShopifyProductEditorSourceFacts | null;
   existing: ShopifyPdpIntelligenceRecord | null;
   openAiApiKey: string | null;
 }
@@ -79,18 +81,6 @@ function trimFactsToBudget(facts: string[]): string[] {
   return accepted;
 }
 
-function computeShopifyInventoryStatus(product: ShopifyCurrentListingDocket): "in_stock" | "low_stock" | "out_of_stock" | "unknown" {
-  const quantities = product.variants
-    .map((variant) => variant.inventoryQuantity)
-    .filter((quantity): quantity is number => typeof quantity === "number" && Number.isFinite(quantity));
-
-  if (!quantities.length) return "unknown";
-  const inStockCount = quantities.filter((quantity) => quantity > 0).length;
-  if (inStockCount === 0) return "out_of_stock";
-  if (inStockCount === quantities.length) return "in_stock";
-  return "low_stock";
-}
-
 function toAvailabilityStatus(status: string): string {
   if (status === "in_stock") return "Available";
   if (status === "low_stock") return "Limited Availability";
@@ -99,22 +89,23 @@ function toAvailabilityStatus(status: string): string {
   return "Availability Unknown";
 }
 
-function toGroundedIngredients(supplier: RocktomicSupplierProduct | null): string[] {
+function toGroundedIngredients(
+  supplier: RocktomicSupplierProduct | null,
+  sourceFacts?: ShopifyProductEditorSourceFacts | null
+): string[] {
+  if (sourceFacts?.activeIngredients?.values?.length) {
+    return sourceFacts.activeIngredients.values;
+  }
   if (supplier?.activeIngredients?.length) {
     return supplier.activeIngredients.map((entry) => entry.trim()).filter(Boolean);
   }
-  if (!supplier?.supplementFacts.value) return ["Unknown"];
+  if (!supplier?.supplementFacts.value) return [];
   const lines = supplier.supplementFacts.value
     .split(/\n|;|,/g)
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 2);
-  if (!lines.length) return [supplier.supplementFacts.value];
+  if (!lines.length) return supplier.supplementFacts.value ? [supplier.supplementFacts.value] : [];
   return lines.slice(0, 12);
-}
-
-function formatMoney(value: number | null, currency = "USD"): string {
-  if (value == null || !Number.isFinite(value)) return "Unknown";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
 }
 
 function buildGroundedRecord(
@@ -133,29 +124,36 @@ function buildGroundedRecord(
     });
 
   const supplier = options.supplierMatch.product;
+  const sourceFacts = options.sourceFacts ?? null;
   const shopifyPrice = options.product.variants.find((variant) => variant.price != null)?.price ?? null;
   const compareAtPrice = options.product.variants.find((variant) => variant.compareAtPrice != null)?.compareAtPrice ?? null;
 
-  const inventoryStatus = supplier?.inventoryStatus && supplier.inventoryStatus !== "unknown"
-    ? supplier.inventoryStatus
-    : options.supplierMatch.inventoryAvailable
-      ? computeShopifyInventoryStatus(options.product)
-      : "source_unavailable";
+  const inventoryStatus = sourceFacts?.inventory?.status || (supplier?.inventoryStatus ?? "source_unavailable");
 
-  const wholesaleCost = supplier?.pricing?.wholesaleCost ?? null;
-  const msrp = supplier?.pricing?.msrp ?? null;
-  const estimatedProfit = supplier?.pricing?.estimatedProfit ?? (shopifyPrice != null && wholesaleCost != null ? shopifyPrice - wholesaleCost : null);
-  const marginPercent = supplier?.pricing?.marginPercent ?? (shopifyPrice != null && wholesaleCost != null && shopifyPrice > 0
+  const wholesaleCost = sourceFacts?.commerce?.wholesaleCost ?? supplier?.pricing?.wholesaleCost ?? null;
+  const msrp = sourceFacts?.commerce?.msrp ?? supplier?.pricing?.msrp ?? null;
+  const estimatedProfit = sourceFacts?.commerce?.estimatedProfit ?? supplier?.pricing?.estimatedProfit ?? (shopifyPrice != null && wholesaleCost != null ? shopifyPrice - wholesaleCost : null);
+  const marginPercent = sourceFacts?.commerce?.marginPercent ?? supplier?.pricing?.marginPercent ?? (shopifyPrice != null && wholesaleCost != null && shopifyPrice > 0
     ? Number((((shopifyPrice - wholesaleCost) / shopifyPrice) * 100).toFixed(2))
     : null);
 
-  const groundedIngredients = toGroundedIngredients(supplier);
-  const certifications = supplier?.certifications?.length ? supplier.certifications : ["Unknown"];
-  const dietaryAttributes = supplier?.dietaryAttributes?.length ? supplier.dietaryAttributes : ["Unknown"];
-  const manufacturingClaims = supplier?.manufacturingClaims?.length ? supplier.manufacturingClaims : ["Unknown"];
-  const warningsText = supplier?.warnings?.value ? [supplier.warnings.value] : ["Unknown"];
-  const coaStatus = supplier?.coa?.status || "unknown";
-  const coaLink = supplier?.coa?.url || "";
+  const groundedIngredients = toGroundedIngredients(supplier, sourceFacts);
+  const certifications = supplier?.certifications?.length ? supplier.certifications : [];
+  const dietaryAttributes = sourceFacts?.dietaryAllergenAttributes?.values?.length
+    ? sourceFacts.dietaryAllergenAttributes.values
+    : supplier?.dietaryAttributes?.length
+      ? supplier.dietaryAttributes
+      : [];
+  const manufacturingClaims = supplier?.manufacturingClaims?.length ? supplier.manufacturingClaims : [];
+  const warningsText = supplier?.warnings?.value ? [supplier.warnings.value] : [];
+  const coaStatus = sourceFacts?.assets?.coaStatus || supplier?.coa?.status || "unknown";
+  const coaLink = sourceFacts?.assets?.coaUrl || supplier?.coa?.url || "";
+  const supplementFactsValue = sourceFacts?.supplementFacts?.value || supplier?.supplementFacts?.value || "";
+  const supplementFactsDisplay =
+    supplementFactsValue || sourceFacts?.supplementFacts?.displayText || "Source sync required.";
+  const servingSize = sourceFacts?.servingSize?.value || supplier?.servingSize || "";
+  const servingsPerContainer = sourceFacts?.servingsPerContainer?.value || supplier?.servingsPerContainer || "";
+  const otherIngredients = sourceFacts?.otherIngredients?.value || supplier?.otherIngredients || "";
 
   const next: ShopifyPdpIntelligenceRecord = {
     ...existing,
@@ -180,29 +178,31 @@ function buildGroundedRecord(
       "Daily product-detail-page education",
       "Operator-reviewed marketplace publishing",
     ]),
-    key_features: sanitizePublicList(supplier?.productFeatures?.length ? supplier.productFeatures : ["Unknown"]),
+    key_features: sanitizePublicList(supplier?.productFeatures?.length ? supplier.productFeatures : []),
     highlights: sanitizePublicList([
       ...(supplier?.ingredientHighlights?.length ? supplier.ingredientHighlights : []),
-      ...(manufacturingClaims[0] !== "Unknown" ? manufacturingClaims : []),
+      ...manufacturingClaims,
     ]),
     quick_facts: sanitizePublicList([
-      `Container Size: ${supplier?.containerSize || "Unknown"}`,
-      `Serving Size: ${supplier?.servingSize || "Unknown"}`,
-      `Servings Per Container: ${supplier?.servingsPerContainer || "Unknown"}`,
-      `Product Weight: ${supplier?.productWeight || "Unknown"}`,
+      supplier?.containerSize ? `Container Size: ${supplier.containerSize}` : "",
+      servingSize ? `Serving Size: ${servingSize}` : "",
+      servingsPerContainer ? `Servings Per Container: ${servingsPerContainer}` : "",
+      supplier?.productWeight ? `Product Weight: ${supplier.productWeight}` : "",
     ]),
     ingredient_highlights: sanitizePublicList(groundedIngredients),
-    supplement_facts: sanitizePublicText(supplier?.supplementFacts?.value || "Unknown"),
+    supplement_facts: sanitizePublicText(supplementFactsDisplay),
     ingredients: sanitizePublicList(
-      supplier?.activeIngredients?.length
-        ? supplier.activeIngredients.map((entry) =>
-            supplier.amountPerServing ? `${entry}: ${supplier.amountPerServing}` : entry
+      groundedIngredients.length
+        ? groundedIngredients.map((entry) =>
+            sourceFacts?.amountPerServing?.value || supplier?.amountPerServing
+              ? `${entry}: ${sourceFacts?.amountPerServing?.value || supplier?.amountPerServing}`
+              : entry
           )
         : groundedIngredients
     ),
-    serving_size: sanitizePublicText(supplier?.servingSize || "Unknown"),
-    servings_per_container: sanitizePublicText(supplier?.servingsPerContainer || "Unknown"),
-    other_ingredients: sanitizePublicText(supplier?.otherIngredients || "Unknown"),
+    serving_size: sanitizePublicText(servingSize || sourceFacts?.servingSize?.displayText || ""),
+    servings_per_container: sanitizePublicText(servingsPerContainer || sourceFacts?.servingsPerContainer?.displayText || ""),
+    other_ingredients: sanitizePublicText(otherIngredients || sourceFacts?.otherIngredients?.displayText || ""),
     source_diagnostics: [
       options.supplierMatch.supplierSku ? `Matched SKU: ${options.supplierMatch.supplierSku}` : "Matched SKU: Unknown",
       `Inventory source: ${options.supplierMatch.inventoryAvailable ? "Available" : "Unavailable"}`,
@@ -210,8 +210,14 @@ function buildGroundedRecord(
       `source_facts_used: ${options.supplierMatch.supplierFactsSynced ? "true" : "false"}`,
       `supplier_product_record_status: ${supplier ? "synced" : "missing"}`,
       `pricing_record_status: ${wholesaleCost != null || msrp != null ? "synced" : "missing"}`,
-      `inventory_record_status: ${supplier ? "synced" : "missing"}`,
-      `supplement_facts_status: ${supplier?.supplementFacts?.status || "missing"}`,
+      `inventory_record_status: ${sourceFacts?.inventoryRecordFound || supplier ? "synced" : "missing"}`,
+      `asset_record_status: ${sourceFacts?.assetsRecordFound || supplier?.coa?.url ? "synced" : "missing"}`,
+      `selected_membership_tier: ${sourceFacts?.selectedMembershipTier || supplier?.pricing?.membershipTier || "none"}`,
+      `normalized_sku: ${sourceFacts?.normalizedSku || options.supplierMatch.supplierSku || "missing"}`,
+      `source_facts_used: ${options.supplierMatch.supplierFactsSynced ? "true" : "false"}`,
+      `supplement_facts_status: ${sourceFacts?.supplementFacts?.status || supplier?.supplementFacts?.status || "missing"}`,
+      `generated_from_source_version: ${supplier?.sourceVersion || "shopify_limited"}`,
+      `stale_intelligence_before_generation: ${sourceFacts?.staleIntelligence ? "true" : "false"}`,
       `coa_status: ${supplier?.coa?.status || "missing"}`,
       `coa_link_status: ${supplier?.coaLinkStatus || "not_present"}`,
       `coa_link_error: ${supplier?.coaLinkError || "none"}`,
@@ -219,7 +225,7 @@ function buildGroundedRecord(
     trust_signals: sanitizePublicList([
       ...certifications,
       ...(coaStatus && coaStatus !== "unknown" ? [`COA status: ${coaStatus}`] : []),
-      ...(manufacturingClaims[0] !== "Unknown" ? manufacturingClaims : []),
+      ...manufacturingClaims,
     ]),
     certifications: sanitizePublicList(certifications),
     dietary_attributes: sanitizePublicList(dietaryAttributes),
@@ -240,10 +246,10 @@ function buildGroundedRecord(
     currency: supplier?.pricing?.currency || "USD",
     inventory_status: inventoryStatus,
     availability_status: toAvailabilityStatus(inventoryStatus),
-    ships_from: sanitizePublicText(supplier?.shipping?.shipsFrom || "Unknown"),
-    processing_time: sanitizePublicText(supplier?.shipping?.processingTime || "Unknown"),
-    shipping_time: sanitizePublicText(supplier?.shipping?.shippingTime || "Unknown"),
-    return_policy: sanitizePublicText(supplier?.shipping?.returnPolicy || "Unknown"),
+    ships_from: sanitizePublicText(supplier?.shipping?.shipsFrom || ""),
+    processing_time: sanitizePublicText(supplier?.shipping?.processingTime || ""),
+    shipping_time: sanitizePublicText(supplier?.shipping?.shippingTime || ""),
+    return_policy: sanitizePublicText(supplier?.shipping?.returnPolicy || ""),
     fulfillment_status: sanitizePublicText(supplier?.shipping?.fulfillmentStatus || "unknown"),
     compliance_safe_claims: sanitizePublicList([
       "Supports daily wellness goals when used as directed.",
@@ -352,6 +358,7 @@ async function requestOpenAiGeneration(options: GenerateOptions): Promise<Record
   if (!options.openAiApiKey) return null;
 
   const supplier = options.supplierMatch.product;
+  const sourceFacts = options.sourceFacts ?? null;
   const facts = [
     `Shopify title: ${options.product.title}`,
     options.product.vendor && options.product.vendor !== "Not available" ? `Vendor: ${options.product.vendor}` : "",
@@ -361,6 +368,10 @@ async function requestOpenAiGeneration(options: GenerateOptions): Promise<Record
     supplier?.containerSize ? `Container size: ${supplier.containerSize}` : "",
     supplier?.servingSize ? `Serving size: ${supplier.servingSize}` : "",
     supplier?.supplementFacts?.value ? `Supplement facts: ${supplier.supplementFacts.value}` : "",
+    sourceFacts?.supplementFacts?.status ? `Supplement facts status: ${sourceFacts.supplementFacts.status}` : "",
+    sourceFacts?.inventory?.displayText ? `Inventory status: ${sourceFacts.inventory.displayText}` : "",
+    sourceFacts?.selectedMembershipTier ? `Selected membership tier: ${sourceFacts.selectedMembershipTier}` : "",
+    sourceFacts?.commerce?.wholesaleCost != null ? `Selected tier cost: ${sourceFacts.commerce.wholesaleCost}` : "",
     supplier?.certifications?.length ? `Certifications: ${supplier.certifications.join(", ")}` : "",
     supplier?.dietaryAttributes?.length ? `Dietary attributes: ${supplier.dietaryAttributes.join(", ")}` : "",
     supplier?.manufacturingClaims?.length ? `Manufacturing claims: ${supplier.manufacturingClaims.join(", ")}` : "",

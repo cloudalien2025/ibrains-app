@@ -6,6 +6,14 @@ import {
   type RocktomicSupplierProduct,
   type RocktomicSkuMatchResult,
 } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
+export {
+  getGlobalSupplierAssetsBySku,
+  getGlobalSupplierInventoryBySku,
+  getGlobalSupplierMembershipTiers,
+  getGlobalSupplierPricingBySku,
+  getGlobalSupplierProductBySku,
+  getGlobalSupplierSyncSummary,
+} from "@/lib/ecomviper/suppliers/global-supplier-data";
 
 export type SupplierPlatform = "rocktomic";
 
@@ -34,6 +42,7 @@ export async function getPrimarySupplierCatalogSnapshot(options?: {
   const snapshot = await getRocktomicSourceIngestionSnapshot({
     allowRefresh: options?.allowRefresh ?? true,
     triggerBackgroundRefresh: options?.triggerBackgroundRefresh ?? true,
+    includeSeedFallbackProducts: false,
   });
   return {
     platform: "rocktomic",
@@ -53,6 +62,7 @@ export async function matchPrimarySupplierBySkus(
     userId: options?.userId ?? null,
     allowRefresh: options?.allowRefresh ?? true,
     triggerBackgroundRefresh: options?.triggerBackgroundRefresh ?? true,
+    includeSeedFallbackProducts: false,
   });
   return {
     platform: "rocktomic",

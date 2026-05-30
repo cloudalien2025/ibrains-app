@@ -101,6 +101,7 @@ export default async function EcomViperDashboardPage() {
           userId,
           allowRefresh: false,
           triggerBackgroundRefresh: false,
+          includeSeedFallbackProducts: false,
         })
       )
       .then((snapshot) => ({ kind: "ok" as const, snapshot }))

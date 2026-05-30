@@ -17,10 +17,24 @@ function asIso(value: string | null): string {
 
 export default async function RocktomicDropshippingPage({ searchParams }: RocktomicDropshippingPageProps) {
   const auth = await requireSignedInUser().catch(() => ({ userId: null, unauthorizedResponse: null }));
+  if (!auth.userId) {
+    return (
+      <main className="ibrains-shell min-h-screen p-6" data-testid="ecomviper-rocktomic-page">
+        <article className="mx-auto max-w-3xl rounded-2xl border border-[#D9E4F0] bg-white/95 p-6">
+          <h1 className="text-2xl font-semibold text-[#0F172A]">Supplier diagnostics unavailable</h1>
+          <p className="mt-2 text-sm text-[#475569]">Sign in before loading supplier feed diagnostics.</p>
+          <Link href="/brains" className="mt-4 inline-flex text-sm text-[#1D4ED8] hover:underline">
+            Back to iBrains Dashboard
+          </Link>
+        </article>
+      </main>
+    );
+  }
   const snapshot = await getRocktomicSourceIngestionSnapshot({
-    userId: auth.userId || null,
+    userId: auth.userId,
     allowRefresh: false,
     triggerBackgroundRefresh: false,
+    includeSeedFallbackProducts: false,
   });
   const params = await searchParams;
   const sku = (params.sku || "").trim();
@@ -30,10 +44,10 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
     <main className="ibrains-shell min-h-screen p-6" data-testid="ecomviper-rocktomic-page">
       <div className="mx-auto max-w-6xl space-y-4">
         <header className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">Dropshipping / Rocktomic</p>
-          <h1 className="mt-2 text-2xl font-semibold text-[#0F172A]">Rocktomic Supplier Intelligence Engine</h1>
+          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">Dropshipping / Supplier Feed</p>
+          <h1 className="mt-2 text-2xl font-semibold text-[#0F172A]">Supplier Feed Diagnostics</h1>
           <p className="mt-2 text-sm text-[#475569]">
-            Source-backed catalog + inventory ingestion diagnostics. Merchants do not upload Rocktomic files in normal workflow.
+            Source-backed catalog, pricing, inventory, and asset ingestion diagnostics. Merchants do not upload supplier files in normal workflow.
           </p>
           <div className="mt-4 flex flex-wrap gap-3 text-sm">
             <Link href="/ecomviper" className="text-[#1D4ED8] hover:underline">

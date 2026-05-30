@@ -4,7 +4,10 @@ import { buildShopifyAgenticDemoWorkspaceState } from "@/lib/ecomviper/shopify/s
 import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopify-connection";
 import { hydrateShopifyLiveWorkspaceForUser } from "@/lib/ecomviper/shopify/shopify-live-hydrator";
 import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify/openai-connection";
-import type { RocktomicSupplierProduct } from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
+import {
+  normalizeRocktomicSku,
+  type RocktomicSupplierProduct,
+} from "@/lib/ecomviper/dropshipping/rocktomic-supplier-intelligence";
 import { matchPrimarySupplierBySkus } from "@/lib/ecomviper/suppliers/supplier-intelligence";
 import {
   buildCurrentShopifyListingDocket,
@@ -55,6 +58,7 @@ export interface ShopifyProductEditorInitialState {
   lastSyncedAt: string | null;
   warnings: string[];
   pdpIntelligence: ShopifyPdpIntelligenceRecord | null;
+  sourceFacts?: ShopifyProductEditorSourceFacts | null;
   supplierContext: {
     matched: boolean;
     matchedSku: string | null;
@@ -68,6 +72,91 @@ export interface ShopifyProductEditorInitialState {
     lastSupplierCheckAt: string | null;
     product: RocktomicSupplierProduct | null;
   };
+}
+
+export type ShopifyProductEditorSourceFieldStatus =
+  | "extracted"
+  | "partial"
+  | "ocr_required"
+  | "source_sync_required"
+  | "source_missing"
+  | "extraction_failed"
+  | "not_applicable";
+
+export interface ShopifyProductEditorSourceFacts {
+  shopifyProductId: string | null;
+  shopifyProductHandle: string | null;
+  shopifySku: string | null;
+  normalizedSku: string;
+  supplierProductRecordFound: boolean;
+  pricingRecordFound: boolean;
+  inventoryRecordFound: boolean;
+  assetsRecordFound: boolean;
+  selectedMembershipTier: string | null;
+  detectedMembershipTiers: string[];
+  lastGlobalSupplierSyncAt: string | null;
+  lastGeneratedIntelligenceAt: string | null;
+  staleIntelligence: boolean;
+  supplementFacts: {
+    status: ShopifyProductEditorSourceFieldStatus;
+    value: string;
+    displayText: string;
+  };
+  activeIngredients: {
+    status: ShopifyProductEditorSourceFieldStatus;
+    values: string[];
+    displayText: string;
+  };
+  amountPerServing: {
+    status: ShopifyProductEditorSourceFieldStatus;
+    value: string;
+    displayText: string;
+  };
+  otherIngredients: {
+    status: ShopifyProductEditorSourceFieldStatus;
+    value: string;
+    displayText: string;
+  };
+  servingSize: {
+    status: ShopifyProductEditorSourceFieldStatus;
+    value: string;
+    displayText: string;
+  };
+  servingsPerContainer: {
+    status: ShopifyProductEditorSourceFieldStatus;
+    value: string;
+    displayText: string;
+  };
+  dietaryAllergenAttributes: {
+    status: ShopifyProductEditorSourceFieldStatus;
+    values: string[];
+    displayText: string;
+  };
+  commerce: {
+    shopifyPrice: number | null;
+    compareAtPrice: number | null;
+    wholesaleCost: number | null;
+    msrp: number | null;
+    estimatedProfit: number | null;
+    marginPercent: number | null;
+    currency: string;
+    pricingStatusLabel: string;
+    message: string;
+  };
+  inventory: {
+    status: string;
+    displayText: string;
+  };
+  assets: {
+    coaUrl: string | null;
+    labelTemplateUrl: string | null;
+    mockupUrl: string | null;
+    coaStatus: string;
+    coaLinkStatus: string;
+    message: string;
+  };
+  missingFields: string[];
+  diagnostics: string[];
 }
 
 function asString(value: unknown): string {
@@ -162,6 +251,300 @@ function computeShopifyInventoryStatus(product: ShopifyProductRecord): "in_stock
 function firstVariantPrice(product: ShopifyProductRecord): number | null {
   const priced = product.variants.find((variant) => typeof variant.price === "number" && Number.isFinite(variant.price));
   return priced?.price ?? null;
+}
+
+function firstVariantCompareAtPrice(product: ShopifyProductRecord): number | null {
+  const priced = product.variants.find(
+    (variant) => typeof variant.compareAtPrice === "number" && Number.isFinite(variant.compareAtPrice)
+  );
+  return priced?.compareAtPrice ?? null;
+}
+
+function firstVariantSku(product: ShopifyProductRecord): string | null {
+  return product.variants.map((variant) => asString(variant.sku)).find(Boolean) || null;
+}
+
+function diagnosticHas(product: RocktomicSupplierProduct | null, needle: string): boolean {
+  return Boolean(product?.sourceDiagnostics?.some((entry) => entry.includes(needle)));
+}
+
+function normalizedRecordFound(product: RocktomicSupplierProduct | null, recordName: "pricing" | "inventory" | "asset"): boolean {
+  if (!product) return false;
+  const diagnosticKey = `normalized_${recordName}_record_status: found`;
+  const missingDiagnosticKey = `normalized_${recordName}_record_status: missing`;
+  if (diagnosticHas(product, diagnosticKey)) return true;
+  if (diagnosticHas(product, missingDiagnosticKey)) return false;
+  if (recordName === "pricing") {
+    return Boolean(product.pricing?.membershipTiersDetected?.length || Object.keys(product.pricing?.membershipTierCosts || {}).length);
+  }
+  if (recordName === "inventory") {
+    return Boolean(product.inventoryStatus && String(product.inventoryStatus) !== "source_unavailable");
+  }
+  return Boolean(product.coa?.url || product.labelTemplate?.url || product.mockup?.url);
+}
+
+function sourceStatusForScalar(input: {
+  product: RocktomicSupplierProduct | null;
+  value: string | null | undefined;
+  fieldName: string;
+}): { status: ShopifyProductEditorSourceFieldStatus; value: string; displayText: string } {
+  const value = asString(input.value);
+  if (value) return { status: "extracted", value, displayText: value };
+  if (!input.product) return { status: "source_sync_required", value: "", displayText: "Source sync required." };
+  if (input.product.supplementFacts?.status === "ocr_required") {
+    return {
+      status: "ocr_required",
+      value: "",
+      displayText: `${input.fieldName} require OCR extraction from catalog label image.`,
+    };
+  }
+  if (diagnosticHas(input.product, "extraction_failed")) {
+    return { status: "extraction_failed", value: "", displayText: `${input.fieldName} extraction failed.` };
+  }
+  return { status: "source_missing", value: "", displayText: `${input.fieldName} not found in normalized source record.` };
+}
+
+function sourceStatusForArray(input: {
+  product: RocktomicSupplierProduct | null;
+  values: string[] | null | undefined;
+  fieldName: string;
+}): { status: ShopifyProductEditorSourceFieldStatus; values: string[]; displayText: string } {
+  const values = Array.from(new Set((input.values || []).map((entry) => entry.trim()).filter(Boolean)));
+  if (values.length) return { status: "extracted", values, displayText: values.join(", ") };
+  if (!input.product) return { status: "source_sync_required", values: [], displayText: "Source sync required." };
+  if (input.product.supplementFacts?.status === "ocr_required") {
+    return {
+      status: "ocr_required",
+      values: [],
+      displayText: `${input.fieldName} require OCR extraction from catalog label image.`,
+    };
+  }
+  return {
+    status: "source_missing",
+    values: [],
+    displayText: `${input.fieldName} not found in normalized source record.`,
+  };
+}
+
+function supplementFactsStatus(product: RocktomicSupplierProduct | null) {
+  if (product?.supplementFacts?.value) {
+    return {
+      status: "extracted" as const,
+      value: product.supplementFacts.value,
+      displayText: product.supplementFacts.value,
+    };
+  }
+  if (!product) {
+    return {
+      status: "source_sync_required" as const,
+      value: "",
+      displayText: "Source sync required.",
+    };
+  }
+  if (product.supplementFacts?.status === "ocr_required") {
+    return {
+      status: "ocr_required" as const,
+      value: "",
+      displayText: "Supplement Facts require OCR extraction from catalog label image.",
+    };
+  }
+  if (diagnosticHas(product, "extraction_failed")) {
+    return {
+      status: "extraction_failed" as const,
+      value: "",
+      displayText: "Supplement Facts extraction failed.",
+    };
+  }
+  return {
+    status: "source_missing" as const,
+    value: "",
+    displayText: "Supplement Facts not found in normalized source record.",
+  };
+}
+
+function availabilityFromInventoryStatus(status: string): string {
+  if (status === "in_stock") return "Available";
+  if (status === "low_stock") return "Limited Availability";
+  if (status === "out_of_stock") return "Currently Unavailable";
+  if (status === "source_unavailable") return "Inventory Status Unavailable";
+  return "Availability Unknown";
+}
+
+function buildPricingMessage(input: {
+  pricingRecordFound: boolean;
+  selectedMembershipTier: string | null;
+  wholesaleCost: number | null;
+}): string {
+  if (!input.pricingRecordFound) return "Pricing record not found for SKU.";
+  if (!input.selectedMembershipTier) return "Select membership tier in Settings to calculate cost and profit.";
+  if (input.wholesaleCost == null) return "Cost not found for selected tier.";
+  return "Selected membership tier pricing mapped.";
+}
+
+function computeStaleIntelligence(input: {
+  pdpIntelligence: ShopifyPdpIntelligenceRecord | null;
+  latestSupplierSyncAt: string | null;
+}): boolean {
+  const generatedAt = input.pdpIntelligence?.last_generated_at;
+  if (!generatedAt || !input.latestSupplierSyncAt) return false;
+  const generatedMs = Date.parse(generatedAt);
+  const syncMs = Date.parse(input.latestSupplierSyncAt);
+  return Number.isFinite(generatedMs) && Number.isFinite(syncMs) && generatedMs < syncMs;
+}
+
+function buildSourceFacts(input: {
+  product: ShopifyProductRecord;
+  currentShopifyListing: ShopifyCurrentListingDocket;
+  supplierProduct: RocktomicSupplierProduct | null;
+  pdpIntelligence: ShopifyPdpIntelligenceRecord | null;
+  syncStatus: string | null;
+  lastSupplierCheckAt: string | null;
+}): ShopifyProductEditorSourceFacts {
+  const supplierProduct = input.supplierProduct;
+  const shopifySku = firstVariantSku(input.product);
+  const normalizedSku = normalizeRocktomicSku(shopifySku || "");
+  const pricingRecordFound = normalizedRecordFound(supplierProduct, "pricing");
+  const inventoryRecordFound = normalizedRecordFound(supplierProduct, "inventory");
+  const assetsRecordFound = normalizedRecordFound(supplierProduct, "asset");
+  const selectedMembershipTier = supplierProduct?.pricing?.membershipTier || null;
+  const wholesaleCost =
+    selectedMembershipTier && typeof supplierProduct?.pricing?.wholesaleCost === "number"
+      ? supplierProduct.pricing.wholesaleCost
+      : null;
+  const shopifyPrice = firstVariantPrice(input.product);
+  const compareAtPrice = firstVariantCompareAtPrice(input.product);
+  const estimatedProfit =
+    shopifyPrice != null && wholesaleCost != null ? Number((shopifyPrice - wholesaleCost).toFixed(2)) : null;
+  const marginPercent =
+    shopifyPrice != null && wholesaleCost != null && shopifyPrice > 0
+      ? Number((((shopifyPrice - wholesaleCost) / shopifyPrice) * 100).toFixed(2))
+      : null;
+  const latestSupplierSyncAt = supplierProduct?.lastSyncedAt || input.lastSupplierCheckAt;
+  const staleIntelligence = computeStaleIntelligence({
+    pdpIntelligence: input.pdpIntelligence,
+    latestSupplierSyncAt,
+  });
+  const supplementFacts = supplementFactsStatus(supplierProduct);
+  const activeIngredients = sourceStatusForArray({
+    product: supplierProduct,
+    values: supplierProduct?.activeIngredients,
+    fieldName: "Active Ingredients",
+  });
+  const amountPerServing = sourceStatusForScalar({
+    product: supplierProduct,
+    value: supplierProduct?.amountPerServing,
+    fieldName: "Amount Per Serving",
+  });
+  const otherIngredients = sourceStatusForScalar({
+    product: supplierProduct,
+    value: supplierProduct?.otherIngredients,
+    fieldName: "Other Ingredients",
+  });
+  const servingSize = sourceStatusForScalar({
+    product: supplierProduct,
+    value: supplierProduct?.servingSize,
+    fieldName: "Serving Size",
+  });
+  const servingsPerContainer = sourceStatusForScalar({
+    product: supplierProduct,
+    value: supplierProduct?.servingsPerContainer,
+    fieldName: "Servings Per Container",
+  });
+  const dietaryAllergenAttributes = sourceStatusForArray({
+    product: supplierProduct,
+    values: supplierProduct?.allergenDietaryAttributes || supplierProduct?.dietaryAttributes,
+    fieldName: "Dietary / Allergen Attributes",
+  });
+  const inventoryStatus = inventoryRecordFound
+    ? supplierProduct?.inventoryStatus || "unknown"
+    : supplierProduct
+      ? "unknown"
+      : "source_unavailable";
+  const pricingMessage = buildPricingMessage({
+    pricingRecordFound,
+    selectedMembershipTier,
+    wholesaleCost,
+  });
+  const missingFields = [
+    !supplierProduct ? "supplier_product_record" : null,
+    !pricingRecordFound ? "pricing_record" : null,
+    !inventoryRecordFound ? "inventory_record" : null,
+    !assetsRecordFound ? "assets_record" : null,
+    supplementFacts.status !== "extracted" ? `supplement_facts:${supplementFacts.status}` : null,
+    activeIngredients.status !== "extracted" ? `active_ingredients:${activeIngredients.status}` : null,
+    servingSize.status !== "extracted" ? `serving_size:${servingSize.status}` : null,
+    servingsPerContainer.status !== "extracted" ? `servings_per_container:${servingsPerContainer.status}` : null,
+  ].filter((entry): entry is string => Boolean(entry));
+  const diagnostics = [
+    `shopify_product_id: ${input.currentShopifyListing.productId}`,
+    `shopify_handle: ${input.currentShopifyListing.handle || "none"}`,
+    `shopify_sku: ${shopifySku || "none"}`,
+    `normalized_sku: ${normalizedSku || "none"}`,
+    `global_supplier_product_record_found: ${supplierProduct ? "true" : "false"}`,
+    `global_pricing_record_found: ${pricingRecordFound ? "true" : "false"}`,
+    `global_inventory_record_found: ${inventoryRecordFound ? "true" : "false"}`,
+    `global_assets_record_found: ${assetsRecordFound ? "true" : "false"}`,
+    `selected_membership_tier: ${selectedMembershipTier || "none"}`,
+    `last_global_supplier_sync: ${latestSupplierSyncAt || "never"}`,
+    `last_generated_intelligence: ${input.pdpIntelligence?.last_generated_at || "never"}`,
+    `stale_intelligence: ${staleIntelligence ? "true" : "false"}`,
+    `supplier_sync_status: ${input.syncStatus || "unknown"}`,
+    `supplement_facts_status: ${supplementFacts.status}`,
+    `missing_fields: ${missingFields.length ? missingFields.join(",") : "none"}`,
+    ...(supplierProduct?.sourceDiagnostics || []),
+  ];
+
+  return {
+    shopifyProductId: input.currentShopifyListing.productId,
+    shopifyProductHandle: input.currentShopifyListing.handle || null,
+    shopifySku,
+    normalizedSku,
+    supplierProductRecordFound: Boolean(supplierProduct),
+    pricingRecordFound,
+    inventoryRecordFound,
+    assetsRecordFound,
+    selectedMembershipTier,
+    detectedMembershipTiers: supplierProduct?.pricing?.membershipTiersDetected || [],
+    lastGlobalSupplierSyncAt: latestSupplierSyncAt,
+    lastGeneratedIntelligenceAt: input.pdpIntelligence?.last_generated_at || null,
+    staleIntelligence,
+    supplementFacts,
+    activeIngredients,
+    amountPerServing,
+    otherIngredients,
+    servingSize,
+    servingsPerContainer,
+    dietaryAllergenAttributes,
+    commerce: {
+      shopifyPrice,
+      compareAtPrice,
+      wholesaleCost,
+      msrp: supplierProduct?.pricing?.msrp ?? null,
+      estimatedProfit,
+      marginPercent,
+      currency: supplierProduct?.pricing?.currency || "USD",
+      pricingStatusLabel: supplierProduct?.pricing?.pricingStatusLabel || (pricingRecordFound ? "membership_tier_not_selected" : "pricing_record_not_found"),
+      message: pricingMessage,
+    },
+    inventory: {
+      status: inventoryStatus,
+      displayText: availabilityFromInventoryStatus(inventoryStatus),
+    },
+    assets: {
+      coaUrl: supplierProduct?.coa?.url || null,
+      labelTemplateUrl: supplierProduct?.labelTemplate?.url || null,
+      mockupUrl: supplierProduct?.mockup?.url || null,
+      coaStatus: supplierProduct?.coa?.url ? "available" : supplierProduct?.coa?.status || "pending_source",
+      coaLinkStatus: supplierProduct?.coaLinkStatus || "not_present",
+      message: supplierProduct?.coa?.url
+        ? "available/extracted"
+        : supplierProduct?.coaLinkStatus === "extraction_failed"
+          ? supplierProduct.coaLinkError || "COA extraction failed."
+          : "COA repository pending",
+    },
+    missingFields,
+    diagnostics,
+  };
 }
 
 async function resolveProduct(
@@ -306,6 +689,7 @@ export async function buildShopifyProductEditorStateForUser(
       lastSyncedAt: resolved.lastSyncedAt,
       warnings: resolved.warnings,
       pdpIntelligence: null,
+      sourceFacts: null,
       supplierContext: {
         matched: false,
         matchedSku: null,
@@ -384,17 +768,17 @@ export async function buildShopifyProductEditorStateForUser(
       }
     : null;
   const inventoryAvailable = supplierSnapshot?.inventoryAvailable ?? false;
-  const shopifyInventoryStatus = computeShopifyInventoryStatus(resolved.product);
-  const supplierInventoryStatus =
-    supplierProduct?.inventoryStatus && supplierProduct.inventoryStatus !== "unknown"
-      ? supplierProduct.inventoryStatus
-      : inventoryAvailable
-        ? shopifyInventoryStatus
-        : "unknown";
   const syncStatus = supplierSnapshot?.syncStatus || null;
-  const syncRequired =
-    !supplierProduct &&
-    Boolean(syncStatus && syncStatus !== "synced");
+  const sourceFacts = buildSourceFacts({
+    product: resolved.product,
+    currentShopifyListing,
+    supplierProduct,
+    pdpIntelligence,
+    syncStatus,
+    lastSupplierCheckAt: supplierSnapshot?.lastCheckedAt ?? null,
+  });
+  const supplierInventoryStatus = sourceFacts.inventory.status;
+  const syncRequired = !supplierProduct;
   const syncMessage = syncRequired
     ? "Supplier data has not been synced for this SKU. Run source sync."
     : null;
@@ -422,6 +806,7 @@ export async function buildShopifyProductEditorStateForUser(
             inventory_status: supplierInventoryStatus,
           }
         : pdpIntelligence,
+    sourceFacts,
     supplierContext: {
       matched: supplierMatch?.status === "rocktomic",
       matchedSku: supplierMatch?.matchedSku ?? null,

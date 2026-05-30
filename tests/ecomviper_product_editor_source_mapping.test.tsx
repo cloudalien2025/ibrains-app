@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import EcomViperProductEditorClient from "@/app/ecomviper/products/[productId-or-handle]/product-editor-client";
+import { createEmptyShopifyPdpIntelligenceRecord } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence";
 import { buildCurrentShopifyListingDocket } from "@/lib/ecomviper/shopify/shopify-product-docket";
 import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
 import type { ShopifyProductRecord } from "@/lib/ecomviper/shopify/shopify-types";
@@ -72,6 +73,73 @@ function createInitialState(): ShopifyProductEditorInitialState {
     lastSyncedAt: "2026-05-30T00:00:00.000Z",
     warnings: [],
     pdpIntelligence: null,
+    sourceFacts: {
+      shopifyProductId: current.productId,
+      shopifyProductHandle: current.handle,
+      shopifySku: "ROC949",
+      normalizedSku: "ROC949",
+      supplierProductRecordFound: true,
+      pricingRecordFound: true,
+      inventoryRecordFound: true,
+      assetsRecordFound: true,
+      selectedMembershipTier: "Non Member Pricing",
+      detectedMembershipTiers: ["Non Member Pricing"],
+      lastGlobalSupplierSyncAt: "2026-05-30T00:00:00.000Z",
+      lastGeneratedIntelligenceAt: null,
+      staleIntelligence: false,
+      supplementFacts: {
+        status: "extracted",
+        value: "Serving Size: 1 gummy | Servings Per Container: 60 | Magnesium (as Magnesium Glycinate): 30mg",
+        displayText: "Serving Size: 1 gummy | Servings Per Container: 60 | Magnesium (as Magnesium Glycinate): 30mg",
+      },
+      activeIngredients: {
+        status: "extracted",
+        values: ["Magnesium (as Magnesium Glycinate)"],
+        displayText: "Magnesium (as Magnesium Glycinate)",
+      },
+      amountPerServing: {
+        status: "extracted",
+        value: "Magnesium (as Magnesium Glycinate) 30mg",
+        displayText: "Magnesium (as Magnesium Glycinate) 30mg",
+      },
+      otherIngredients: {
+        status: "extracted",
+        value: "Glucose syrup, sugar",
+        displayText: "Glucose syrup, sugar",
+      },
+      servingSize: { status: "extracted", value: "1 gummy", displayText: "1 gummy" },
+      servingsPerContainer: { status: "extracted", value: "60", displayText: "60" },
+      dietaryAllergenAttributes: { status: "extracted", values: ["Vegan"], displayText: "Vegan" },
+      commerce: {
+        shopifyPrice: 39.99,
+        compareAtPrice: null,
+        wholesaleCost: 12.47,
+        msrp: 39.99,
+        estimatedProfit: 27.52,
+        marginPercent: 68.82,
+        currency: "USD",
+        pricingStatusLabel: "tier_pricing_mapped",
+        message: "Selected membership tier pricing mapped.",
+      },
+      inventory: { status: "in_stock", displayText: "Available" },
+      assets: {
+        coaUrl: "https://example.com/ROC949-COA.pdf",
+        labelTemplateUrl: "https://example.com/templates.html",
+        mockupUrl: "https://example.com/templates.html",
+        coaStatus: "available",
+        coaLinkStatus: "extracted",
+        message: "available/extracted",
+      },
+      missingFields: [],
+      diagnostics: [
+        "normalized_sku: ROC949",
+        "global_supplier_product_record_found: true",
+        "global_pricing_record_found: true",
+        "global_inventory_record_found: true",
+        "global_assets_record_found: true",
+        "supplement_facts_status: extracted",
+      ],
+    },
     supplierContext: {
       matched: true,
       matchedSku: "ROC949",
@@ -181,8 +249,54 @@ describe("ecomviper product editor supplier field mapping", () => {
     expect(container.querySelector('input[value="1 gummy"]')).not.toBeNull();
     expect(container.querySelector('input[value="60"]')).not.toBeNull();
     expect(container.textContent).toContain("Glucose syrup, sugar");
-    expect(container.textContent).toContain("coa_link_status: extracted");
-    expect(container.textContent).toContain("COA Link: Open");
+    expect(container.textContent).toContain("global_assets_record_found: true");
+    expect(container.textContent).toContain("COA Link: View COA");
+  });
+
+  it("renders explicit OCR-required source state instead of stale generated Unknown values", async () => {
+    const state = createInitialState();
+    const fallback = createEmptyShopifyPdpIntelligenceRecord({
+      shopifyProductId: state.currentShopifyListing?.productId || "gid://shopify/Product/949",
+      productHandle: state.currentShopifyListing?.handle || null,
+      supplier: "Rocktomic",
+      supplierSku: "ROC949",
+    });
+    state.pdpIntelligence = {
+      ...fallback,
+      supplement_facts: "Unknown",
+      ingredients: ["Unknown"],
+      serving_size: "Unknown",
+      inventory_status: "source_unavailable",
+      availability_status: "Inventory Status Unavailable",
+      last_generated_at: "2026-05-29T00:00:00.000Z",
+    };
+    if (state.sourceFacts) {
+      state.sourceFacts.staleIntelligence = true;
+      state.sourceFacts.supplementFacts = {
+        status: "ocr_required",
+        value: "",
+        displayText: "Supplement Facts require OCR extraction from catalog label image.",
+      };
+      state.sourceFacts.activeIngredients = {
+        status: "ocr_required",
+        values: [],
+        displayText: "Active Ingredients require OCR extraction from catalog label image.",
+      };
+    }
+
+    await act(async () => {
+      root.render(<EcomViperProductEditorClient initialState={state} />);
+    });
+
+    const ingredientsTab = Array.from(container.querySelectorAll("button")).find((node) =>
+      node.textContent?.includes("Ingredients")
+    ) as HTMLButtonElement;
+    await act(async () => {
+      ingredientsTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Supplement Facts require OCR extraction from catalog label image.");
+    expect(container.textContent).toContain("Source data has changed since this intelligence was generated.");
+    expect(container.textContent).toContain("Inventory: Available");
   });
 });
-

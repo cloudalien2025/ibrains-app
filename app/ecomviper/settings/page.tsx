@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
-import {
-  getRocktomicSourceIngestionSnapshot,
-  type RocktomicSourceIngestionSnapshot,
-} from "@/lib/ecomviper/dropshipping/rocktomic-source-ingestion";
 import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopify-connection";
 import { getShopifyImportStateForUser } from "@/lib/ecomviper/shopify/shopify-import";
 import { getShopifyOpenAiConnectionStatusForUser } from "@/lib/ecomviper/shopify/openai-connection";
-import { getSupplierMembershipTierSelectionForUser } from "@/lib/ecomviper/settings/supplier-membership";
+import { getMerchantSupplierMembershipTier } from "@/lib/ecomviper/settings/supplier-membership";
+import {
+  getGlobalSupplierSyncSummary,
+  type GlobalSupplierSyncSummary,
+} from "@/lib/ecomviper/suppliers/global-supplier-data";
 import { safeIsoDate } from "@/lib/ui/safe-formatters";
 import SupplierMembershipTierForm from "@/app/ecomviper/settings/supplier-membership-tier-form";
 import RocktomicSourceSyncTrigger from "@/app/ecomviper/dropshipping/rocktomic/source-sync-trigger";
@@ -16,6 +16,25 @@ export const dynamic = "force-dynamic";
 
 function asIso(value: string | null): string {
   return safeIsoDate(value, "Never");
+}
+
+function emptySupplierSummary(): GlobalSupplierSyncSummary {
+  return {
+    supplierKey: "rocktomic",
+    globalScopeKey: "__global__",
+    productCount: 0,
+    pricingRecordCount: 0,
+    inventoryRecordCount: 0,
+    assetRecordCount: 0,
+    sourceStatuses: [],
+    latestRun: null,
+    detectedMembershipTiers: [],
+    syncStatus: "never_synced",
+    lastCheckedAt: null,
+    lastSuccessfulSyncAt: null,
+    lastAttemptedSyncAt: null,
+    lastSyncError: null,
+  };
 }
 
 export default async function EcomViperSettingsPage() {
@@ -33,29 +52,13 @@ export default async function EcomViperSettingsPage() {
   let shopifyStore = "Not connected";
   let lastImportAt: string | null = null;
   let openAiLabel = "Not connected";
-  let rocktomic: RocktomicSourceIngestionSnapshot = {
-    supplier: "Rocktomic" as const,
-    products: [],
-    productCount: 0,
-    catalogSkuCount: 0,
-    catalogExtractedSkuCount: 0,
-    inventorySkuCount: 0,
-    inventoryAvailable: false,
-    usedSeedFallback: true,
-    membershipTiersDetected: [] as string[],
-    sourceDiagnostics: [],
-    lastCheckedAt: "",
-    lastSuccessfulSyncAt: null,
-    lastAttemptedSyncAt: null,
-    syncStatus: "never_synced" as const,
-    lastSyncError: null,
-    syncRunSummary: null,
-    cacheState: "seed_fallback" as const,
-    refreshState: "idle" as const,
-  };
+  let supplierSummary = emptySupplierSummary();
   const selectedMembershipTier = userId
-    ? await getSupplierMembershipTierSelectionForUser(userId).catch(() => null)
+    ? await getMerchantSupplierMembershipTier({ userId, supplierKey: "rocktomic" }).catch(() => null)
     : null;
+  if (userId) {
+    supplierSummary = await getGlobalSupplierSyncSummary("rocktomic").catch(() => emptySupplierSummary());
+  }
 
   if (userId) {
     const [shopifyStatus, importState, openAiStatus] = await Promise.allSettled([
@@ -77,16 +80,6 @@ export default async function EcomViperSettingsPage() {
       openAiLabel = openAiStatus.value.connected ? "Connected" : "Not connected";
     }
 
-    if (shopifyConnected) {
-      const snapshot = await getRocktomicSourceIngestionSnapshot({
-        userId,
-        allowRefresh: false,
-        triggerBackgroundRefresh: false,
-      }).catch(() => null);
-      if (snapshot) {
-        rocktomic = snapshot;
-      }
-    }
   }
 
   return (
@@ -94,13 +87,13 @@ export default async function EcomViperSettingsPage() {
       <div className="mx-auto max-w-6xl space-y-4">
         <header className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
           <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">EcomViper Settings / Diagnostics</p>
-          <h1 className="mt-1 text-xl font-semibold text-[#0F172A]">Shopify + Rocktomic Configuration</h1>
+          <h1 className="mt-1 text-xl font-semibold text-[#0F172A]">Shopify + Supplier Configuration</h1>
           <p className="mt-1 text-sm text-[#475569]">
             `/ecomviper/shopify` now redirects to this settings surface so Shopify no longer runs as a separate child workspace.
           </p>
           <div className="mt-3 flex flex-wrap gap-3 text-sm">
             <Link href="/ecomviper" className="text-[#1D4ED8] hover:underline">Back to EcomViper Dashboard</Link>
-            <Link href="/ecomviper/dropshipping/rocktomic" className="text-[#1D4ED8] hover:underline">Open Rocktomic Diagnostics</Link>
+            <Link href="/ecomviper/dropshipping/rocktomic" className="text-[#1D4ED8] hover:underline">Open supplier diagnostics</Link>
           </div>
         </header>
 
@@ -115,22 +108,25 @@ export default async function EcomViperSettingsPage() {
         </section>
 
         <SupplierMembershipTierForm
-          detectedTiers={rocktomic.membershipTiersDetected}
+          detectedTiers={supplierSummary.detectedMembershipTiers}
           initialTier={selectedMembershipTier}
         />
 
         <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
-          <h2 className="text-base font-semibold text-[#0F172A]">Rocktomic Source Diagnostics</h2>
+          <h2 className="text-base font-semibold text-[#0F172A]">Supplier Source Diagnostics</h2>
           <p className="mt-1 text-sm text-[#475569]">
-            Product records: {rocktomic.productCount} · Inventory records: {rocktomic.inventorySkuCount} · Last checked: {asIso(rocktomic.lastCheckedAt)}
+            Product records: {supplierSummary.productCount} · Pricing records: {supplierSummary.pricingRecordCount} · Inventory records: {supplierSummary.inventoryRecordCount} · Assets records: {supplierSummary.assetRecordCount}
           </p>
           <p className="mt-1 text-sm text-[#475569]">
-            Last attempted sync: {asIso(rocktomic.lastAttemptedSyncAt)} · Last successful sync: {asIso(rocktomic.lastSuccessfulSyncAt)} · Sync status: {rocktomic.syncStatus}
+            Last checked: {asIso(supplierSummary.lastCheckedAt)} · Last attempted sync: {asIso(supplierSummary.lastAttemptedSyncAt)} · Last successful sync: {asIso(supplierSummary.lastSuccessfulSyncAt)} · Sync status: {supplierSummary.syncStatus}
           </p>
-          {rocktomic.lastSyncError ? <p className="mt-1 text-xs text-rose-700">Last sync error: {rocktomic.lastSyncError}</p> : null}
-          <p className="mt-1 text-xs text-[#64748B]">
-            Cache: {rocktomic.cacheState || "unknown"} · Refresh: {rocktomic.refreshState || "idle"}
-          </p>
+          {supplierSummary.lastSyncError ? <p className="mt-1 text-xs text-amber-700">Latest source note: {supplierSummary.lastSyncError}</p> : null}
+          {supplierSummary.pricingRecordCount > 0 && !selectedMembershipTier ? (
+            <p className="mt-1 text-xs text-[#64748B]">Select membership tier to calculate product cost and profit.</p>
+          ) : null}
+          {supplierSummary.pricingRecordCount === 0 ? (
+            <p className="mt-1 text-xs text-[#64748B]">Run source sync to detect membership tiers.</p>
+          ) : null}
           <div className="mt-2">
             <RocktomicSourceSyncTrigger />
           </div>
@@ -150,9 +146,9 @@ export default async function EcomViperSettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rocktomic.sourceDiagnostics.map((source) => (
-                  <tr key={source.id} className="border-t border-[#E2E8F0] text-[#334155]">
-                    <td className="py-3 pr-3">{source.label}</td>
+                {supplierSummary.sourceStatuses.map((source) => (
+                  <tr key={source.sourceId} className="border-t border-[#E2E8F0] text-[#334155]">
+                    <td className="py-3 pr-3">{source.sourceLabel}</td>
                     <td className="py-3 pr-3">{source.configured ? "Yes" : "No"}</td>
                     <td className="py-3 pr-3">{source.fetchable ? "Yes" : "No"}</td>
                     <td className="py-3 pr-3">{source.parsed ? "Yes" : "No"}</td>
