@@ -54,7 +54,7 @@ describe("brains table hydration resilience", () => {
       sampleBrain("optizon", "OptiZon"),
       sampleBrain("directoryiq", "DirectoryIQ"),
       sampleBrain("casaflix", "CasaFlix"),
-      sampleBrain("pagebolt", "PageBolt"),
+      sampleBrain("pagebolt", "SiteForge"),
       sampleBrain("reelify", "Reelify"),
       sampleBrain("ipetzo", "iPetzo"),
     ];
@@ -74,7 +74,7 @@ describe("brains table hydration resilience", () => {
     expect(rendered).toContain("OptiZon");
     expect(rendered).toContain("DirectoryIQ");
     expect(rendered).toContain("CasaFlix");
-    expect(rendered).toContain("PageBolt");
+    expect(rendered).toContain("SiteForge");
     expect(rendered).toContain("Reelify");
     expect(rendered).toContain("iPetzo");
     expect(container.querySelectorAll('a[href*=\"/apps\"]').length).toBe(0);

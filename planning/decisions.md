@@ -251,13 +251,14 @@ Last updated: 2026-05-28 (UTC)
 
 - Status: Accepted
 - Decision:
-  - Every standalone brain console route must expose `← Back to Brains` linking to `/brains`.
+  - Every standalone brain console route must expose `← iBrains Dashboard` (or `← All Apps`) linking to `/brains`.
   - OptiBay, OptiWal, and OptiZon are standalone brains and must not show EcomViper-parent back-link copy.
   - EcomViper and iPetzo should render with the standard brain console structure:
     - top/back area
     - left sidebar
     - right workspace/dashboard region
   - Deprecated route language (`Apps`, `Back to Apps`, `Open App`) stays excluded from standalone brain console surfaces.
+  - `BrainOS` remains internal terminology and should not appear in user-facing navigation labels.
 
 ## D-024 Decouple EcomViper Console From OptiBay/OptiWal/OptiZon Launcher UX
 
@@ -265,6 +266,6 @@ Last updated: 2026-05-28 (UTC)
 - Decision:
   - `/ecomviper` is a standalone brain console and must not render launcher navigation/cards for `/optibay`, `/optiwal`, or `/optizon`.
   - EcomViper may include contextual guidance to other commerce brains only through `/brains` (My Brains), not direct child-module launchers.
-  - `/optibay`, `/optiwal`, and `/optizon` remain standalone top-level brain routes with their own console shells and `← Back to Brains`.
+  - `/optibay`, `/optiwal`, and `/optizon` remain standalone top-level brain routes with their own console shells and `/brains` dashboard back-link.
 - Rationale: Sprint 021 standardized back links but left residual parent-child launcher UX in EcomViper, which contradicted the standalone-brain route model and confused workspace ownership.
 - Rationale: Enforces a consistent standalone brain model across authenticated routes and removes residual parent-child launcher language from legacy commerce UI shells.

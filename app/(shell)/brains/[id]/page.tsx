@@ -195,7 +195,7 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
               href="/brains"
               className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white transition hover:bg-white/10"
             >
-              Back to Brains
+              iBrains Dashboard
             </Link>
           </div>
         </div>

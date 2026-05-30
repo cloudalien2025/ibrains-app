@@ -24,7 +24,7 @@ describe("brains index contract", () => {
       "OptiZon",
       "DirectoryIQ",
       "CasaFlix",
-      "PageBolt",
+      "SiteForge",
       "Reelify",
       "iPetzo",
     ]);
@@ -37,11 +37,13 @@ describe("brains index contract", () => {
     }
   });
 
-  it("redirects /brains to /ecomviper during hotfix to avoid blank launcher shells", () => {
+  it("renders /brains as iBrains Dashboard launcher", () => {
     const brainsPagePath = path.join(process.cwd(), "app", "(shell)", "brains", "page.tsx");
     const source = fs.readFileSync(brainsPagePath, "utf8");
 
-    expect(source).toContain('redirect("/ecomviper")');
+    expect(source).toContain("iBrains Dashboard");
+    expect(source).toContain("BrainsTable");
+    expect(source).not.toContain('redirect("/ecomviper")');
   });
 
   it("does not server-render fetch protected /api/brains endpoints", () => {

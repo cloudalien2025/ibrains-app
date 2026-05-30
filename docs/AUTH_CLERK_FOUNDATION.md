@@ -54,9 +54,10 @@ Set a Clerk secret key for server-side auth and middleware protection:
 
 ## Protected workspace rendering rule
 
-- `/brains` is the canonical My Brains index and must render from local canonical brain inventory.
+- `/brains` is the canonical iBrains Dashboard launcher and must render from local canonical brain inventory.
 - `/brains` server render must not call protected `/api/brains/*` endpoints.
 - Optional brain stats may hydrate client-side after the cards render and must fail safely.
+- `/brains` must not hard-redirect to `/ecomviper`; app workspaces link back to `/brains`.
 - Signed-out protected API routes such as `/api/brains` and `/api/brains/:id/stats` must return clean non-500 auth responses.
 
 ## Production smoke checklist

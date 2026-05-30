@@ -236,7 +236,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     <main className="ibrains-shell min-h-screen text-[#0F172A]" data-testid="ecomviper-product-editor-page">
       <div className="mx-auto max-w-[1500px] px-4 py-4 sm:px-6">
         <header className="mb-3 flex items-center justify-between rounded-2xl border border-[#D9E4F0] bg-white/95 px-4 py-3">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">iBrains BrainOS Dashboard</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">iBrains Dashboard</p>
           <Link href="/ecomviper" className="text-sm text-[#1D4ED8] hover:underline">Back to Products</Link>
         </header>
 

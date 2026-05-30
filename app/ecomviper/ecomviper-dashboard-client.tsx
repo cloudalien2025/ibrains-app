@@ -101,9 +101,9 @@ export default function EcomViperDashboardClient({
           <div className="flex items-center gap-3">
             <BackToBrainsLink className="text-sm font-medium text-[#1D4ED8] hover:text-[#1E40AF] hover:underline" />
             <div className="h-5 w-px bg-[#E2E8F0]" />
-            <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">iBrains BrainOS Dashboard</p>
+            <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">iBrains Dashboard</p>
           </div>
-          <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs text-[#334155]">EcomViper Operational Workspace</span>
+          <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs text-[#334155]">EcomViper Workspace</span>
         </header>
 
         <div className="grid gap-3 lg:grid-cols-[236px_minmax(0,1fr)]">
@@ -113,7 +113,7 @@ export default function EcomViperDashboardClient({
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#0F172A] text-xs font-semibold text-white">EV</span>
                 <h2 className="text-base font-semibold text-[#0F172A]">EcomViper</h2>
               </div>
-              <p className="mt-1 text-xs text-[#64748B]">Shopify-first catalog operations with Rocktomic supplier intelligence.</p>
+              <p className="mt-1 text-xs text-[#64748B]">Shopify-first catalog operations with supplier intelligence.</p>
             </div>
             <nav className="grid gap-1" aria-label="EcomViper workspace navigation">
               <a href="#ecomviper-products-panel" className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-left text-sm text-[#0F172A]">
@@ -131,16 +131,16 @@ export default function EcomViperDashboardClient({
               <div className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-6">
                 <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Workspace: {storeDomain || "Default"}</p>
                 <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Shopify: {shopifyStatusLabel}</p>
-                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Rocktomic: {rocktomicStatusLabel}</p>
+                <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Supplier Feed: {rocktomicStatusLabel}</p>
                 <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">OpenAI: {openAiStatusLabel}</p>
                 <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Products: {productCount}</p>
                 <p className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">Last sync: {asIso(lastImportAt)}</p>
               </div>
               <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#64748B]">
-                <span>Rocktomic records: {rocktomicProductCount}</span>
-                <span>Rocktomic checked: {asIso(rocktomicLastCheckedAt)}</span>
+                <span>Supplier Records: {rocktomicProductCount}</span>
+                <span>Supplier Feed Checked: {asIso(rocktomicLastCheckedAt)}</span>
                 <Link href="/ecomviper/settings" className="text-[#1D4ED8] hover:underline">Open settings/diagnostics</Link>
-                <Link href="/ecomviper/dropshipping/rocktomic" className="text-[#1D4ED8] hover:underline">Open Rocktomic diagnostics</Link>
+                <Link href="/ecomviper/dropshipping/rocktomic" className="text-[#1D4ED8] hover:underline">Open supplier diagnostics</Link>
               </div>
               {!shopifyConnected ? (
                 <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -172,7 +172,7 @@ export default function EcomViperDashboardClient({
                 />
                 <select value={supplierFilter} onChange={(event) => setSupplierFilter(event.target.value as SupplierFilter)} className="rounded-lg border border-[#D9E4F0] px-3 py-2 text-sm">
                   <option value="all">Supplier match: all</option>
-                  <option value="rocktomic">Rocktomic</option>
+                  <option value="rocktomic">Matched</option>
                   <option value="unmatched">Unmatched</option>
                 </select>
                 <select value={shopifyStatusFilter} onChange={(event) => setShopifyStatusFilter(event.target.value as ShopifyStatusFilter)} className="rounded-lg border border-[#D9E4F0] px-3 py-2 text-sm">
@@ -250,7 +250,7 @@ export default function EcomViperDashboardClient({
                         <td className="py-3 pr-3">{row.shopifyStatus}</td>
                         <td className="py-3 pr-3">
                           {row.supplierMatch === "rocktomic"
-                            ? `Rocktomic (${row.supplierMatchedSku}) · ${Math.round(row.supplierMatchConfidence * 100)}%`
+                            ? `Matched (${row.supplierMatchedSku}) · ${Math.round(row.supplierMatchConfidence * 100)}%`
                             : "Unmatched"}
                         </td>
                         <td className="py-3 pr-3">{row.aiPdpScore}</td>

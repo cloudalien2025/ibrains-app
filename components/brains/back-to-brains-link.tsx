@@ -9,7 +9,7 @@ type BackToBrainsLinkProps = {
 export default function BackToBrainsLink({ className }: BackToBrainsLinkProps) {
   return (
     <Link href="/brains" className={className ?? "text-sm text-[#2563EB] hover:text-[#1D4ED8]"}>
-      ← Back to Brains
+      ← iBrains Dashboard
     </Link>
   );
 }

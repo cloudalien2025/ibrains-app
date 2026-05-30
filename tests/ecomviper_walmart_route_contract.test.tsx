@@ -149,7 +149,7 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).toContain(">Dropshipping<");
     expect(html).toContain(">Agentic Visibility<");
     expect(html).toContain(">Settings<");
-    expect(html).toContain("iBrains BrainOS Dashboard");
+    expect(html).toContain("iBrains Dashboard");
     expect(html).not.toContain(">OptiWal<");
     expect(html).not.toContain(">OptiBay<");
     expect(html).not.toContain(">OptiZon<");

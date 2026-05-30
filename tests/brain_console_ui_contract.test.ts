@@ -7,10 +7,10 @@ function readSource(relativePath: string): string {
 }
 
 describe("brain console ui contract", () => {
-  it("keeps Back to Brains link canonical and scoped to /brains", () => {
+  it("keeps iBrains Dashboard back link canonical and scoped to /brains", () => {
     const linkSource = readSource("components/brains/back-to-brains-link.tsx");
     expect(linkSource).toContain('href="/brains"');
-    expect(linkSource).toContain("Back to Brains");
+    expect(linkSource).toContain("iBrains Dashboard");
   });
 
   it("wires Back to Brains into every canonical standalone brain console", () => {
