@@ -64,3 +64,26 @@ If selected tier or cost source is unavailable, generation must preserve `unknow
 - When normalized supplier facts are missing, generation runs in Shopify-limited mode with explicit warning:
   - `Supplier facts not synced. Generated copy will be limited to Shopify data.`
 - Generation diagnostics must include source-fact usage and normalized record status fields.
+
+## Hotfix 009.8 Source Facts + Stale Intelligence
+
+Generate Intelligence uses the same `sourceFacts` object displayed by Product Editor.
+
+Diagnostics returned from generation include:
+
+- `normalized_sku`
+- `supplier_product_record_status`
+- `pricing_record_status`
+- `inventory_record_status`
+- `asset_record_status`
+- `selected_membership_tier`
+- `source_facts_used`
+- `supplement_facts_status`
+- `generated_from_source_version`
+- `stale_intelligence_before_generation`
+
+Saved generated intelligence is merchant-scoped and may be stale. If `last_generated_at` is older than the latest global supplier sync for the matched SKU, Product Editor shows:
+
+`Source data has changed since this intelligence was generated. Regenerate to use latest source facts.`
+
+Old generated `Unknown` values must not be used as source facts. Generation remains Shopify-limited when global supplier facts are missing, and public/generated copy must not mention supplier names, supplier matching, internal source URLs, or internal platform terminology.

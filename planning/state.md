@@ -45,7 +45,29 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 010.1: Completed and merged (`hotfix-010-1-ecomviper-saturation-swr`, Rocktomic stale-while-revalidate cache + duplicate-source fetch dedupe + disconnected-workspace ingestion skip, production deployed).
 - Shopify Stabilization Sprint 011: In progress (`stabilization-ecomviper-performance-architecture-audit`, end-to-end performance/architecture/production-safety audit and hardening).
 - Shopify Stabilization Sprint 009.6: In progress (`stabilization-009-6-supplier-data-pipeline-normalized-sku-intelligence`, normalized supplier sync pipeline + SKU intelligence persistence hardening).
+- Shopify Hotfix Sprint 009.8 Data Binding: In progress (`hotfix-009-8-global-supplier-data-scope-product-editor-binding`, global supplier normalized data boundary + merchant membership/Product Editor binding correction).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Emergency Auth Runtime Recovery`, then resume `Shopify Sprint 011 planning`.
+
+## Active Hotfix Note: Shopify Hotfix 009.8 Global Supplier Data Scope + Product Editor Binding
+
+- Sprint/lane: `hotfix-009-8-global-supplier-data-scope-product-editor-binding` - in progress.
+- Start date: `2026-05-30 (UTC)`.
+- Production database scope finding:
+  - normalized supplier tables have `user_id` + `supplier_id` scope columns and no `workspace_id`/`tenant_id` columns.
+  - records exist globally under `__global__` for products/pricing/inventory/assets (`145` each).
+  - an additional merchant duplicate scope exists for `user_3CnqTBgyO2p8whGnWNezzuVBgHd` (`145` each), confirming the prior model could duplicate platform supplier data per user.
+  - source runs include global run `2` under `__global__` and user run `3`; both parsed products/pricing/assets `145` and inventory source rows `153`.
+  - sampled global SKUs `ROC720`, `ROC721`, `ROC801`, `ROC817`, `ROC948`, `ROC949`, `ROC507`, and `ROC920` all have product/pricing/inventory/assets rows; supplement facts are currently `ocr_required` for sampled rows.
+- Root cause:
+  - normalized records could be persisted under `__global__`, while Settings/Product Editor/status reads passed the signed-in merchant user id.
+  - Product Editor seeded source-owned fields from saved generated PDP intelligence before normalized facts, allowing stale `Unknown` values to mask source records.
+  - Settings gated supplier diagnostics behind Shopify connection state and read membership tiers from the scoped snapshot instead of global pricing rows.
+- Implementation direction:
+  - global supplier reads use `lib/ecomviper/suppliers/global-supplier-data.ts`.
+  - source sync persists under `__global__` and matching paths disable seed fallback products.
+  - product-facing cache-only supplier reads prefer persisted normalized records over process-local snapshots to avoid stale sourceFacts after sync.
+  - merchant membership tier remains user-scoped through merchant setting wrappers.
+  - Product Editor composes `sourceFacts` separately from saved/generated intelligence and flags stale generation.
 
 ## Hotfix Closure Update: Shopify Hotfix 009.7 Catalog Sync + Internal Auth Cleanup (`2026-05-30 UTC`)
 

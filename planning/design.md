@@ -81,6 +81,11 @@ Hotfix 009.4 commerce/settings extension:
 - Product Editor Commerce and right-rail cards surface selected tier context and pricing status.
 - Unknown pricing must remain explicit when tier/cost source is unavailable.
 
+Hotfix 009.8 supplier terminology:
+- Settings primary diagnostics label is `Supplier Source Diagnostics`.
+- Dropshipping diagnostics primary heading is `Supplier Feed Diagnostics`.
+- Merchant-facing EcomViper surfaces should describe platform-managed feed data as supplier/source records without making the supplier brand the primary page label.
+
 ## Non-Goals
 
 - This standard does not define brand color palettes for every brain.

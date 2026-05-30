@@ -14,6 +14,7 @@ import { getSupplierMembershipTierSelectionForUser } from "@/lib/ecomviper/setti
 import {
   acquireSupplierSyncLock,
   clearRocktomicNormalizedStoreForTests,
+  GLOBAL_SUPPLIER_SCOPE_USER_ID,
   getSupplierNormalizedSnapshot,
   persistSupplierNormalizedSnapshot,
   releaseSupplierSyncLock,
@@ -796,12 +797,13 @@ function buildSeedFallbackSnapshot(input: {
   selectedMembershipTier: string | null;
   refreshScheduled: boolean;
   reason: string;
+  includeProducts?: boolean;
   syncStatus?: SupplierSourceSyncStatus;
   lastAttemptedSyncAt?: string | null;
   lastSuccessfulSyncAt?: string | null;
   lastSyncError?: string | null;
 }): RocktomicSourceIngestionSnapshot {
-  const products = listRocktomicSupplierProducts();
+  const products = input.includeProducts === false ? [] : listRocktomicSupplierProducts();
   const syncStatus = input.syncStatus || "never_synced";
   return {
     supplier: "Rocktomic",
@@ -836,11 +838,6 @@ function buildSeedFallbackSnapshot(input: {
     cacheState: "seed_fallback",
     refreshState: input.refreshScheduled ? "refreshing" : "idle",
   };
-}
-
-function asFallbackUserKey(userId: string | null | undefined): string {
-  const normalized = (userId || "").trim();
-  return normalized || "__global__";
 }
 
 function toSourceSyncStatus(input: {
@@ -1039,10 +1036,9 @@ function snapshotFromPersisted(input: {
       input.selectedMembershipTier && pricing?.costsByMembershipTier
         ? pricing.costsByMembershipTier[input.selectedMembershipTier] ?? null
         : null;
-    const firstTierCost =
-      pricing && Object.values(pricing.costsByMembershipTier).length
-        ? Object.values(pricing.costsByMembershipTier)[0] ?? null
-        : null;
+    const pricingRecordFound = Boolean(pricing);
+    const inventoryRecordFound = Boolean(inventory);
+    const assetRecordFound = Boolean(assets);
     return {
       supplier: "Rocktomic",
       sku: product.sku,
@@ -1059,7 +1055,14 @@ function snapshotFromPersisted(input: {
       productFeatures: product.keyProductFeatures,
       otherIngredients: product.otherIngredients,
       allergenDietaryAttributes: product.dietaryAttributes,
-      sourceDiagnostics: Array.isArray(payload.sourceDiagnostics) ? (payload.sourceDiagnostics as string[]) : [],
+      sourceDiagnostics: [
+        ...(Array.isArray(payload.sourceDiagnostics) ? (payload.sourceDiagnostics as string[]) : []),
+        "normalized_supplier_scope: global",
+        "normalized_product_record_status: found",
+        `normalized_pricing_record_status: ${pricingRecordFound ? "found" : "missing"}`,
+        `normalized_inventory_record_status: ${inventoryRecordFound ? "found" : "missing"}`,
+        `normalized_asset_record_status: ${assetRecordFound ? "found" : "missing"}`,
+      ],
       coaLinkStatus:
         product.coaExtractionStatus === "extraction_failed"
           ? "extraction_failed"
@@ -1102,12 +1105,12 @@ function snapshotFromPersisted(input: {
       pricingStatus: pricing?.detectedMembershipTiers?.length ? "current" : "pending_source",
       policyStatus: "available",
       pricing: {
-        wholesaleCost: selectedCostFromTier ?? firstTierCost ?? null,
+        wholesaleCost: selectedCostFromTier,
         msrp: pricing?.msrp ?? null,
         estimatedProfit: null,
         marginPercent: null,
         currency: "USD",
-        sourceStatus: pricing?.detectedMembershipTiers?.length ? "available" : "unknown",
+        sourceStatus: pricingRecordFound ? "available" : "unknown",
         membershipTier: input.selectedMembershipTier,
         membershipTiersDetected: pricing?.detectedMembershipTiers || [],
         membershipTierCosts: pricing?.costsByMembershipTier || {},
@@ -1120,7 +1123,9 @@ function snapshotFromPersisted(input: {
             ? "source_unavailable_for_selected_membership_tier"
             : input.selectedMembershipTier
               ? "tier_pricing_mapped"
-              : "membership_tier_not_selected",
+              : pricingRecordFound
+                ? "membership_tier_not_selected"
+                : "pricing_record_not_found",
       },
       shipping: payload.shipping || {
         shipsFrom: "US",
@@ -1273,6 +1278,7 @@ export async function getRocktomicSourceIngestionSnapshot(
     userId?: string | null;
     allowRefresh?: boolean;
     triggerBackgroundRefresh?: boolean;
+    includeSeedFallbackProducts?: boolean;
   }
 ): Promise<RocktomicSourceIngestionSnapshot> {
   const selectedMembershipTier = options?.userId
@@ -1283,8 +1289,9 @@ export async function getRocktomicSourceIngestionSnapshot(
     : "";
   const allowRefresh = options?.allowRefresh ?? true;
   const triggerBackgroundRefresh = options?.triggerBackgroundRefresh ?? true;
-  const cacheKey = selectedMembershipTierKey || "__default__";
-  const fallbackUserId = asFallbackUserKey(options?.userId);
+  const includeSeedFallbackProducts = options?.includeSeedFallbackProducts ?? true;
+  const cacheKey = `${selectedMembershipTierKey || "__default__"}::seed:${includeSeedFallbackProducts ? "1" : "0"}`;
+  const fallbackUserId = GLOBAL_SUPPLIER_SCOPE_USER_ID;
   const createSnapshotPromise = async (): Promise<RocktomicSourceIngestionSnapshot> => {
     const now = Date.now();
     const config = getRocktomicSourceConfigSnapshot();
@@ -1585,6 +1592,29 @@ export async function getRocktomicSourceIngestionSnapshot(
   };
 
   const now = Date.now();
+  const shouldPreferPersistedNormalizedSnapshot =
+    !options?.forceRefresh && !allowRefresh && includeSeedFallbackProducts === false;
+  if (shouldPreferPersistedNormalizedSnapshot) {
+    const persisted = await getSupplierNormalizedSnapshot({
+      userId: fallbackUserId,
+      supplierId: "rocktomic",
+    }).catch(() => null);
+    const persistedSnapshot = snapshotFromPersisted({
+      persisted,
+      selectedMembershipTier,
+    });
+    if (persistedSnapshot) {
+      cache.set(cacheKey, {
+        snapshot: persistedSnapshot,
+        expiresAt: now + ROCKTOMIC_INGESTION_TTL_MS,
+      });
+      return withRuntimeSnapshotState(persistedSnapshot, {
+        cacheState: "fresh",
+        refreshState: "idle",
+      });
+    }
+  }
+
   const existing = cache.get(cacheKey);
   if (!options?.forceRefresh && existing) {
     if (existing.expiresAt > now) {
@@ -1612,7 +1642,7 @@ export async function getRocktomicSourceIngestionSnapshot(
     });
   }
 
-  if (!options?.forceRefresh) {
+  if (!options?.forceRefresh && !shouldPreferPersistedNormalizedSnapshot) {
     const persisted = await getSupplierNormalizedSnapshot({
       userId: fallbackUserId,
       supplierId: "rocktomic",
@@ -1657,6 +1687,7 @@ export async function getRocktomicSourceIngestionSnapshot(
       reason: shouldStartBackgroundRefresh
         ? "Source refresh scheduled in background."
         : "Source refresh deferred for request safety.",
+      includeProducts: includeSeedFallbackProducts,
     });
   }
 
@@ -1684,7 +1715,7 @@ export async function runRocktomicSourceSync(input: {
   triggerKind?: "manual" | "api" | "cli";
 }): Promise<RocktomicSourceIngestionSnapshot> {
   const lock = await acquireSupplierSyncLock({
-    userId: asFallbackUserKey(input.userId),
+    userId: GLOBAL_SUPPLIER_SCOPE_USER_ID,
     supplierId: "rocktomic",
     ttlMs: 180_000,
   });
@@ -1693,6 +1724,7 @@ export async function runRocktomicSourceSync(input: {
       userId: input.userId,
       allowRefresh: false,
       triggerBackgroundRefresh: false,
+      includeSeedFallbackProducts: false,
     });
     return {
       ...existing,
@@ -1703,14 +1735,15 @@ export async function runRocktomicSourceSync(input: {
 
   try {
     return await getRocktomicSourceIngestionSnapshot({
-      userId: input.userId,
+      userId: null,
       forceRefresh: true,
       allowRefresh: true,
       triggerBackgroundRefresh: false,
+      includeSeedFallbackProducts: false,
     });
   } finally {
     await releaseSupplierSyncLock({
-      userId: asFallbackUserKey(input.userId),
+      userId: GLOBAL_SUPPLIER_SCOPE_USER_ID,
       supplierId: "rocktomic",
       token: lock.token,
     }).catch(() => undefined);

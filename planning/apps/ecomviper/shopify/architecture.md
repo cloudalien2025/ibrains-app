@@ -63,3 +63,18 @@ Extraction is SKU-agnostic and no longer hardcoded to `ROC949`.
 - `matchPrimarySupplierBySkus()`
 
 Current platform implementation is Rocktomic-backed, but callers no longer couple directly to provider modules.
+
+## Hotfix 009.8 Data Scope Correction
+
+Supplier catalog/pricing/inventory/assets/COA records are global platform intelligence. Merchant-specific data remains scoped to the signed-in user/workspace.
+
+Correct Product Editor flow:
+
+1. Load current merchant Shopify product.
+2. Normalize the first Shopify variant SKU.
+3. Query global normalized supplier product/pricing/inventory/assets by SKU.
+4. Read current merchant selected membership tier.
+5. Compose Product Editor `sourceFacts`.
+6. Render saved/generated PDP intelligence separately and mark stale if supplier sync is newer.
+
+Settings and supplier diagnostics read global normalized counts and global membership tiers after auth. The selected tier save path remains merchant-scoped.

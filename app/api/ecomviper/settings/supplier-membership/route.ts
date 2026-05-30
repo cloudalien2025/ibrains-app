@@ -4,8 +4,8 @@ import { NextRequest } from "next/server";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import {
-  getSupplierMembershipTierSelectionForUser,
-  saveSupplierMembershipTierSelectionForUser,
+  getMerchantSupplierMembershipTier,
+  setMerchantSupplierMembershipTier,
 } from "@/lib/ecomviper/settings/supplier-membership";
 
 function asString(value: unknown): string {
@@ -22,7 +22,10 @@ export async function GET() {
     if (unauthorizedResponse) return unauthorizedResponse;
     if (!userId) return fail(401, "Please sign in before loading settings.", "UNAUTHORIZED");
 
-    const membershipTier = await getSupplierMembershipTierSelectionForUser(userId);
+    const membershipTier = await getMerchantSupplierMembershipTier({
+      userId,
+      supplierKey: "rocktomic",
+    });
     return ok({
       ok: true,
       membershipTier,
@@ -41,9 +44,10 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => ({}))) as { membershipTier?: unknown };
     const membershipTierRaw = asString(body.membershipTier);
     const membershipTier = membershipTierRaw ? membershipTierRaw : null;
-    const savedTier = await saveSupplierMembershipTierSelectionForUser({
+    const savedTier = await setMerchantSupplierMembershipTier({
       userId,
-      membershipTier,
+      supplierKey: "rocktomic",
+      tier: membershipTier,
     });
 
     return ok({

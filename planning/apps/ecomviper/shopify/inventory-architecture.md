@@ -30,3 +30,17 @@ Last updated: 2026-05-29 (UTC)
 
 - Inventory status is persisted from sync runs into `supplier_inventory_normalized`.
 - Route render reads qualitative status only and never infers unit quantities.
+
+## Hotfix 009.8 Global Inventory Binding
+
+Product Editor reads inventory from the global normalized supplier inventory row for the matched normalized SKU.
+
+Display labels:
+
+- `in_stock` -> `Available`
+- `low_stock` -> `Limited Availability`
+- `out_of_stock` -> `Currently Unavailable`
+- `unknown` -> `Availability Unknown`
+- `source_unavailable` -> `Inventory Status Unavailable`
+
+If a normalized inventory row exists, the UI must not collapse that SKU to `source_unavailable`, even when the source value is qualitative `unknown`. Unit quantities remain unavailable unless the source explicitly provides them.

@@ -153,6 +153,8 @@ const TABLES = {
   locks: "supplier_source_sync_locks",
 } as const;
 
+export const GLOBAL_SUPPLIER_SCOPE_USER_ID = "__global__";
+
 declare global {
   var __rocktomic_normalized_store_products__: Map<string, PersistedSupplierProductNormalized[]> | undefined;
   var __rocktomic_normalized_store_inventory__: Map<string, PersistedSupplierInventoryNormalized[]> | undefined;

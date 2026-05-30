@@ -13,7 +13,8 @@ describe("ecomviper route render sync safety", () => {
     expect(rocktomic).not.toContain("runRocktomicSourceSync(");
 
     expect(dashboard).toContain("allowRefresh: false");
-    expect(settings).toContain("allowRefresh: false");
+    expect(settings).toContain("getGlobalSupplierSyncSummary");
     expect(rocktomic).toContain("allowRefresh: false");
+    expect(rocktomic).toContain("includeSeedFallbackProducts: false");
   });
 });

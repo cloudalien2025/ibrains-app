@@ -11,8 +11,7 @@ if [[ -z "${TOKEN}" ]]; then
 fi
 
 if [[ -z "${USER_ID}" ]]; then
-  echo "ERROR: ECOMVIPER_SYNC_USER_ID (or second arg) is required."
-  exit 1
+  USER_ID="__global__"
 fi
 
 curl -sS --max-time 120 \

@@ -89,3 +89,33 @@ Supplier ingestion now has an explicit durable pipeline:
 5. Product Editor + PDP generation consume normalized facts and show explicit sync-required diagnostics when missing
 
 `/ecomviper`, `/ecomviper/settings`, `/ecomviper/dropshipping/rocktomic`, Product Editor, and PDP generation remain forbidden from triggering live source downloads/parsing during page render.
+
+## Hotfix 009.8 Global Supplier Data Boundary
+
+Normalized supplier intelligence is platform-managed global data. The durable normalized tables still carry the legacy `user_id` scope column, but supplier sync and route reads treat `__global__` as the only valid platform supplier scope for Rocktomic records.
+
+Global supplier data:
+
+- `supplier_products_normalized`
+- `supplier_inventory_normalized`
+- `supplier_pricing_normalized`
+- `supplier_assets_normalized`
+- `supplier_source_sync_status`
+- `supplier_source_sync_runs`
+- `supplier_source_sync_locks`
+
+Merchant/workspace data remains signed-in-user scoped:
+
+- Shopify connection and imported Shopify products
+- selected supplier membership tier
+- saved PDP intelligence
+- marketplace/buy-now/publish settings
+
+Repository boundary:
+
+- global supplier reads use `lib/ecomviper/suppliers/global-supplier-data.ts`
+- merchant tier settings use `getMerchantSupplierMembershipTier` / `setMerchantSupplierMembershipTier`
+- normal page render uses normalized records only and passes `includeSeedFallbackProducts: false` where SKU matching is product-facing
+- product-facing cache-only reads prefer the persisted normalized snapshot before any process-local in-memory supplier snapshot, so Product Editor and Generate Intelligence do not serve stale supplier facts after a sync
+
+Authenticated merchants may view global supplier diagnostics after auth, but supplier records are not public. Source sync runs as a platform/global sync and persists under `__global__`; it no longer creates merchant-specific supplier rows for normal operation.

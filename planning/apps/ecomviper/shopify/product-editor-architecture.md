@@ -59,3 +59,44 @@ Stabilization 009.6 guardrail:
 
 - Product Editor reads normalized supplier records only.
 - Product Editor must not download PDFs, parse Google Sheets, or run OCR on route render.
+
+## Hotfix 009.8 Source Facts Boundary
+
+Product Editor now composes two separate data layers:
+
+1. `sourceFacts`
+   - current merchant Shopify product
+   - normalized global supplier product by SKU
+   - normalized global pricing by SKU
+   - normalized global inventory by SKU
+   - normalized global assets/COA by SKU
+   - current merchant selected membership tier
+2. `generatedIntelligence`
+   - merchant-scoped saved PDP intelligence and generated copy
+
+Source-owned fields in Product Editor must render from `sourceFacts` first. Saved generated PDP values must not override source facts for supplement facts, ingredients, serving metadata, pricing, inventory, COA, or source diagnostics.
+
+Product-facing supplier lookups must prefer persisted normalized records over process-local supplier cache snapshots. In-memory cache may protect source-fetch paths, but it must not cause Product Editor or Generate Intelligence to show stale source facts after the normalized sync updates.
+
+Internal Source Diagnostics must include:
+
+- Shopify product id/handle/SKU
+- normalized SKU
+- global product/pricing/inventory/assets record found flags
+- selected membership tier
+- last global supplier sync
+- last generated intelligence timestamp
+- stale intelligence flag
+- missing fields and status reasons
+
+Missing-data states use explicit statuses:
+
+- `extracted`
+- `partial`
+- `ocr_required`
+- `source_sync_required`
+- `source_missing`
+- `extraction_failed`
+- `not_applicable`
+
+`Unknown` is not a valid replacement for a known pipeline state such as OCR required or source sync required.

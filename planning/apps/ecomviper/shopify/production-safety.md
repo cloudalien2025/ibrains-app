@@ -89,3 +89,28 @@ Validation after sync:
 1. `GET /api/ecomviper/supplier-sources/status`
 2. Confirm non-zero parsed counts where sources are accessible.
 3. Confirm Product Editor no longer shows `Supplier data has not been synced for this SKU. Run source sync.` for synced SKU.
+
+## Hotfix 009.8 Supplier Verification Runbook
+
+Supplier sync is platform/global. Internal sync defaults to `__global__` when no explicit `ECOMVIPER_SYNC_USER_ID` is provided, and normal route reads use global normalized records after the merchant is authenticated.
+
+Post-deploy verification:
+
+1. Confirm `/api/meta/release` returns non-null `git_sha` and `build_id`.
+2. Run bounded route timings for:
+   - `/api/health`
+   - `/api/meta/release`
+   - `/brains`
+   - `/ecomviper`
+   - `/ecomviper/settings`
+   - `/ecomviper/dropshipping/rocktomic`
+3. Confirm Settings shows global supplier counts and membership tier options.
+4. Save a merchant membership tier.
+5. Open Product Editor for multiple Shopify SKUs, including at least `ROC948`, `ROC949`, and one of `ROC507` or `ROC817`.
+6. Confirm Source Diagnostics show normalized product/pricing/inventory/assets record status.
+7. Confirm Ingredients/Supplement Facts show extracted data or explicit OCR/source status.
+8. Confirm Commerce shows cost/profit/margin only after membership tier selection.
+9. Confirm inventory labels are qualitative and no unit quantities are invented.
+10. Confirm Assets/COA show links or precise pending/extraction status.
+11. Generate Intelligence and confirm diagnostics show `source_facts_used`.
+12. Check browser console for crashes/errors and app/nginx logs for 504s or timeout growth.

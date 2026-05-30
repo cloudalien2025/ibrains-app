@@ -7,7 +7,7 @@ describe("ecomviper dropshipping rocktomic route shell", () => {
     const routePath = path.join(process.cwd(), "app/ecomviper/dropshipping/rocktomic/page.tsx");
     const routeSource = fs.readFileSync(routePath, "utf8");
 
-    expect(routeSource).toContain("Rocktomic Supplier Intelligence Engine");
+    expect(routeSource).toContain("Supplier Feed Diagnostics");
     expect(routeSource).toContain("Source Status");
     expect(routeSource).toContain("SKU Lookup");
     expect(routeSource).toContain("Catalog Source References");

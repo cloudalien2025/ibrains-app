@@ -119,6 +119,16 @@ export async function getSupplierMembershipTierSelectionForUser(userId: string):
   }
 }
 
+export async function getMerchantSupplierMembershipTier(params: {
+  userId: string;
+  workspaceId?: string | null;
+  supplierKey?: string | null;
+}): Promise<string | null> {
+  void params.workspaceId;
+  void params.supplierKey;
+  return getSupplierMembershipTierSelectionForUser(params.userId);
+}
+
 export async function saveSupplierMembershipTierSelectionForUser(params: {
   userId: string;
   membershipTier: string | null;
@@ -176,4 +186,18 @@ export async function saveSupplierMembershipTierSelectionForUser(params: {
     }
     throw error;
   }
+}
+
+export async function setMerchantSupplierMembershipTier(params: {
+  userId: string;
+  workspaceId?: string | null;
+  supplierKey?: string | null;
+  tier: string | null;
+}): Promise<string | null> {
+  void params.workspaceId;
+  void params.supplierKey;
+  return saveSupplierMembershipTierSelectionForUser({
+    userId: params.userId,
+    membershipTier: params.tier,
+  });
 }

@@ -115,6 +115,7 @@ describe("ecomviper dashboard auth guard", () => {
       userId: "user_1",
       allowRefresh: false,
       triggerBackgroundRefresh: false,
+      includeSeedFallbackProducts: false,
     });
     expect(mocks.listShopifyProductsForUser).toHaveBeenCalledTimes(1);
   });
