@@ -123,3 +123,20 @@ Phase 4 continues to avoid permanent binary storage:
 
 - no permanent `.ai`/`.tif` file persistence in repo DB artifacts
 - URLs + metadata + extracted evidence only
+
+## Phase 4.2 Reliability Follow-up
+
+Phase 4.2 keeps Phase 3.6 extraction semantics, but improves operational freshness/reuse behavior:
+
+- bounded remote concurrency for metadata/extraction
+- request timeout budgets for remote checks
+- metadata-change detection reason codes
+- conditional GET support (`If-None-Match`, `If-Modified-Since`) with `304` cache reuse
+- additional evidence fields:
+  - `reusedFromPreviousBuild`
+  - `previousExtractedAt`
+  - `changedDetected`
+  - `changeReason`
+  - `extractionSkippedReason`
+
+Large `.ai` binaries remain temp-only and are not persisted.

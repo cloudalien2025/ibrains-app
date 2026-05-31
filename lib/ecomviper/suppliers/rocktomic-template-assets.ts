@@ -130,8 +130,10 @@ async function listAzureContainers(input: {
   sasToken: string;
   prefix: string;
   fetchImpl?: typeof fetch;
+  requestTimeoutMs?: number;
 }): Promise<string[]> {
   const fetchImpl = input.fetchImpl || fetch;
+  const requestTimeoutMs = Math.max(1_000, input.requestTimeoutMs ?? 30_000);
   const names: string[] = [];
   let marker = "";
   const sasParams = new URLSearchParams(input.sasToken.replace(/^\?/, ""));
@@ -144,7 +146,11 @@ async function listAzureContainers(input: {
       marker,
       ...Object.fromEntries(sasParams.entries()),
     });
-    const response = await fetchImpl(url, { method: "GET", cache: "no-store" });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+    const response = await fetchImpl(url, { method: "GET", cache: "no-store", signal: controller.signal }).finally(() =>
+      clearTimeout(timeout)
+    );
     if (!response.ok) throw new Error(`azure_container_list_http_${response.status}`);
     const xml = await response.text();
     const parsed = parseContainerNamesFromXml(xml);
@@ -161,8 +167,10 @@ async function listAzureBlobsForContainer(input: {
   sasToken: string;
   containerName: string;
   fetchImpl?: typeof fetch;
+  requestTimeoutMs?: number;
 }): Promise<AzureBlobListItem[]> {
   const fetchImpl = input.fetchImpl || fetch;
+  const requestTimeoutMs = Math.max(1_000, input.requestTimeoutMs ?? 30_000);
   const rows: AzureBlobListItem[] = [];
   let marker = "";
   const sasParams = new URLSearchParams(input.sasToken.replace(/^\?/, ""));
@@ -175,7 +183,11 @@ async function listAzureBlobsForContainer(input: {
       marker,
       ...Object.fromEntries(sasParams.entries()),
     });
-    const response = await fetchImpl(url, { method: "GET", cache: "no-store" });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+    const response = await fetchImpl(url, { method: "GET", cache: "no-store", signal: controller.signal }).finally(() =>
+      clearTimeout(timeout)
+    );
     if (!response.ok) throw new Error(`azure_blob_list_http_${response.status}`);
     const xml = await response.text();
     const parsed = parseBlobEntriesFromXml(xml);
@@ -349,8 +361,14 @@ export async function extractRocktomicTemplateAssetsFromTemplatesPage(input: {
   html: string;
   sourcePageUrl: string;
   fetchImpl?: typeof fetch;
+  azureListConcurrency?: number;
+  requestTimeoutMs?: number;
+  enableAzureListing?: boolean;
 }): Promise<RocktomicTemplateAssetExtractionResult> {
   const staticResult = extractRocktomicTemplateAssets(input);
+  if (input.enableAzureListing === false) {
+    return staticResult;
+  }
   const config = parseBlobServiceConfig(input.html);
   if (!config) {
     return staticResult;
@@ -368,16 +386,19 @@ export async function extractRocktomicTemplateAssetsFromTemplatesPage(input: {
       sasToken: config.sasToken,
       prefix: "roc",
       fetchImpl,
+      requestTimeoutMs: input.requestTimeoutMs,
     });
     containersListed = containers.length;
+    const azureListConcurrency = Math.min(10, Math.max(1, input.azureListConcurrency ?? 4));
 
-    const rows = await mapWithConcurrency(containers, 8, async (containerName) => {
+    const rows = await mapWithConcurrency(containers, azureListConcurrency, async (containerName) => {
       try {
         const blobs = await listAzureBlobsForContainer({
           blobUri: config.blobUri,
           sasToken: config.sasToken,
           containerName,
           fetchImpl,
+          requestTimeoutMs: input.requestTimeoutMs,
         });
         return { containerName, blobs };
       } catch {

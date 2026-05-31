@@ -174,3 +174,19 @@ Offline package rebuild timeout follow-up:
   - `timeout 600 npm run ecomviper:build-rocktomic-supplier-data`
   - still timed out at `600.01s` after source enumeration stage
 - closure proceeded using existing latest artifacts generated at `2026-05-31T18:42:26Z` and matching expected Phase 3.6 counts/policy.
+
+## Phase 4.2 Reliability Dependency
+
+Phase 4.2 does not change DB schema/import contracts. It hardens the upstream offline package build lane so future refresh imports are reliable.
+
+Key dependency updates:
+
+- builder now emits `latest/build-timing-report.json` and `latest/build-cache-summary.json`
+- failed builds keep diagnostics under `data/ecomviper/suppliers/rocktomic/builds/<buildId>/` without overwriting `latest`
+- incremental AI extraction reuses unchanged metadata/evidence to reduce refresh time before re-import
+
+Import boundary is unchanged:
+
+- `ECOMMERCE_DATABASE_URL` only for migrate/import/verify
+- no runtime route import/extraction
+- no Product Editor/Generate Intelligence binding in this phase

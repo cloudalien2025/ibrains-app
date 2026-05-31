@@ -91,4 +91,46 @@ describe("rocktomic template asset extraction", () => {
     expect(result.assetsBySku.find((entry) => entry.sku === "ROC011")?.assetReadiness.readyForOptiPixelAssets).toBe(true);
     expect(result.assetsBySku.find((entry) => entry.sku === "ROC012")?.defects).toContain("missing_mockup_template_tif");
   });
+
+  it("limits azure blob listing concurrency when configured", async () => {
+    const listContainersXml = `<?xml version="1.0" encoding="utf-8"?><EnumerationResults><Containers><Container><Name>roc011</Name></Container><Container><Name>roc012</Name></Container><Container><Name>roc013</Name></Container></Containers><NextMarker /></EnumerationResults>`;
+    const blobXml = `<?xml version="1.0" encoding="utf-8"?><EnumerationResults><Blobs><Blob><Name>ROC011.ai</Name><Properties><Last-Modified>Mon, 12 Aug 2024 18:00:53 GMT</Last-Modified></Properties></Blob></Blobs><NextMarker /></EnumerationResults>`;
+    const html = `
+      <html><body>
+        <script>
+          var blobUri = "https://rocktomicplatform.blob.core.windows.net";
+          var sas = "?sv=test&sig=test";
+        </script>
+      </body></html>
+    `;
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetchImpl: typeof fetch = async (url) => {
+      const asText = String(url);
+      if (asText.includes("comp=list") && asText.includes("prefix=roc")) {
+        return new Response(listContainersXml, { status: 200 });
+      }
+      if (asText.includes("/roc0")) {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 15));
+        inFlight -= 1;
+        return new Response(blobXml.replaceAll("ROC011", asText.includes("roc012") ? "ROC012" : asText.includes("roc013") ? "ROC013" : "ROC011"), {
+          status: 200,
+        });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    const result = await extractRocktomicTemplateAssetsFromTemplatesPage({
+      html,
+      sourcePageUrl: "https://rocktomicplatform.blob.core.windows.net/client-resources/templates.html",
+      fetchImpl,
+      azureListConcurrency: 2,
+    });
+
+    expect(maxInFlight).toBeLessThanOrEqual(2);
+    expect(result.counts.labelTemplatesFound).toBe(3);
+  });
 });

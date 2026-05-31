@@ -2686,3 +2686,51 @@ Warning:
   - signed-in desktop/mobile visual verification for Product Editor hero/gallery interactions remains blocked in this CLI run (no authenticated browser session).
 - Recommended next sprint:
   - complete authenticated desktop/mobile verification evidence capture for Product Editor hero/gallery/add-image interactions and publish-placeholder UX, then continue publish backend wiring.
+
+## Sprint Checkpoint: Phase 4.2 Rocktomic Offline Builder Reliability (Local Branch)
+
+- Branch: `sprint-022-rocktomic-builder-reliability`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks in progress; MR/deploy pending.
+
+Scope implemented locally:
+
+- added offline builder reliability runtime module:
+  - `lib/ecomviper/suppliers/rocktomic-build-runtime.ts`
+- upgraded builder command:
+  - `scripts/ecomviper/build_rocktomic_supplier_data.ts`
+  - stage timing + machine-readable timing report
+  - stage/total/network timeout budgeting
+  - atomic build-dir to latest promotion
+  - incremental AI extraction reuse/caching controls
+  - bounded remote concurrency + explicit mode flags
+- tightened template asset extraction runtime controls:
+  - `lib/ecomviper/suppliers/rocktomic-template-assets.ts`
+- tightened AI label metadata/extraction freshness handling:
+  - `lib/ecomviper/suppliers/rocktomic-ai-label-text.ts`
+
+Artifact additions:
+
+- `data/ecomviper/suppliers/rocktomic/latest/build-timing-report.json` (success path)
+- `data/ecomviper/suppliers/rocktomic/latest/build-cache-summary.json`
+- failure timing diagnostics written under:
+  - `data/ecomviper/suppliers/rocktomic/builds/<buildId>/build-timing-report.json`
+
+Focused tests added/updated:
+
+- `tests/ecomviper_rocktomic_builder_reliability.test.ts`
+- `tests/ecomviper_rocktomic_ai_label_text.test.ts`
+- `tests/ecomviper_rocktomic_template_assets.test.ts`
+
+Phase boundary confirmation:
+
+- no Product Editor behavior changes
+- no Generate Intelligence behavior changes
+- no runtime route extraction/fetching
+- no admin-triggered build/import UI
+- no DB migration/import changes in this sprint
+- no permanent `.ai`/`.tif` binary storage
+
+Recommended next phase after Phase 4.2 closure:
+
+- Phase 5 — Product Editor read-only shared ecommerce DB supplier-facts binding.

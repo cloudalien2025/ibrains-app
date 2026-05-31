@@ -44,6 +44,11 @@ export interface RocktomicAiLabelTextEvidenceRecord extends RocktomicAiRemoteAss
   needsReview: boolean;
   parseWarnings: string[];
   errorDetail: string | null;
+  reusedFromPreviousBuild?: boolean;
+  previousExtractedAt?: string | null;
+  changedDetected?: boolean;
+  changeReason?: string | null;
+  extractionSkippedReason?: string | null;
 }
 
 function parseNumberHeader(value: string | null): number | null {
@@ -126,6 +131,7 @@ export async function readRemoteAssetMetadata(input: {
   fileName: string;
   templatePageLastUpdated: string | null;
   fetchImpl?: typeof fetch;
+  requestTimeoutMs?: number;
 }): Promise<RocktomicAiRemoteAssetMetadata> {
   const fetchImpl = input.fetchImpl || fetch;
   const lastCheckedAt = new Date().toISOString();
@@ -135,9 +141,14 @@ export async function readRemoteAssetMetadata(input: {
   let httpLastModified: string | null = null;
   let httpContentLength: number | null = null;
   let httpContentType: string | null = null;
+  const timeoutMs = Math.max(1_000, input.requestTimeoutMs ?? 30_000);
 
   try {
-    const response = await fetchImpl(input.url, { method: "HEAD", cache: "no-store" });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetchImpl(input.url, { method: "HEAD", cache: "no-store", signal: controller.signal }).finally(() =>
+      clearTimeout(timeout)
+    );
     if (response.ok) {
       httpEtag = response.headers.get("etag");
       httpLastModified = response.headers.get("last-modified");
@@ -163,24 +174,29 @@ export async function readRemoteAssetMetadata(input: {
   };
 }
 
+export function determineMetadataChangeReason(
+  previous: RocktomicAiLabelTextEvidenceRecord | null | undefined,
+  current: RocktomicAiRemoteAssetMetadata
+): string | null {
+  if (!previous) return "missing_previous_evidence";
+  if (previous.extractionStatus !== "success" && previous.extractionStatus !== "reused_cached") return "previous_not_successful";
+  if (!previous.parsedFacts || !previous.extractedAt) return "previous_missing_parsed_facts";
+  if (previous.url !== current.url) return "asset_url_changed";
+  if ((previous.fileName || "").toLowerCase() !== (current.fileName || "").toLowerCase()) return "file_name_changed";
+  if ((previous.templatePageLastUpdated || null) !== (current.templatePageLastUpdated || null)) return "template_last_updated_changed";
+  if (previous.httpEtag && current.httpEtag && previous.httpEtag !== current.httpEtag) return "etag_changed";
+  if (previous.httpLastModified && current.httpLastModified && previous.httpLastModified !== current.httpLastModified) return "last_modified_changed";
+  if (previous.httpContentLength && current.httpContentLength && previous.httpContentLength !== current.httpContentLength)
+    return "content_length_changed";
+  if (previous.httpContentType && current.httpContentType && previous.httpContentType !== current.httpContentType) return "content_type_changed";
+  return null;
+}
+
 export function shouldDownloadForExtraction(
   previous: RocktomicAiLabelTextEvidenceRecord | null | undefined,
   current: RocktomicAiRemoteAssetMetadata
 ): boolean {
-  if (!previous) return true;
-  if (!previous.extractedAt) return true;
-  if (previous.extractionStatus !== "success") return true;
-  if (!previous.parsedFacts) return true;
-  if (previous.url !== current.url) return true;
-  if ((previous.templatePageLastUpdated || null) !== (current.templatePageLastUpdated || null)) return true;
-
-  const keys: Array<keyof RocktomicAiRemoteAssetMetadata> = ["httpEtag", "httpLastModified", "httpContentLength", "httpContentType"];
-  for (const key of keys) {
-    const prevValue = previous[key] ?? null;
-    const currValue = current[key] ?? null;
-    if (prevValue && currValue && prevValue !== currValue) return true;
-  }
-  return false;
+  return Boolean(determineMetadataChangeReason(previous, current));
 }
 
 export function detectAiCompatibility(bytes: ArrayBuffer): RocktomicAiCompatibility {
@@ -286,14 +302,18 @@ export async function extractRocktomicAiLabelTextForSku(input: {
   templatePageLastUpdated: string | null;
   previousEvidence?: RocktomicAiLabelTextEvidenceRecord | null;
   fetchImpl?: typeof fetch;
+  forceRefresh?: boolean;
+  requestTimeoutMs?: number;
 }): Promise<RocktomicAiLabelTextEvidenceRecord> {
   const fetchImpl = input.fetchImpl || fetch;
   const sku = normalizeRocktomicSku(input.sku);
+  const requestTimeoutMs = Math.max(1_000, input.requestTimeoutMs ?? 30_000);
   const metadata = await readRemoteAssetMetadata({
     url: input.assetUrl,
     fileName: input.fileName,
     templatePageLastUpdated: input.templatePageLastUpdated,
     fetchImpl,
+    requestTimeoutMs,
   });
 
   const baseRecord: RocktomicAiLabelTextEvidenceRecord = {
@@ -311,9 +331,15 @@ export async function extractRocktomicAiLabelTextForSku(input: {
     needsReview: true,
     parseWarnings: [],
     errorDetail: null,
+    reusedFromPreviousBuild: false,
+    previousExtractedAt: input.previousEvidence?.extractedAt || null,
+    changedDetected: false,
+    changeReason: null,
+    extractionSkippedReason: null,
   };
 
-  if (!shouldDownloadForExtraction(input.previousEvidence, metadata) && input.previousEvidence) {
+  const changeReason = determineMetadataChangeReason(input.previousEvidence, metadata);
+  if (!input.forceRefresh && !changeReason && input.previousEvidence) {
     return {
       ...input.previousEvidence,
       ...metadata,
@@ -321,18 +347,55 @@ export async function extractRocktomicAiLabelTextForSku(input: {
       extractionStatus: "reused_cached",
       extractionMethod: input.previousEvidence.extractionMethod,
       errorDetail: null,
+      reusedFromPreviousBuild: true,
+      previousExtractedAt: input.previousEvidence.extractedAt || null,
+      changedDetected: false,
+      changeReason: null,
+      extractionSkippedReason: "unchanged_metadata",
     };
   }
 
   let response: Response;
   try {
-    response = await fetchImpl(input.assetUrl, { method: "GET", cache: "no-store" });
+    const headers = new Headers();
+    if (!input.forceRefresh && input.previousEvidence?.httpEtag) {
+      headers.set("If-None-Match", input.previousEvidence.httpEtag);
+    }
+    if (!input.forceRefresh && input.previousEvidence?.httpLastModified) {
+      headers.set("If-Modified-Since", input.previousEvidence.httpLastModified);
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
+    response = await fetchImpl(input.assetUrl, {
+      method: "GET",
+      cache: "no-store",
+      headers,
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
   } catch (error) {
     return {
       ...baseRecord,
       extractionStatus: "extraction_error",
       extractionMethod: "none",
       errorDetail: error instanceof Error ? error.message : "asset_download_failed",
+      changedDetected: Boolean(changeReason),
+      changeReason,
+    };
+  }
+
+  if (response.status === 304 && input.previousEvidence) {
+    return {
+      ...input.previousEvidence,
+      ...metadata,
+      sku,
+      extractionStatus: "reused_cached",
+      extractionMethod: input.previousEvidence.extractionMethod,
+      errorDetail: null,
+      reusedFromPreviousBuild: true,
+      previousExtractedAt: input.previousEvidence.extractedAt || null,
+      changedDetected: false,
+      changeReason: null,
+      extractionSkippedReason: "http_not_modified_304",
     };
   }
 
@@ -342,6 +405,8 @@ export async function extractRocktomicAiLabelTextForSku(input: {
       extractionStatus: "extraction_error",
       extractionMethod: "none",
       errorDetail: `asset_download_http_${response.status}`,
+      changedDetected: Boolean(changeReason),
+      changeReason,
     };
   }
 
@@ -359,6 +424,8 @@ export async function extractRocktomicAiLabelTextForSku(input: {
       tempDownloadedBytes: bytes.byteLength,
       httpContentType: metadata.httpContentType || contentType,
       httpContentLength: metadata.httpContentLength ?? contentLength,
+      changedDetected: Boolean(changeReason),
+      changeReason,
     };
   }
 
@@ -374,6 +441,8 @@ export async function extractRocktomicAiLabelTextForSku(input: {
       rawText: rawText || null,
       httpContentType: metadata.httpContentType || contentType,
       httpContentLength: metadata.httpContentLength ?? contentLength,
+      changedDetected: Boolean(changeReason),
+      changeReason,
     };
   }
 
@@ -394,5 +463,9 @@ export async function extractRocktomicAiLabelTextForSku(input: {
     errorDetail: null,
     httpContentType: metadata.httpContentType || contentType,
     httpContentLength: metadata.httpContentLength ?? contentLength,
+    changedDetected: Boolean(changeReason),
+    changeReason,
+    reusedFromPreviousBuild: false,
+    extractionSkippedReason: null,
   };
 }
