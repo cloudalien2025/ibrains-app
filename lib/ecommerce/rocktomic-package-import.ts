@@ -84,7 +84,7 @@ export interface EcomImportRowSet {
 }
 
 function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  return typeof value === "string" ? value.replace(/\u0000/g, "").trim() : "";
 }
 
 function asNullableString(value: unknown): string | null {
