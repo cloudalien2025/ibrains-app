@@ -2888,3 +2888,73 @@ Recommended next phase:
   - no use of `ecomviper-prod-postgres`
 - Recommended next phase:
   - Phase 6 — Generate Intelligence supplier facts binding from shared ecommerce DB.
+
+## Sprint Closure Update: Phase 5 Product Editor Read-Only Supplier Facts Binding
+
+- Sprint/branch:
+  - implementation branch: `sprint-024-product-editor-supplier-facts-binding`
+  - closure metadata branch: `sprint-024-1-phase5-closure-metadata`
+- Phase 5 MR:
+  - `!291`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/291`
+  - source commit SHA: `048c4969870c4d8ef82b759c73d680a2b1daf119`
+  - merge commit SHA: `7f40e11984d54842527ca76f816dd7e7d057bc8b`
+- Pipeline status:
+  - MR pipeline `2565781198`: success
+  - branch pipeline `2565780245`: success
+  - main/deploy pipeline `2565788605`: success
+- Production release verification:
+  - `/api/meta/release` reports:
+    - `git_sha=7f40e11984d54842527ca76f816dd7e7d057bc8b`
+    - `build_id=2565788605`
+    - `deployed_at=2026-05-31T22:32:26Z`
+    - `release_metadata_complete=true`
+  - `/api/health`: `200`
+  - smoke script: `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai` passed
+  - close-wait socket check: passed (`0`)
+- Focused Phase 5 verification:
+  - passed:
+    - `tests/ecommerce_supplier_product_match.test.ts`
+    - `tests/ecommerce_supplier_facts_read.test.ts`
+    - `tests/ecomviper_shopify_supplier_facts_panel.test.tsx`
+    - `tests/ecomviper_shopify_product_editor_workflow.test.tsx`
+    - `tests/ecomviper_route_render_sync_safety.test.ts`
+  - `npm run build`: passed
+  - `git diff --check`: passed
+- Full test run (`npm test`):
+  - failed on known unrelated baseline suites only; Phase 5 focused suites remained green.
+  - unrelated failures observed:
+    1. `tests/casahud_ai_channel_engine.test.ts`
+    2. `tests/ecomviper_walmart_products_persistence.test.ts`
+    3. `tests/frontdoor_env_copy_contract.test.ts`
+    4. `tests/homepage_layout_contract.test.ts`
+    5. `tests/siteforge_command_center_shell.test.tsx`
+    6. `tests/studio_casahud_media_planning_engine.test.ts`
+    7. `tests/studio_casahud_youtube_package_engine.test.ts`
+    8. `tests/walmart/compliance.test.ts`
+- Shared ecommerce DB verification (correct env):
+  - executed with production `ECOMMERCE_DATABASE_URL` and compatibility suffix `&uselibpqcompat=true`
+  - `npm run ecommerce:check-db`: pass
+  - `npm run ecommerce:verify-rocktomic-import`: pass
+  - verify summary:
+    - expected/actual SKUs: `164`
+    - statuses: usable `8`, usable_with_warnings `59`, blocked `97`, extraction_error `0`
+    - table counts: facts/pricing/inventory/assets/validation all `164`
+    - readiness query present: ingredient matching ready `129` blocked `35`; product editor facts ready `70` blocked `94`
+- Signed-out route checks:
+  - `/admin`: `307` to `/sign-in?redirect_url=%2Fadmin`
+  - `/admin/ecomviper`: `307` to `/sign-in?redirect_url=%2Fadmin%2Fecomviper`
+  - `/admin/ecomviper/suppliers/rocktomic/audit`: `307` to `/sign-in?redirect_url=%2Fadmin%2Fecomviper%2Fsuppliers%2Frocktomic%2Faudit`
+  - `/apps/ecomviper/shopify`: `404` (route not present under current conventions)
+  - `/ecomviper/shopify/products/roc011`: `307` to `/sign-in?redirect_url=%2Fecomviper%2Fshopify%2Fproducts%2Froc011`
+- Signed-in Product Editor verification status:
+  - not executed in this CLI closure run due no authenticated browser session in runner.
+- Scope/boundary confirmation:
+  - Supplier Source Facts panel remains read-only.
+  - Missing COA is compliance warning only; not an ingredient-matching blocker.
+  - Missing pricing is pricing warning/unavailable only; not an ingredient-matching blocker.
+  - No Generate Intelligence binding changes in Phase 5.
+  - No supplier import/sync/extraction/OCR/AI-label runtime behavior added to Product Editor.
+  - No `DATABASE_URL` fallback for supplier facts reads; ecommerce reads use `ECOMMERCE_DATABASE_URL`.
+- Risks/follow-ups:
+  - signed-in Product Editor scenario verification (exact match/no match/missing COA/missing pricing/ingredient blocked) should be completed with authenticated session and captured in next ops pass.
+  - baseline unrelated test failures remain outside Phase 5 scope.
