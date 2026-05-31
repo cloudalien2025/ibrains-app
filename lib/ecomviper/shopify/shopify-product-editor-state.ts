@@ -19,6 +19,10 @@ import {
 import type { ShopifyPdpIntelligenceRecord } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence";
 import { getPersistedShopifyPdpIntelligenceForProduct } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence-repository";
 import {
+  readSupplierFactsForShopifyProduct,
+} from "@/lib/ecommerce/supplier-facts-read";
+import type { SupplierFactsPanelViewModel } from "@/lib/ecommerce/supplier-facts-types";
+import {
   sourceLabel,
   sourceToHydrationMode,
   type ShopifyWorkspaceHydrationMode,
@@ -59,6 +63,7 @@ export interface ShopifyProductEditorInitialState {
   warnings: string[];
   pdpIntelligence: ShopifyPdpIntelligenceRecord | null;
   sourceFacts?: ShopifyProductEditorSourceFacts | null;
+  supplierFactsPanel?: SupplierFactsPanelViewModel | null;
   supplierContext: {
     matched: boolean;
     matchedSku: string | null;
@@ -781,6 +786,7 @@ export async function buildShopifyProductEditorStateForUser(
       warnings: resolved.warnings,
       pdpIntelligence: null,
       sourceFacts: null,
+      supplierFactsPanel: null,
       supplierContext: {
         matched: false,
         matchedSku: null,
@@ -816,6 +822,11 @@ export async function buildShopifyProductEditorStateForUser(
       pdpIntelligence = null;
     }
   }
+
+  const supplierFactsPanel = await readSupplierFactsForShopifyProduct({
+    product: resolved.product,
+    supplierSlug: "rocktomic",
+  }).catch(() => null);
 
   const skus = currentShopifyListing.variants.map((entry) => entry.sku.trim()).filter(Boolean);
   const supplierSnapshot = await matchPrimarySupplierBySkus(skus, {
@@ -898,6 +909,7 @@ export async function buildShopifyProductEditorStateForUser(
           }
         : pdpIntelligence,
     sourceFacts,
+    supplierFactsPanel,
     supplierContext: {
       matched: supplierMatch?.status === "rocktomic",
       matchedSku: supplierMatch?.matchedSku ?? null,
