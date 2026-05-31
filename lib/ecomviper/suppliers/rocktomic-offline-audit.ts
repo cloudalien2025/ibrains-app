@@ -1,4 +1,9 @@
 import fs from "node:fs/promises";
+import {
+  evaluateRocktomicPackageValidation,
+  type RocktomicPackageValidationResult,
+  type RocktomicSkuValidationResult,
+} from "@/lib/ecomviper/suppliers/rocktomic-validation-policy";
 
 export type RocktomicSourceType = "pdf" | "html" | "docx" | "google_sheet";
 
@@ -63,6 +68,8 @@ export interface AssetsRecord {
 export interface AuditRow {
   sku: string;
   productName: string;
+  skuType: string;
+  validationStatus: string;
   hasProductName: boolean;
   hasCategory: boolean;
   hasSupplementFacts: boolean;
@@ -73,12 +80,24 @@ export interface AuditRow {
   hasMockup: boolean;
   missingFieldCount: number;
   missingFields: string[];
+  blockingDefectCount: number;
+  warningDefectCount: number;
+  blockingDefects: string[];
+  warningDefects: string[];
+  notApplicableFields: string[];
+  usableForProductEditor: boolean;
+  usableForGenerateIntelligence: boolean;
+  usableForImageStudio: boolean;
+  usableForChannelOptimization: boolean;
+  usableForOptiBay: boolean;
+  usableForOptiWal: boolean;
+  usableForOptizon: boolean;
   sourceNotes: string[];
 }
 
-export interface ValidationReport {
-  generatedAt: string;
-  totalSkusDiscovered: number;
+export interface ValidationReport extends RocktomicPackageValidationResult {
+  packageGeneratedAt: string;
+  supplierSlug: "rocktomic";
   recordsWritten: {
     sourceFacts: number;
     pricing: number;
@@ -86,17 +105,6 @@ export interface ValidationReport {
     assets: number;
     audit: number;
   };
-  coverageCounts: Record<string, number>;
-  missingFieldCounts: Record<string, number>;
-  skuLevelDefects: Array<{
-    sku: string;
-    missingFields: string[];
-    sourceNotes: string[];
-  }>;
-  sourceErrors: Array<{
-    sourceId: string;
-    error: string;
-  }>;
 }
 
 export function normalizeRocktomicSku(value: string): string {
@@ -375,6 +383,7 @@ export function buildAuditRows(input: {
   inventoryBySku: Record<string, InventoryRecord>;
   assetsBySku: Record<string, AssetsRecord>;
   sourceErrors: Array<{ sourceId: string; error: string }>;
+  skuValidationBySku?: Record<string, RocktomicSkuValidationResult>;
 }): AuditRow[] {
   const allSkus = Array.from(
     new Set([
@@ -397,9 +406,12 @@ export function buildAuditRows(input: {
       ...(assets?.missingFields ?? ["coaUrl", "labelTemplateUrl", "mockupUrl"]),
     ];
     const uniqueMissing = Array.from(new Set(missingFields)).sort((left, right) => left.localeCompare(right));
+    const skuValidation = input.skuValidationBySku?.[sku];
     return {
       sku,
       productName: facts?.productName || pricing?.productName || "",
+      skuType: skuValidation?.skuType || "unknown",
+      validationStatus: skuValidation?.status || "blocked",
       hasProductName: Boolean(facts?.productName || pricing?.productName),
       hasCategory: Boolean(facts?.category),
       hasSupplementFacts: Boolean(facts?.supplementFactsText),
@@ -410,6 +422,22 @@ export function buildAuditRows(input: {
       hasMockup: Boolean(assets?.mockupUrl),
       missingFieldCount: uniqueMissing.length,
       missingFields: uniqueMissing,
+      blockingDefectCount: skuValidation?.blockingDefects.length ?? 0,
+      warningDefectCount: skuValidation?.warningDefects.length ?? 0,
+      blockingDefects: skuValidation?.blockingDefects.map((defect) => `${defect.field}:${defect.code}`) ?? [],
+      warningDefects: skuValidation?.warningDefects.map((defect) => `${defect.field}:${defect.code}`) ?? [],
+      notApplicableFields: skuValidation?.notApplicableFields ?? [],
+      usableForProductEditor: Boolean(skuValidation?.readiness.usableForProductEditor),
+      usableForGenerateIntelligence: Boolean(skuValidation?.readiness.usableForGenerateIntelligence),
+      usableForImageStudio: Boolean(skuValidation?.readiness.usableForImageStudio),
+      usableForChannelOptimization: Boolean(
+        skuValidation?.readiness.usableForOptiBay ||
+          skuValidation?.readiness.usableForOptiWal ||
+          skuValidation?.readiness.usableForOptizon
+      ),
+      usableForOptiBay: Boolean(skuValidation?.readiness.usableForOptiBay),
+      usableForOptiWal: Boolean(skuValidation?.readiness.usableForOptiWal),
+      usableForOptizon: Boolean(skuValidation?.readiness.usableForOptizon),
       sourceNotes: input.sourceErrors.map((entry) => `${entry.sourceId}: ${entry.error}`),
     } satisfies AuditRow;
   });
@@ -426,6 +454,8 @@ export function toAuditCsv(rows: AuditRow[]): string {
   const header = [
     "sku",
     "productName",
+    "skuType",
+    "validationStatus",
     "hasProductName",
     "hasCategory",
     "hasSupplementFacts",
@@ -436,6 +466,18 @@ export function toAuditCsv(rows: AuditRow[]): string {
     "hasMockup",
     "missingFieldCount",
     "missingFields",
+    "blockingDefectCount",
+    "warningDefectCount",
+    "blockingDefects",
+    "warningDefects",
+    "notApplicableFields",
+    "usableForProductEditor",
+    "usableForGenerateIntelligence",
+    "usableForImageStudio",
+    "usableForChannelOptimization",
+    "usableForOptiBay",
+    "usableForOptiWal",
+    "usableForOptizon",
     "sourceNotes",
   ];
 
@@ -445,6 +487,8 @@ export function toAuditCsv(rows: AuditRow[]): string {
       [
         row.sku,
         row.productName,
+        row.skuType,
+        row.validationStatus,
         String(row.hasProductName),
         String(row.hasCategory),
         String(row.hasSupplementFacts),
@@ -455,6 +499,18 @@ export function toAuditCsv(rows: AuditRow[]): string {
         String(row.hasMockup),
         String(row.missingFieldCount),
         row.missingFields.join("|"),
+        String(row.blockingDefectCount),
+        String(row.warningDefectCount),
+        row.blockingDefects.join("|"),
+        row.warningDefects.join("|"),
+        row.notApplicableFields.join("|"),
+        String(row.usableForProductEditor),
+        String(row.usableForGenerateIntelligence),
+        String(row.usableForImageStudio),
+        String(row.usableForChannelOptimization),
+        String(row.usableForOptiBay),
+        String(row.usableForOptiWal),
+        String(row.usableForOptizon),
         row.sourceNotes.join("|"),
       ]
         .map((value) => csvEscape(value))
@@ -466,72 +522,37 @@ export function toAuditCsv(rows: AuditRow[]): string {
 
 export function buildValidationReport(input: {
   generatedAt: string;
+  packageVersion: number | null;
   sourceFacts: SourceFactRecord[];
   pricing: PricingRecord[];
   inventory: InventoryRecord[];
   assets: AssetsRecord[];
-  auditRows: AuditRow[];
   sourceErrors: Array<{ sourceId: string; error: string }>;
 }): ValidationReport {
-  const coverageCounts: Record<string, number> = {
-    productName: 0,
-    category: 0,
-    supplementFactsText: 0,
-    wholesaleCost: 0,
-    msrp: 0,
-    estimatedProfit: 0,
-    inventoryStatus: 0,
-    rawInventoryValue: 0,
-    coaUrl: 0,
-    labelTemplateUrl: 0,
-    mockupUrl: 0,
-  };
-  const missingFieldCounts: Record<string, number> = {};
-
-  for (const facts of input.sourceFacts) {
-    if (facts.productName) coverageCounts.productName += 1;
-    if (facts.category) coverageCounts.category += 1;
-    if (facts.supplementFactsText) coverageCounts.supplementFactsText += 1;
-  }
-  for (const entry of input.pricing) {
-    if (entry.wholesaleCost != null) coverageCounts.wholesaleCost += 1;
-    if (entry.msrp != null) coverageCounts.msrp += 1;
-    if (entry.estimatedProfit != null) coverageCounts.estimatedProfit += 1;
-  }
-  for (const entry of input.inventory) {
-    if (entry.rawInventoryValue) coverageCounts.rawInventoryValue += 1;
-    if (entry.inventoryStatus !== "missing") coverageCounts.inventoryStatus += 1;
-  }
-  for (const entry of input.assets) {
-    if (entry.coaUrl) coverageCounts.coaUrl += 1;
-    if (entry.labelTemplateUrl) coverageCounts.labelTemplateUrl += 1;
-    if (entry.mockupUrl) coverageCounts.mockupUrl += 1;
-  }
-  for (const row of input.auditRows) {
-    for (const field of row.missingFields) {
-      missingFieldCounts[field] = (missingFieldCounts[field] || 0) + 1;
-    }
-  }
+  const sourceFactsBySku = Object.fromEntries(input.sourceFacts.map((record) => [record.sku, record]));
+  const pricingBySku = Object.fromEntries(input.pricing.map((record) => [record.sku, record]));
+  const inventoryBySku = Object.fromEntries(input.inventory.map((record) => [record.sku, record]));
+  const assetsBySku = Object.fromEntries(input.assets.map((record) => [record.sku, record]));
+  const packageValidation = evaluateRocktomicPackageValidation({
+    generatedAt: input.generatedAt,
+    packageVersion: input.packageVersion,
+    sourceFactsBySku,
+    pricingBySku,
+    inventoryBySku,
+    assetsBySku,
+    sourceErrors: input.sourceErrors,
+  });
 
   return {
-    generatedAt: input.generatedAt,
-    totalSkusDiscovered: input.auditRows.length,
+    ...packageValidation,
+    packageGeneratedAt: input.generatedAt,
+    supplierSlug: "rocktomic",
     recordsWritten: {
       sourceFacts: input.sourceFacts.length,
       pricing: input.pricing.length,
       inventory: input.inventory.length,
       assets: input.assets.length,
-      audit: input.auditRows.length,
+      audit: packageValidation.totalSkusValidated,
     },
-    coverageCounts,
-    missingFieldCounts,
-    skuLevelDefects: input.auditRows
-      .filter((row) => row.missingFieldCount > 0)
-      .map((row) => ({
-        sku: row.sku,
-        missingFields: row.missingFields,
-        sourceNotes: row.sourceNotes,
-      })),
-    sourceErrors: input.sourceErrors,
   };
 }

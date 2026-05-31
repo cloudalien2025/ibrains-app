@@ -80,6 +80,31 @@ Last updated: 2026-05-31 (UTC)
 - Recommended next phase:
   - Phase 2 — Rocktomic validation rules and blocking/warning field policy.
 
+## Sprint Checkpoint: Phase 2 Rocktomic Validation Policy (Local Branch)
+
+- Branch: `sprint-016-rocktomic-validation-policy`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused tests in progress; MR/deploy verification pending.
+- Scope implemented locally:
+  - Added formal validation policy module:
+    - `lib/ecomviper/suppliers/rocktomic-validation-policy.ts`
+  - Upgraded offline package outputs to include:
+    - formal SKU statuses (`usable`, `usable_with_warnings`, `blocked`, `not_applicable`, `extraction_error`)
+    - package status (`pass`, `pass_with_warnings`, `fail`)
+    - blocking/warning/not-applicable field handling
+    - downstream readiness flags (offline output only)
+  - Extended generated artifacts:
+    - `data/ecomviper/suppliers/rocktomic/latest/validation-report.json`
+    - `data/ecomviper/suppliers/rocktomic/latest/audit.csv`
+  - Added focused tests for policy status and boundary behavior.
+- Phase boundary confirmation:
+  - no database import/migration performed
+  - no runtime route/component behavior switch performed
+  - no Product Editor / Generate Intelligence / Admin UI / Image Studio / OptiBay / OptiWal / Optizon behavior changes performed
+- Recommended next phases:
+  - Phase 3: Admin validation visibility
+  - Phase 4: controlled validated data import/read path
+
 ## Sprint Checkpoint: Rocktomic Supplier Data Package Phase 1 (Offline All-SKU Audit)
 
 - Branch: `rocktomic-offline-all-sku-audit-phase1`

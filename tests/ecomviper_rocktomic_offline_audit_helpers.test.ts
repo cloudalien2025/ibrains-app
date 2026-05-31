@@ -104,22 +104,27 @@ describe("rocktomic offline audit helpers", () => {
     expect(auditRows).toHaveLength(1);
     expect(auditRows[0]?.missingFields).toContain("coaUrl");
     expect(auditRows[0]?.sourceNotes[0]).toContain("catalog_pdf");
+    expect(auditRows[0]?.validationStatus).toBeTruthy();
 
     const csv = toAuditCsv(auditRows);
     expect(csv).toContain("missingFields");
+    expect(csv).toContain("validationStatus");
+    expect(csv).toContain("blockingDefects");
     expect(csv).toContain("ROC949");
 
     const report = buildValidationReport({
       generatedAt: "2026-05-31T00:00:00.000Z",
+      packageVersion: 1,
       sourceFacts,
       pricing,
       inventory,
       assets,
-      auditRows,
       sourceErrors: [{ sourceId: "catalog_pdf", error: "mock parse error" }],
     });
     expect(report.totalSkusDiscovered).toBe(1);
-    expect(report.missingFieldCounts.coaUrl).toBe(1);
+    expect(report.validationPolicyVersion).toBeTruthy();
+    expect(report.supplierId).toBe("rocktomic");
+    expect(report.skuValidationResults).toHaveLength(1);
     expect(report.sourceErrors).toHaveLength(1);
   });
 

@@ -176,3 +176,25 @@ Phase 1 rules:
 - `ibrains-ecommerce-prod-postgres` is the target shared ecommerce database.
 - `ecomviper-prod-postgres` is legacy/deprecated and ignored for forward architecture unless future explicit recovery scope says otherwise.
 - Phase 1.5 performs no production data migration, no schema migration, and no runtime supplier-ingestion DB switch.
+
+## Rocktomic Validation Policy (Phase 2)
+
+Phase 2 upgrades the offline package from informational defects to a formal validation contract.
+
+Policy outputs now include:
+
+- blocking vs warning defect classification
+- SKU status (`usable`, `usable_with_warnings`, `blocked`, `not_applicable`, `extraction_error`)
+- package status (`pass`, `pass_with_warnings`, `fail`)
+- downstream readiness flags in offline artifacts only
+
+Phase 2 still does not:
+
+- import supplier data into shared ecommerce DB
+- change Product Editor / Generate Intelligence runtime behavior
+- add admin validation UI, sync buttons, or workers
+- execute validation in render paths or app startup
+
+Detailed policy contract:
+
+- `planning/apps/ecomviper/shopify/rocktomic-validation-policy.md`
