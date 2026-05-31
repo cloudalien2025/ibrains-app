@@ -93,6 +93,8 @@ export interface ShopifyProductEditorSourceFacts {
   inventoryRecordFound: boolean;
   assetsRecordFound: boolean;
   selectedMembershipTier: string | null;
+  effectiveMembershipTier: string | null;
+  usingDefaultMembershipTier: boolean;
   detectedMembershipTiers: string[];
   lastGlobalSupplierSyncAt: string | null;
   lastGeneratedIntelligenceAt: string | null;
@@ -128,6 +130,26 @@ export interface ShopifyProductEditorSourceFacts {
     displayText: string;
   };
   dietaryAllergenAttributes: {
+    status: ShopifyProductEditorSourceFieldStatus;
+    values: string[];
+    displayText: string;
+  };
+  keyProductFeatures: {
+    status: ShopifyProductEditorSourceFieldStatus;
+    values: string[];
+    displayText: string;
+  };
+  certifications: {
+    status: ShopifyProductEditorSourceFieldStatus;
+    values: string[];
+    displayText: string;
+  };
+  manufacturingClaims: {
+    status: ShopifyProductEditorSourceFieldStatus;
+    values: string[];
+    displayText: string;
+  };
+  testingClaims: {
     status: ShopifyProductEditorSourceFieldStatus;
     values: string[];
     displayText: string;
@@ -290,7 +312,9 @@ function sourceStatusForScalar(input: {
 }): { status: ShopifyProductEditorSourceFieldStatus; value: string; displayText: string } {
   const value = asString(input.value);
   if (value) return { status: "extracted", value, displayText: value };
-  if (!input.product) return { status: "source_sync_required", value: "", displayText: "Source sync required." };
+  if (!input.product) {
+    return { status: "source_sync_required", value: "", displayText: "Run source sync to extract supplier facts." };
+  }
   if (input.product.supplementFacts?.status === "ocr_required") {
     return {
       status: "ocr_required",
@@ -311,7 +335,9 @@ function sourceStatusForArray(input: {
 }): { status: ShopifyProductEditorSourceFieldStatus; values: string[]; displayText: string } {
   const values = Array.from(new Set((input.values || []).map((entry) => entry.trim()).filter(Boolean)));
   if (values.length) return { status: "extracted", values, displayText: values.join(", ") };
-  if (!input.product) return { status: "source_sync_required", values: [], displayText: "Source sync required." };
+  if (!input.product) {
+    return { status: "source_sync_required", values: [], displayText: "Run source sync to extract supplier facts." };
+  }
   if (input.product.supplementFacts?.status === "ocr_required") {
     return {
       status: "ocr_required",
@@ -338,7 +364,7 @@ function supplementFactsStatus(product: RocktomicSupplierProduct | null) {
     return {
       status: "source_sync_required" as const,
       value: "",
-      displayText: "Source sync required.",
+      displayText: "Run source sync to extract supplier facts.",
     };
   }
   if (product.supplementFacts?.status === "ocr_required") {
@@ -364,7 +390,7 @@ function supplementFactsStatus(product: RocktomicSupplierProduct | null) {
 
 function availabilityFromInventoryStatus(status: string): string {
   if (status === "in_stock") return "Available";
-  if (status === "low_stock") return "Limited Availability";
+  if (status === "low_stock") return "Action Required: Mark Out of Stock";
   if (status === "out_of_stock") return "Currently Unavailable";
   if (status === "source_unavailable") return "Inventory Status Unavailable";
   return "Availability Unknown";
@@ -373,12 +399,34 @@ function availabilityFromInventoryStatus(status: string): string {
 function buildPricingMessage(input: {
   pricingRecordFound: boolean;
   selectedMembershipTier: string | null;
+  effectiveMembershipTier: string | null;
+  usingDefaultMembershipTier: boolean;
   wholesaleCost: number | null;
 }): string {
   if (!input.pricingRecordFound) return "Pricing record not found for SKU.";
-  if (!input.selectedMembershipTier) return "Select membership tier in Settings to calculate cost and profit.";
+  if (!input.selectedMembershipTier && !input.usingDefaultMembershipTier) {
+    return "Select membership tier in Settings to calculate cost and profit.";
+  }
+  if (input.usingDefaultMembershipTier && input.effectiveMembershipTier) {
+    return `Pricing Tier: ${input.effectiveMembershipTier} (default)`;
+  }
   if (input.wholesaleCost == null) return "Cost not found for selected tier.";
   return "Selected membership tier pricing mapped.";
+}
+
+function resolveDefaultMembershipTier(input: {
+  selectedMembershipTier: string | null;
+  membershipTierCosts: Record<string, number> | null | undefined;
+  detectedMembershipTiers: string[] | null | undefined;
+}): string | null {
+  if (input.selectedMembershipTier) return input.selectedMembershipTier;
+  const costs = input.membershipTierCosts ?? {};
+  const fromDetected = Array.from(new Set((input.detectedMembershipTiers || []).map((entry) => entry.trim()).filter(Boolean)));
+  const fromCosts = Object.keys(costs).map((entry) => entry.trim()).filter(Boolean);
+  const all = Array.from(new Set([...fromDetected, ...fromCosts]));
+  if (!all.length) return null;
+  const nonMember = all.find((entry) => entry.toLowerCase() === "non member pricing");
+  return nonMember || all[0] || null;
 }
 
 function computeStaleIntelligence(input: {
@@ -407,9 +455,15 @@ function buildSourceFacts(input: {
   const inventoryRecordFound = normalizedRecordFound(supplierProduct, "inventory");
   const assetsRecordFound = normalizedRecordFound(supplierProduct, "asset");
   const selectedMembershipTier = supplierProduct?.pricing?.membershipTier || null;
+  const effectiveMembershipTier = resolveDefaultMembershipTier({
+    selectedMembershipTier,
+    membershipTierCosts: supplierProduct?.pricing?.membershipTierCosts,
+    detectedMembershipTiers: supplierProduct?.pricing?.membershipTiersDetected,
+  });
+  const usingDefaultMembershipTier = Boolean(!selectedMembershipTier && effectiveMembershipTier);
   const wholesaleCost =
-    selectedMembershipTier && typeof supplierProduct?.pricing?.wholesaleCost === "number"
-      ? supplierProduct.pricing.wholesaleCost
+    effectiveMembershipTier && supplierProduct?.pricing?.membershipTierCosts
+      ? supplierProduct.pricing.membershipTierCosts[effectiveMembershipTier] ?? null
       : null;
   const shopifyPrice = firstVariantPrice(input.product);
   const compareAtPrice = firstVariantCompareAtPrice(input.product);
@@ -455,6 +509,28 @@ function buildSourceFacts(input: {
     values: supplierProduct?.allergenDietaryAttributes || supplierProduct?.dietaryAttributes,
     fieldName: "Dietary / Allergen Attributes",
   });
+  const keyProductFeatures = sourceStatusForArray({
+    product: supplierProduct,
+    values: supplierProduct?.productFeatures,
+    fieldName: "Key Product Features",
+  });
+  const certifications = sourceStatusForArray({
+    product: supplierProduct,
+    values: supplierProduct?.certifications,
+    fieldName: "Certifications",
+  });
+  const manufacturingClaims = sourceStatusForArray({
+    product: supplierProduct,
+    values: supplierProduct?.manufacturingClaims,
+    fieldName: "Manufacturing Claims",
+  });
+  const testingClaims = sourceStatusForArray({
+    product: supplierProduct,
+    values: (supplierProduct?.manufacturingClaims || []).filter((entry) =>
+      /third-?party|tested|nsf|fda|gmp/i.test(entry)
+    ),
+    fieldName: "Testing Claims",
+  });
   const inventoryStatus = inventoryRecordFound
     ? supplierProduct?.inventoryStatus || "unknown"
     : supplierProduct
@@ -463,6 +539,8 @@ function buildSourceFacts(input: {
   const pricingMessage = buildPricingMessage({
     pricingRecordFound,
     selectedMembershipTier,
+    effectiveMembershipTier,
+    usingDefaultMembershipTier,
     wholesaleCost,
   });
   const missingFields = [
@@ -485,6 +563,8 @@ function buildSourceFacts(input: {
     `global_inventory_record_found: ${inventoryRecordFound ? "true" : "false"}`,
     `global_assets_record_found: ${assetsRecordFound ? "true" : "false"}`,
     `selected_membership_tier: ${selectedMembershipTier || "none"}`,
+    `effective_membership_tier: ${effectiveMembershipTier || "none"}`,
+    `using_default_membership_tier: ${usingDefaultMembershipTier ? "true" : "false"}`,
     `last_global_supplier_sync: ${latestSupplierSyncAt || "never"}`,
     `last_generated_intelligence: ${input.pdpIntelligence?.last_generated_at || "never"}`,
     `stale_intelligence: ${staleIntelligence ? "true" : "false"}`,
@@ -504,6 +584,8 @@ function buildSourceFacts(input: {
     inventoryRecordFound,
     assetsRecordFound,
     selectedMembershipTier,
+    effectiveMembershipTier,
+    usingDefaultMembershipTier,
     detectedMembershipTiers: supplierProduct?.pricing?.membershipTiersDetected || [],
     lastGlobalSupplierSyncAt: latestSupplierSyncAt,
     lastGeneratedIntelligenceAt: input.pdpIntelligence?.last_generated_at || null,
@@ -515,6 +597,10 @@ function buildSourceFacts(input: {
     servingSize,
     servingsPerContainer,
     dietaryAllergenAttributes,
+    keyProductFeatures,
+    certifications,
+    manufacturingClaims,
+    testingClaims,
     commerce: {
       shopifyPrice,
       compareAtPrice,
@@ -523,7 +609,8 @@ function buildSourceFacts(input: {
       estimatedProfit,
       marginPercent,
       currency: supplierProduct?.pricing?.currency || "USD",
-      pricingStatusLabel: supplierProduct?.pricing?.pricingStatusLabel || (pricingRecordFound ? "membership_tier_not_selected" : "pricing_record_not_found"),
+      pricingStatusLabel: supplierProduct?.pricing?.pricingStatusLabel
+        || (usingDefaultMembershipTier ? "default_tier_pricing_mapped" : pricingRecordFound ? "membership_tier_not_selected" : "pricing_record_not_found"),
       message: pricingMessage,
     },
     inventory: {
@@ -538,9 +625,13 @@ function buildSourceFacts(input: {
       coaLinkStatus: supplierProduct?.coaLinkStatus || "not_present",
       message: supplierProduct?.coa?.url
         ? "available/extracted"
+        : !supplierProduct
+          ? "Source sync required."
         : supplierProduct?.coaLinkStatus === "extraction_failed"
-          ? supplierProduct.coaLinkError || "COA extraction failed."
-          : "COA repository pending",
+          ? "COA Link: extraction failed"
+          : supplierProduct?.coaLinkStatus === "not_present"
+            ? "COA Link: not found in catalog row"
+            : "Source sync required.",
     },
     missingFields,
     diagnostics,

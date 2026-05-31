@@ -181,7 +181,7 @@ function mapInventoryStatus(value: string): RocktomicInventoryStatus {
 
 export function toInventoryAvailabilityDisplay(status: string): string {
   if (status === "in_stock") return "Available";
-  if (status === "low_stock") return "Limited Availability";
+  if (status === "low_stock") return "Action Required: Mark Out of Stock";
   if (status === "out_of_stock") return "Currently Unavailable";
   if (status === "source_unavailable") return "Inventory Status Unavailable";
   return "Availability Unknown";
@@ -657,8 +657,8 @@ function buildProduct(input: {
 }): RocktomicSupplierProduct {
   const inventory = input.inventoryBySku.get(input.catalogRow.sku);
   const pdfFields = input.catalogPdfFieldsBySku.get(input.catalogRow.sku);
-  const coaUrl = pdfFields?.coaUrl ?? input.coaRepositoryUrl;
-  const coaStatus = coaUrl ? "available" : pdfFields ? "configured" : input.coaRepositoryUrl ? "configured" : "pending_source";
+  const coaUrl = pdfFields?.coaUrl ?? null;
+  const coaStatus = coaUrl ? "available" : pdfFields ? "configured" : "pending_source";
   const coaVerificationStatus = coaUrl ? "pending" : "unavailable";
   return {
     supplier: "Rocktomic",

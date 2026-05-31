@@ -1,6 +1,6 @@
 # Product Editor Architecture (Sprint 009.4)
 
-Last updated: 2026-05-30 (UTC)
+Last updated: 2026-05-31 (UTC)
 
 ## Layout
 
@@ -84,6 +84,7 @@ Internal Source Diagnostics must include:
 - normalized SKU
 - global product/pricing/inventory/assets record found flags
 - selected membership tier
+- effective membership tier (including default-tier fallback label when used)
 - last global supplier sync
 - last generated intelligence timestamp
 - stale intelligence flag
@@ -100,3 +101,11 @@ Missing-data states use explicit statuses:
 - `not_applicable`
 
 `Unknown` is not a valid replacement for a known pipeline state such as OCR required or source sync required.
+
+Hotfix 009.9 binding additions:
+
+- Product Editor commerce surface must not show `Not selected` while computing costs from a fallback tier.
+- `low_stock` inventory must render as `Action Required: Mark Out of Stock`.
+- COA card must separate link availability from parsing progress:
+  - `COA Link: View COA` when SKU link exists
+  - `COA Document Parsing: pending` as non-blocking status.

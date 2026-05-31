@@ -146,6 +146,8 @@ describe("shopify PDP intelligence generation", () => {
     expect(result.serving_size).toBe("1 gummy");
     expect(result.servings_per_container).toBe("60");
     expect(result.ingredients.join(" ")).toContain("Magnesium (as Magnesium Glycinate)");
+    expect(result.source_diagnostics.join(" ")).toContain("source_facts_used: false");
+    expect(result.source_diagnostics.join(" ")).toContain("coa_link_status: extracted");
   });
 
   it("sanitizes supplier names from shopper-facing output fields", async () => {

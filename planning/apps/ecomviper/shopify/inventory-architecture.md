@@ -1,6 +1,6 @@
 # Inventory Architecture (Sprint 009.4)
 
-Last updated: 2026-05-29 (UTC)
+Last updated: 2026-05-31 (UTC)
 
 ## Internal Status Model
 
@@ -21,7 +21,7 @@ Last updated: 2026-05-29 (UTC)
 ## Customer-Facing Labels
 
 - `in_stock` -> `Available`
-- `low_stock` -> `Limited Availability`
+- `low_stock` -> `Action Required: Mark Out of Stock`
 - `out_of_stock` -> `Currently Unavailable`
 - `unknown` -> `Availability Unknown`
 - `source_unavailable` -> `Inventory Status Unavailable`
@@ -38,7 +38,7 @@ Product Editor reads inventory from the global normalized supplier inventory row
 Display labels:
 
 - `in_stock` -> `Available`
-- `low_stock` -> `Limited Availability`
+- `low_stock` -> `Action Required: Mark Out of Stock`
 - `out_of_stock` -> `Currently Unavailable`
 - `unknown` -> `Availability Unknown`
 - `source_unavailable` -> `Inventory Status Unavailable`

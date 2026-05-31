@@ -1,6 +1,6 @@
 # EcomViper Production Safety Runbook
 
-Last updated: 2026-05-30 (UTC)
+Last updated: 2026-05-31 (UTC)
 
 ## Goal
 
@@ -114,3 +114,5 @@ Post-deploy verification:
 10. Confirm Assets/COA show links or precise pending/extraction status.
 11. Generate Intelligence and confirm diagnostics show `source_facts_used`.
 12. Check browser console for crashes/errors and app/nginx logs for 504s or timeout growth.
+13. Verify Settings tier save succeeds while signed in (no false `Sign-in required` response on valid session).
+14. Verify Product Editor low-stock SKU renders `Action Required: Mark Out of Stock`.

@@ -66,7 +66,7 @@ function chipTone(ok: boolean): string {
 
 function availabilityFromInventoryStatus(status: string): string {
   if (status === "in_stock") return "Available";
-  if (status === "low_stock") return "Limited Availability";
+  if (status === "low_stock") return "Action Required: Mark Out of Stock";
   if (status === "out_of_stock") return "Currently Unavailable";
   if (status === "source_unavailable") return "Inventory Status Unavailable";
   return "Availability Unknown";
@@ -152,18 +152,21 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
       supplier: supplierProduct?.supplier ?? seeded.supplier,
       supplier_sku: initialState.supplierContext.matchedSku ?? seeded.supplier_sku,
       certifications:
-        meaningfulList(seeded.certifications).length > 0
-          ? meaningfulList(seeded.certifications)
+        sourceFacts?.certifications.values?.length
+          ? sourceFacts.certifications.values
           : supplierProduct?.certifications?.length
             ? supplierProduct.certifications
-            : [],
-      dietary_attributes: sourceDietary,
+            : meaningfulList(seeded.certifications),
+      dietary_attributes:
+        sourceFacts?.dietaryAllergenAttributes.values?.length
+          ? sourceFacts.dietaryAllergenAttributes.values
+          : sourceDietary,
       manufacturing_claims:
-        meaningfulList(seeded.manufacturing_claims).length > 0
-          ? meaningfulList(seeded.manufacturing_claims)
+        sourceFacts?.manufacturingClaims.values?.length
+          ? sourceFacts.manufacturingClaims.values
           : supplierProduct?.manufacturingClaims?.length
             ? supplierProduct.manufacturingClaims
-            : [],
+            : meaningfulList(seeded.manufacturing_claims),
       inventory_status: sourceInventoryStatus,
       availability_status: sourceAvailabilityStatus,
       coa_status: sourceFacts?.assets.coaStatus || seeded.coa_status || supplierProduct?.coa?.status || "unknown",
@@ -191,11 +194,11 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
       servings_per_container: sourceServingsPerContainer,
       other_ingredients: sourceOtherIngredients,
       key_features:
-        meaningfulList(seeded.key_features).length > 0
-          ? meaningfulList(seeded.key_features)
+        sourceFacts?.keyProductFeatures.values?.length
+          ? sourceFacts.keyProductFeatures.values
           : supplierProduct?.productFeatures?.length
             ? supplierProduct.productFeatures
-            : [],
+            : meaningfulList(seeded.key_features),
       ingredient_highlights: sourceIngredientHighlights,
       source_diagnostics:
         sourceFacts?.diagnostics.length
@@ -221,10 +224,12 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
 
   const productReference = initialState.productReference || product.handle || product.productId;
   const selectedMembershipTier = sourceFacts?.selectedMembershipTier ?? supplierProduct?.pricing?.membershipTier ?? null;
+  const effectiveMembershipTier = sourceFacts?.effectiveMembershipTier ?? selectedMembershipTier;
+  const usingDefaultMembershipTier = sourceFacts?.usingDefaultMembershipTier ?? false;
   const pricingStatusLabel = sourceFacts?.commerce.pricingStatusLabel || supplierProduct?.pricing?.pricingStatusLabel || "unknown";
   const pricingMessage = sourceFacts?.commerce.message || "Select membership tier in Settings to calculate cost and profit.";
   const hasSelectedTierWholesale =
-    Boolean(selectedMembershipTier) && typeof sourceFacts?.commerce.wholesaleCost === "number";
+    Boolean(effectiveMembershipTier) && typeof sourceFacts?.commerce.wholesaleCost === "number";
   const supplierSyncRequired = initialState.supplierContext.syncRequired;
   const supplierSyncMessage = initialState.supplierContext.syncMessage;
 
@@ -504,7 +509,15 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                   <input value={record.estimated_profit ?? ""} onChange={(e) => setRecord((s) => ({ ...s, estimated_profit: e.target.value ? Number(e.target.value) : null }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
                 <label className="grid gap-1 text-sm">Selected Membership Tier
-                  <input value={selectedMembershipTier || "Not selected"} readOnly className="rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-[#475569]" />
+                  <input
+                    value={
+                      usingDefaultMembershipTier && effectiveMembershipTier
+                        ? `${effectiveMembershipTier} (default)`
+                        : selectedMembershipTier || "None selected"
+                    }
+                    readOnly
+                    className="rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-[#475569]"
+                  />
                 </label>
                 <label className="grid gap-1 text-sm">Pricing Status
                   <input value={pricingStatusLabel} readOnly className="rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-[#475569]" />
@@ -515,12 +528,12 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 <label className="grid gap-1 text-sm">Availability Status
                   <input value={record.availability_status} onChange={(e) => setRecord((s) => ({ ...s, availability_status: e.target.value }))} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
-                {!selectedMembershipTier ? (
+                {!effectiveMembershipTier ? (
                   <p className="text-sm text-[#475569] md:col-span-2">
                     {pricingMessage}
                   </p>
                 ) : null}
-                {selectedMembershipTier && !hasSelectedTierWholesale ? (
+                {effectiveMembershipTier && !hasSelectedTierWholesale ? (
                   <p className="text-sm text-amber-800 md:col-span-2">
                     {pricingMessage}
                   </p>
@@ -610,7 +623,8 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
             {activeTab === "assets" ? (
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="md:col-span-2 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-sm text-[#334155]">
-                  <p>COA: {sourceFacts?.assets.coaUrl ? <a href={sourceFacts.assets.coaUrl} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">View COA</a> : sourceFacts?.assets.message || "COA repository pending"}</p>
+                  <p>COA: {sourceFacts?.assets.coaUrl ? <a href={sourceFacts.assets.coaUrl} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">View COA</a> : sourceFacts?.assets.message || "COA Link: source sync required"}</p>
+                  <p>COA Document Parsing: pending</p>
                   <p>Label Template: {sourceFacts?.assets.labelTemplateUrl ? <a href={sourceFacts.assets.labelTemplateUrl} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">Open label template</a> : "Not available"}</p>
                   <p>Mockup: {sourceFacts?.assets.mockupUrl ? <a href={sourceFacts.assets.mockupUrl} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">Open mockup</a> : "Not available"}</p>
                 </div>
@@ -669,7 +683,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 <p>MSRP: {asMoney(record.msrp, record.currency)}</p>
                 <p>Margin: {hasSelectedTierWholesale && record.margin_percent != null ? `${record.margin_percent}%` : pricingMessage}</p>
                 <p>Estimated Profit: {hasSelectedTierWholesale ? asMoney(record.estimated_profit, record.currency) : pricingMessage}</p>
-                <p>Selected Membership Tier: {selectedMembershipTier || "Not selected"}</p>
+                <p>Selected Membership Tier: {usingDefaultMembershipTier && effectiveMembershipTier ? `${effectiveMembershipTier} (default)` : selectedMembershipTier || "None selected"}</p>
                 <p>Pricing Status: {pricingStatusLabel}</p>
                 <p>Inventory: {record.inventory_status || "unknown"}</p>
                 <p>Availability: {record.availability_status || "Availability Unknown"}</p>
@@ -698,7 +712,8 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
               <h2 className="text-sm font-semibold">COA</h2>
               <div className="mt-2 space-y-1 text-xs text-[#475569]">
                 <p>COA Status: {record.coa_status || "unknown"}</p>
-                <p>COA Link: {record.coa_link ? <a className="text-[#1D4ED8] hover:underline" href={record.coa_link} target="_blank" rel="noreferrer">View COA</a> : sourceFacts?.assets.message || (supplierProduct?.coaLinkStatus === "extraction_failed" ? "Extraction failed" : "COA repository pending")}</p>
+                <p>COA Link: {record.coa_link ? <a className="text-[#1D4ED8] hover:underline" href={record.coa_link} target="_blank" rel="noreferrer">View COA</a> : sourceFacts?.assets.message || (supplierProduct?.coaLinkStatus === "extraction_failed" ? "COA Link: extraction failed" : "COA Link: source sync required")}</p>
+                <p>COA Document Parsing: pending</p>
                 <p>Expiration Date: {record.coa_expiration_date || "Unknown"}</p>
                 <p>Testing Categories: {record.coa_testing_categories.join(", ") || "Unknown"}</p>
                 <p>Verification Status: {record.coa_verification_status || "unknown"}</p>

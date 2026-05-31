@@ -83,6 +83,8 @@ function createInitialState(): ShopifyProductEditorInitialState {
       inventoryRecordFound: true,
       assetsRecordFound: true,
       selectedMembershipTier: "Non Member Pricing",
+      effectiveMembershipTier: "Non Member Pricing",
+      usingDefaultMembershipTier: false,
       detectedMembershipTiers: ["Non Member Pricing"],
       lastGlobalSupplierSyncAt: "2026-05-30T00:00:00.000Z",
       lastGeneratedIntelligenceAt: null,
@@ -110,6 +112,26 @@ function createInitialState(): ShopifyProductEditorInitialState {
       servingSize: { status: "extracted", value: "1 gummy", displayText: "1 gummy" },
       servingsPerContainer: { status: "extracted", value: "60", displayText: "60" },
       dietaryAllergenAttributes: { status: "extracted", values: ["Vegan"], displayText: "Vegan" },
+      keyProductFeatures: {
+        status: "extracted",
+        values: ["Premium magnesium glycinate gummies"],
+        displayText: "Premium magnesium glycinate gummies",
+      },
+      certifications: {
+        status: "extracted",
+        values: ["GMP Facility"],
+        displayText: "GMP Facility",
+      },
+      manufacturingClaims: {
+        status: "extracted",
+        values: ["Made in USA"],
+        displayText: "Made in USA",
+      },
+      testingClaims: {
+        status: "source_missing",
+        values: [],
+        displayText: "Testing Claims not found in normalized source record.",
+      },
       commerce: {
         shopifyPrice: 39.99,
         compareAtPrice: null,
@@ -298,5 +320,25 @@ describe("ecomviper product editor supplier field mapping", () => {
     expect(container.textContent).toContain("Supplement Facts require OCR extraction from catalog label image.");
     expect(container.textContent).toContain("Source data has changed since this intelligence was generated.");
     expect(container.textContent).toContain("Inventory: Available");
+  });
+
+  it("labels default pricing tier and low-stock action-required inventory deterministically", async () => {
+    const state = createInitialState();
+    if (state.sourceFacts) {
+      state.sourceFacts.selectedMembershipTier = null;
+      state.sourceFacts.effectiveMembershipTier = "Non Member Pricing";
+      state.sourceFacts.usingDefaultMembershipTier = true;
+      state.sourceFacts.inventory = { status: "low_stock", displayText: "Action Required: Mark Out of Stock" };
+      state.sourceFacts.commerce.wholesaleCost = 18.87;
+      state.sourceFacts.commerce.message = "Pricing Tier: Non Member Pricing (default)";
+    }
+
+    await act(async () => {
+      root.render(<EcomViperProductEditorClient initialState={state} />);
+    });
+
+    expect(container.textContent).toContain("Selected Membership Tier: Non Member Pricing (default)");
+    expect(container.textContent).toContain("Action Required: Mark Out of Stock");
+    expect(container.textContent).toContain("COA Document Parsing: pending");
   });
 });
