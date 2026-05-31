@@ -178,6 +178,29 @@ Phase 3.6 contract source:
 
 - `planning/apps/ecomviper/shopify/rocktomic-ai-label-text-extraction.md`
 
+## Shared Ecommerce DB Supplier Package Import (Phase 4)
+
+- Phase 4 introduces the first shared ecommerce supplier-intelligence schema in the shared ecommerce DB:
+  - target DB: `ibrains-ecommerce-prod-postgres`
+  - connection boundary: `ECOMMERCE_DATABASE_URL` only
+  - table family: `ecommerce_supplier_*`
+- Phase 4 imports all Rocktomic SKUs from offline package artifacts, including:
+  - `usable`
+  - `usable_with_warnings`
+  - `blocked`
+  - `extraction_error`
+- Import persists validation status, readiness, defects, source evidence, pricing/inventory/assets, and package import metadata.
+- Phase 4 does not switch runtime app behavior:
+  - no Product Editor binding changes
+  - no Generate Intelligence binding changes
+  - no OptiPixel runtime/UI
+  - no admin-triggered import button
+- Large `.ai`/`.tif` binaries remain remote assets; only metadata/evidence/facts are stored.
+
+Phase 4 contract source:
+
+- `planning/apps/ecomviper/shopify/rocktomic-shared-ecommerce-db-import.md`
+
 ## Planning Navigation
 
 For family-level direction, start with:

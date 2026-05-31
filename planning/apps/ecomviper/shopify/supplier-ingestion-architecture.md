@@ -268,3 +268,25 @@ Phase 3.6 guarantees:
 Detailed Phase 3.6 contract:
 
 - `planning/apps/ecomviper/shopify/rocktomic-ai-label-text-extraction.md`
+
+## Shared Ecommerce DB Import (Phase 4)
+
+Phase 4 adds an explicit offline-to-DB import lane for Rocktomic supplier package artifacts.
+
+Scope:
+
+1. Apply ecommerce schema migrations using `ECOMMERCE_DATABASE_URL` only.
+2. Import package artifacts from `data/ecomviper/suppliers/rocktomic/latest/*` into `ecommerce_supplier_*` tables.
+3. Preserve SKU validation status/readiness/defects for all SKUs, including blocked SKUs.
+4. Verify import/readback counts and status parity against `validation-report.json`.
+
+Safety:
+
+- import is explicit CLI/script execution only
+- no route-render import/extraction side effects
+- no Product Editor/Generate Intelligence runtime binding switch in this phase
+- no admin-triggered import action in this phase
+
+Detailed Phase 4 contract:
+
+- `planning/apps/ecomviper/shopify/rocktomic-shared-ecommerce-db-import.md`

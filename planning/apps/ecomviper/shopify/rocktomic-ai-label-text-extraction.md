@@ -110,3 +110,16 @@ New package-level counters include:
 
 - Phase 4: controlled import/read of validated supplier data into/from shared ecommerce DB.
 - Future OptiPixel phase: runtime UI and processing model for image intelligence based on remote asset references and on-demand downloads.
+
+## Phase 4 Handoff
+
+Phase 3.6 outputs feed Phase 4 import in these ways:
+
+- `ai-label-text-evidence.json` is persisted as supplier evidence payload.
+- `sourceFacts.json` supplement facts with `ai_pdf_text` provenance are imported as structured facts/evidence.
+- `assets.json` remote freshness metadata (`ETag`, `Last-Modified`, `Content-Length`, `Content-Type`, template-page `Last Updated`) is imported for supplier assets.
+
+Phase 4 continues to avoid permanent binary storage:
+
+- no permanent `.ai`/`.tif` file persistence in repo DB artifacts
+- URLs + metadata + extracted evidence only

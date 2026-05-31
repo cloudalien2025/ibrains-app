@@ -302,6 +302,43 @@ Last updated: 2026-05-31 (UTC)
 - Recommended next phase:
   - Phase 4 — controlled validated supplier data import/read path into/from shared ecommerce database.
 
+## Sprint Checkpoint: Phase 4 Shared Ecommerce DB Supplier Package Import (Local Branch)
+
+- Branch: `sprint-020-rocktomic-shared-ecommerce-db-import`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks in progress; MR/deploy verification pending.
+- Scope implemented locally:
+  - Added shared ecommerce supplier-intelligence schema migration:
+    - `db/ecommerce/migrations/20260601_ecommerce_supplier_intelligence.sql`
+  - Added ecommerce-only migration runner:
+    - `lib/ecommerce/migration-runner.ts`
+    - `scripts/ecommerce/migrate.ts`
+  - Added Rocktomic package import mapping and DB upsert runner:
+    - `lib/ecommerce/rocktomic-package-import.ts`
+    - `lib/ecommerce/rocktomic-import-runner.ts`
+    - `scripts/ecomviper/import_rocktomic_supplier_package.ts`
+  - Added read-only verification script:
+    - `scripts/ecommerce/verify_rocktomic_supplier_import.ts`
+  - Added npm commands:
+    - `npm run ecommerce:migrate`
+    - `npm run ecomviper:import-rocktomic-supplier-package`
+    - `npm run ecommerce:verify-rocktomic-import`
+  - Added Phase 4 focused tests for schema contract, migration idempotency, import mapping, script/runtime boundaries.
+  - Added Phase 4 planning contract doc:
+    - `planning/apps/ecomviper/shopify/rocktomic-shared-ecommerce-db-import.md`
+- Honest boundary confirmation:
+  - `DATABASE_URL` remains core iBrains DB boundary
+  - `ECOMMERCE_DATABASE_URL` is used for Phase 4 migration/import/verify scripts
+  - `ecomviper-prod-postgres` remains deprecated/ignored
+  - no Product Editor / Generate Intelligence runtime behavior switch
+  - no admin write/import trigger UI
+  - no runtime source fetch/extraction/OCR side effects
+  - no permanent `.ai` / `.tif` binary storage
+- Recommended next phases:
+  - Phase 5: Product Editor read-only supplier facts binding from shared ecommerce DB
+  - Phase 6: Generate Intelligence binding
+  - Future OptiPixel phase: runtime use of supplier asset metadata references and on-demand asset workflows
+
 ## Sprint Checkpoint: Rocktomic Supplier Data Package Phase 1 (Offline All-SKU Audit)
 
 - Branch: `rocktomic-offline-all-sku-audit-phase1`
