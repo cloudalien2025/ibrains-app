@@ -98,6 +98,21 @@ These planning roots are active in the current repository structure.
   - `data/ecomviper/suppliers/rocktomic/latest/*`
 - Phase 1 is offline-only and does not change user-facing routes, Product Editor, Generate Intelligence, or admin runtime behavior.
 
+## Shared Ecommerce Database Foundation (Phase 1.5)
+
+- `ibrains-ecommerce-prod-postgres` is the target shared ecommerce platform database for EcomViper + related ecommerce brains/apps.
+- `ecomviper-prod-postgres` is legacy/deprecated and ignored unless a future explicit recovery scope identifies required records.
+- `DATABASE_URL` remains the core iBrains platform DB connection.
+- `ECOMMERCE_DATABASE_URL` is the ecommerce platform DB connection.
+- Phase 1.5 is a boundary/inventory/utilities step only:
+  - no production data migration
+  - no runtime route behavior switch
+  - no Product Editor/Generate Intelligence behavior change
+
+Detailed inventory and move-target mapping:
+
+- `planning/apps/ecomviper/ecommerce-database-foundation.md`
+
 ## Planning Navigation
 
 For family-level direction, start with:

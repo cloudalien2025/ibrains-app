@@ -17,6 +17,7 @@
     "test:e2e:list": "playwright test --list",
     "test:e2e:docker": "PW_NO_SANDBOX=1 pnpm playwright test",
     "test:ui-audit": "playwright test tests/ui-audit",
+    "ecommerce:check-db": "npx --yes tsx scripts/ecommerce/check_database_connection.ts",
     "ecomviper:sync-supplier-sources": "bash scripts/ecomviper_sync_supplier_sources.sh",
     "ecomviper:build-rocktomic-supplier-data": "npx --yes tsx scripts/ecomviper/build_rocktomic_supplier_data.ts",
     "codex:run": "bash scripts/codex_pipeline.sh",

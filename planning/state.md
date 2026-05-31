@@ -50,6 +50,36 @@ Last updated: 2026-05-31 (UTC)
 - Shopify Hotfix Sprint 009.9: In progress (`hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`, deterministic all-SKU sourceFacts field mapping + Product Editor/Generate Intelligence binding + settings tier auth save reliability).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
 
+## Sprint Checkpoint: Phase 1.5 Shared Ecommerce Database Foundation (Local Branch)
+
+- Branch: `sprint-015-shared-ecommerce-db-foundation`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks in progress; MR/deploy verification pending.
+- Architecture boundary established:
+  - `ibrains-ecommerce-prod-postgres` documented as the shared ecommerce platform database target.
+  - `ecomviper-prod-postgres` documented as legacy/deprecated and ignored unless a future explicit recovery scope is approved.
+  - `DATABASE_URL` documented as core iBrains platform DB scope.
+  - `ECOMMERCE_DATABASE_URL` documented as ecommerce-platform DB scope.
+- Foundation work implemented:
+  - Added strict ecommerce DB utility: `lib/ecommerce/database.ts`.
+  - Added explicit non-destructive ecommerce connection smoke script:
+    - `scripts/ecommerce/check_database_connection.ts`
+    - `npm run ecommerce:check-db`
+  - Added planning inventory/move-target doc:
+    - `planning/apps/ecomviper/ecommerce-database-foundation.md`
+  - Updated boundary language in:
+    - `planning/apps/ecomviper/overview.md`
+    - `planning/apps/ecomviper/admin.md`
+    - `planning/apps/ecomviper/shopify/supplier-ingestion-architecture.md`
+- Guardrail confirmation for Phase 1.5:
+  - no data migration performed
+  - no production schema migration performed
+  - no Rocktomic import performed
+  - no runtime route/component behavior switch performed
+  - no Product Editor/Generate Intelligence behavior changes performed
+- Recommended next phase:
+  - Phase 2 — Rocktomic validation rules and blocking/warning field policy.
+
 ## Sprint Checkpoint: Rocktomic Supplier Data Package Phase 1 (Offline All-SKU Audit)
 
 - Branch: `rocktomic-offline-all-sku-audit-phase1`
