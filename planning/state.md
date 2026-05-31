@@ -2734,3 +2734,82 @@ Phase boundary confirmation:
 Recommended next phase after Phase 4.2 closure:
 
 - Phase 5 — Product Editor read-only shared ecommerce DB supplier-facts binding.
+
+## Sprint Closure Update: Phase 4.2 Rocktomic Offline Builder Reliability
+
+- Sprint/branch: `sprint-022-rocktomic-builder-reliability`
+- MR:
+  - `!288`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/288`
+  - source branch commit SHA: `2e0928e3d2366736854d519aeefda741a1f72c9b`
+  - merge commit SHA: `938a6ec98b066ec6c6b56058d9b4bc0cb3863d76`
+  - pipeline `2565721360`: success
+- Branch cleanup:
+  - remote source branch deletion: completed via merge (`--remove-source-branch`)
+  - local source branch deletion: completed
+  - local repository reset target after this closure MR: clean `main`
+
+Phase 4.2 runtime proof:
+
+- First build run: `time npm run ecomviper:build-rocktomic-supplier-data`
+  - duration: `6.756s`
+  - status: success
+- Second build run (incremental):
+  - duration: `5.472s`
+  - status: success
+- Timing artifact: `data/ecomviper/suppliers/rocktomic/latest/build-timing-report.json`
+  - status: `success`
+  - totalDurationMs (second run): `3926`
+  - slowest stage: `ai_label_text_extraction` (`1737ms`)
+  - timeouts: `0`
+  - errors: `0`
+- Cache summary artifact: `data/ecomviper/suppliers/rocktomic/latest/build-cache-summary.json`
+  - AI attempted: `147`
+  - skipped because unchanged: `147`
+  - refreshed because changed: `0`
+  - refreshed because missing evidence: `0`
+
+Validation/package summary after Phase 4.2 build:
+
+- supplier: `rocktomic`
+- validation policy: `rocktomic_phase3_6_v1`
+- package status: `fail`
+- SKUs discovered/validated: `164 / 164`
+- usable: `60`
+- usable_with_warnings: `5`
+- blocked: `99`
+- extraction_error: `0`
+- supplement facts coverage total: `136/141`
+
+Checks executed:
+
+- focused tests: passed
+  - `tests/ecomviper_rocktomic_builder_reliability.test.ts`
+  - `tests/ecomviper_rocktomic_ai_label_text.test.ts`
+  - `tests/ecomviper_rocktomic_template_assets.test.ts`
+  - `tests/ecomviper_rocktomic_offline_runtime_boundary.test.ts`
+- `npm run ecomviper:build-rocktomic-supplier-data`: passed (twice)
+- `npm run build`: passed
+- `git diff --check`: passed
+- `npm test`: failed due unrelated baseline suites (not introduced by Phase 4.2):
+  - `tests/casahud_ai_channel_engine.test.ts`
+  - `tests/ecomviper_walmart_products_persistence.test.ts`
+  - `tests/frontdoor_env_copy_contract.test.ts`
+  - `tests/homepage_layout_contract.test.ts`
+  - `tests/siteforge_command_center_shell.test.tsx`
+  - `tests/studio_casahud_media_planning_engine.test.ts`
+  - `tests/studio_casahud_youtube_package_engine.test.ts`
+  - `tests/walmart/compliance.test.ts`
+
+Architecture boundary confirmation:
+
+- no Product Editor behavior changes
+- no Generate Intelligence behavior changes
+- no runtime source fetching/extraction/OCR added
+- no background workers/sync buttons
+- no `DATABASE_URL` replacement
+- no `ecomviper-prod-postgres` usage
+- no permanent `.ai`/`.tif` binary storage
+
+Recommended next phase:
+
+- Phase 5 — Product Editor read-only shared ecommerce DB supplier-facts binding.
