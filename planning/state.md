@@ -339,6 +339,39 @@ Last updated: 2026-05-31 (UTC)
   - Phase 6: Generate Intelligence binding
   - Future OptiPixel phase: runtime use of supplier asset metadata references and on-demand asset workflows
 
+## Sprint Closure Update: Phase 4 Shared Ecommerce DB Supplier Package Import
+
+- Sprint/branch: `sprint-020-rocktomic-shared-ecommerce-db-import`
+- MR:
+  - `!285`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/285`
+  - source branch commit SHA: `792436951b0142d78f72314957034c6fcc3a7b5a`
+  - merge commit SHA: `786bcfa4b8890db1ca1077dae8a22e3502b5edb5`
+  - MR pipeline `2565671966`: success
+- Branch cleanup:
+  - remote source branch deletion: completed (`--remove-source-branch`)
+  - local source branch deletion: completed (`git branch -d sprint-020-rocktomic-shared-ecommerce-db-import`)
+  - local repository reset: `main` fast-forwarded to `origin/main` and clean
+- Validation summary:
+  - focused Phase 4 tests: passed
+  - `npm run build`: passed
+  - `git diff --check`: passed
+  - `npm test`: failed due unrelated baseline suites (10 failing tests across non-Phase-4 areas)
+  - `npm run ecomviper:build-rocktomic-supplier-data`: timed out in this CLI environment (`timeout 120 ...`, exit `124`) after source enumeration
+- Import execution status:
+  - `npm run ecommerce:migrate`: not run against live DB in this closure run
+  - `npm run ecomviper:import-rocktomic-supplier-package`: not run against live DB in this closure run
+  - `npm run ecommerce:verify-rocktomic-import`: not run against live DB in this closure run
+  - reason: no explicit in-session approval to execute migration/import against target ecommerce environment
+- Honest boundary confirmation:
+  - `DATABASE_URL` boundary unchanged for core iBrains
+  - `ECOMMERCE_DATABASE_URL` used for Phase 4 migration/import/verify tooling
+  - no Product Editor / Generate Intelligence runtime behavior switch
+  - no admin write/import trigger UI
+  - no runtime extraction/OCR/source-fetch side effects
+  - no permanent `.ai`/`.tif` binary storage introduced
+- Recommended next phase:
+  - Phase 5 — bind Product Editor read-only supplier facts to shared ecommerce DB with blocked-SKU safety gates.
+
 ## Sprint Checkpoint: Rocktomic Supplier Data Package Phase 1 (Offline All-SKU Audit)
 
 - Branch: `rocktomic-offline-all-sku-audit-phase1`
