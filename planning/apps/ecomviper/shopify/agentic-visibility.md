@@ -22,3 +22,12 @@ All signals are generated server-side and persisted for operator review before p
 
 - Agentic Visibility remains a dedicated tab inside Product Editor below the new hero gallery + summary area.
 - Top identity and gallery surfaces remain merchant-facing and should not expose extraction/debug internals.
+
+## Final Layout Placement (Sprint 010.1)
+
+- Agentic Visibility tab remains below hero in the full-width edit area, after the primary action row.
+- Action row order remains:
+  - `Generate Intelligence`
+  - `Save Changes`
+  - `Publish`
+- Agentic tab content must continue to avoid rendering extraction/debug internals in merchant-facing text.

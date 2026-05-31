@@ -128,6 +128,24 @@ Sprint 010 Product Editor PDP Gallery redesign:
 - Merchant-facing Product Editor identity sections must avoid extraction/debug/internal key language (for example raw source diagnostics keys).
 - Product Editor render remains display-only and must not trigger supplier sync, OCR/PDF extraction, or OpenAI generation at render time.
 
+Sprint 010.1 Product Editor final layout + add-image workflow:
+- Product Editor workspace must start with the hero row (Gallery left, Product Summary right); do not place a large standalone title/action card above the hero.
+- Product title and shipping belong in Product Summary.
+- Product edit area is full-width below hero and contains the primary action row:
+  - `Generate Intelligence`
+  - `Save Changes`
+  - `Publish`
+- `Preview PDP` is not a primary edit action in this layout.
+- Publish semantics:
+  - `Publish` means public publish to `ecomviper.com`.
+  - If publish backend is unavailable, UI must remain explicit placeholder/disabled and must not fake success.
+- Remove merchant-facing developer diagnostics from Product Editor (for example Workspace Metadata and extraction/debug keys).
+- Product Gallery add-image workflow includes:
+  - upload from computer (`jpeg/png/webp`, bounded file size)
+  - add image by `https` URL
+  - disabled future entry for Image Studio integration
+- Current add-image persistence limitation is acceptable when documented: local upload preview can be temporary until media storage wiring exists.
+
 ## Non-Goals
 
 - This standard does not define brand color palettes for every brain.

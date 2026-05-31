@@ -2184,3 +2184,42 @@ Warning:
 - Final local repository closure state:
   - current branch: `main`
   - local status: clean
+
+## Sprint Checkpoint: EcomViper Product Editor Final Layout + Gallery Add Images (Local Branch)
+
+- Date: `2026-05-31`
+- Branch: `ecomviper-product-editor-final-layout-gallery-add-images`
+- Status: `implementation + focused tests complete locally; MR/pipeline/deploy pending`
+- Scope completed locally:
+  - Product Editor layout refactor to hero-first workspace (`Gallery` left, `Product Summary` right) with no oversized standalone header card.
+  - Product title moved into Product Summary.
+  - Shipping moved into Product Summary.
+  - Standalone Shipping card removed.
+  - Workspace Metadata removed from merchant Product Editor UI.
+  - Full-width edit area below hero with action row order:
+    - `Generate Intelligence`
+    - `Save Changes`
+    - `Publish` (placeholder-disabled semantics for public `ecomviper.com` publish backend).
+  - Preview PDP removed from primary edit action row.
+  - Product Gallery add-image workflow added:
+    - upload from computer (`jpeg/png/webp`, size validation)
+    - add from `https` URL
+    - disabled Image Studio future hook entry.
+- Focused local test evidence:
+  - `tests/ecomviper_product_editor_layout.test.tsx`
+  - `tests/ecomviper_product_image_gallery.test.tsx`
+  - `tests/ecomviper_product_editor_route_contract.test.ts`
+  - `tests/ecomviper_product_editor_sync_required_message.test.tsx`
+  - `tests/ecomviper_product_image_ordering.test.ts`
+  - `tests/ecomviper_route_render_sync_safety.test.ts`
+  - `tests/ibrains_global_shell_contract.test.tsx`
+  - `tests/ecomviper_dashboard_auth_guard.test.tsx`
+  - `tests/proxy_apps_auth_protection.test.ts`
+  - `tests/admin_layout_auth_contract.test.tsx`
+  - `tests/admin_ecomviper_routes_contract.test.tsx`
+- Pending closure work:
+  - run `npm run build`, `git diff --check`, and full `npm test`
+  - commit/push branch
+  - open MR and verify green pipeline
+  - merge + branch cleanup
+  - production deploy verification and smoke/log checks

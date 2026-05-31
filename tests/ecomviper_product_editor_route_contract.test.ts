@@ -14,18 +14,25 @@ describe("ecomviper product editor route contract", () => {
 
     expect(routeSource).toContain("buildShopifyProductEditorStateForUser");
     expect(clientSource).toContain("Products &gt;");
+    expect(clientSource).toContain("ecomviper-product-hero");
+    expect(clientSource).toContain("ecomviper-product-edit-area");
+    expect(clientSource).toContain("ecomviper-product-editor-actions");
     expect(clientSource).toContain("Generate Intelligence");
+    expect(clientSource).toContain("Save Changes");
+    expect(clientSource).toContain("Publish");
+    expect(clientSource).not.toContain("Preview PDP");
     expect(clientSource).toContain("ProductImageGallery");
     expect(clientSource).toContain("orderProductImages");
     expect(gallerySource).toContain("Product Gallery");
+    expect(gallerySource).toContain("Add from Image Studio (Coming soon)");
     expect(clientSource).toContain("Product Summary");
     expect(clientSource).toContain("Trust & Compliance");
     expect(clientSource).toContain("Agentic Visibility");
     expect(clientSource).toContain("SEO & Schema");
     expect(clientSource).toContain("Shipping");
-    expect(clientSource).toContain("Workspace Metadata");
+    expect(clientSource).not.toContain("Workspace Metadata");
     expect(clientSource).not.toContain("Product Rail");
     expect(clientSource).toContain("data-testid=\"ecomviper-product-editor-tabs\"");
-    expect(clientSource).toContain("data-testid=\"ecomviper-product-hero\"");
+    expect(clientSource).toContain("ecomviper.com when the publishing backend is enabled");
   });
 });
