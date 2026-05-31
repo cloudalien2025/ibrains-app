@@ -52,7 +52,7 @@ function bySku<T extends { sku: string }>(records: T[]): Record<string, T> {
 }
 
 async function main(): Promise<void> {
-  log("Rocktomic offline build phase1: starting");
+  log("Rocktomic offline build phase2: starting");
   await fs.mkdir(LATEST_DIR, { recursive: true });
 
   const registry = await loadSourceRegistry(SOURCES_PATH);
@@ -192,23 +192,25 @@ async function main(): Promise<void> {
     return record;
   });
 
+  const generatedAt = new Date().toISOString();
+  const validationReport = buildValidationReport({
+    generatedAt,
+    packageVersion: registry.version ?? null,
+    sourceFacts,
+    pricing,
+    inventory,
+    assets,
+    sourceErrors,
+  });
   const auditRows = buildAuditRows({
     sourceFactsBySku: bySku(sourceFacts),
     pricingBySku: bySku(pricing),
     inventoryBySku: bySku(inventory),
     assetsBySku: bySku(assets),
     sourceErrors,
+    skuValidationBySku: Object.fromEntries(validationReport.skuValidationResults.map((result) => [result.sku, result])),
   });
   const auditCsv = toAuditCsv(auditRows);
-  const validationReport = buildValidationReport({
-    generatedAt: new Date().toISOString(),
-    sourceFacts,
-    pricing,
-    inventory,
-    assets,
-    auditRows,
-    sourceErrors,
-  });
 
   await fs.writeFile(path.join(LATEST_DIR, "sourceFacts.json"), JSON.stringify(sourceFacts, null, 2));
   await fs.writeFile(path.join(LATEST_DIR, "pricing.json"), JSON.stringify(pricing, null, 2));

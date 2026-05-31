@@ -85,3 +85,9 @@ Merchant `/ecomviper` routes remain customer workflows and should not expose:
 - `DATABASE_URL` remains reserved for core iBrains platform concerns.
 - `ecomviper-prod-postgres` is legacy/deprecated and not a planning source of truth.
 - Phase 1.5 does not migrate admin data, change admin runtime DB behavior, or add new admin sync controls.
+
+## Phase 2 / Phase 3 Sequencing
+
+- Phase 2 introduces offline validation policy and package-level status outputs only.
+- Admin runtime pages remain read-only and unchanged in Phase 2.
+- Phase 3 is the first phase planned to add explicit admin validation visibility surfaces from package outputs.

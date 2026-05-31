@@ -113,6 +113,22 @@ Detailed inventory and move-target mapping:
 
 - `planning/apps/ecomviper/ecommerce-database-foundation.md`
 
+## Rocktomic Validation Policy (Phase 2)
+
+- Phase 2 converts the offline Rocktomic package into a formal validation contract:
+  - blocking fields vs warning fields
+  - SKU usability statuses
+  - package promotion status (`pass`, `pass_with_warnings`, `fail`)
+  - downstream readiness flags in package output only
+- Phase 2 remains offline-only and does not:
+  - import supplier data into shared ecommerce DB
+  - switch runtime app behavior
+  - bind Product Editor/Admin/Image Studio/OptiBay/OptiWal/Optizon to package validation results
+
+Policy source-of-truth:
+
+- `planning/apps/ecomviper/shopify/rocktomic-validation-policy.md`
+
 ## Planning Navigation
 
 For family-level direction, start with:

@@ -125,3 +125,13 @@ Likely ecommerce-platform concerns (eventual move toward `ECOMMERCE_DATABASE_URL
 - Phase 2+ should introduce explicit repository-level rebinding/migration phases from current shared pool path to `ECOMMERCE_DATABASE_URL`.
 - Each phase must be scoped by table family and runtime path with rollback safety.
 - Legacy `ecomviper-prod-postgres` remains out of scope unless a future explicit recovery sprint identifies specific must-preserve records.
+
+## Phase 2 Clarification
+
+- Phase 2 Rocktomic validation policy is package/offline quality gating only.
+- Phase 2 does not import validated supplier data into `ibrains-ecommerce-prod-postgres`.
+- Phase 2 does not change runtime database binding behavior.
+
+## Phase 4 Preview
+
+- Phase 4 is the intended phase for controlled import/read binding of validated supplier data into the shared ecommerce database.
