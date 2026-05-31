@@ -74,3 +74,13 @@ Phase 3 does not import package data into database; it only exposes package heal
 - Phase 5: Product Editor read-only supplier facts binding.
 - Phase 6: Generate Intelligence binding.
 - Phase 7: generalized shared ecommerce usage across apps.
+
+## Phase 3.5 Compatibility Note
+
+Phase 3.5 extends offline artifacts consumed by this page (asset-link/OCR/readiness evidence) while preserving the same read-only admin pattern.
+
+The admin route remains:
+
+- read-only
+- package-backed
+- non-extractive/non-syncing at render time

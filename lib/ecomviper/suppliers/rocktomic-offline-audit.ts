@@ -33,6 +33,27 @@ export interface SourceFactRecord {
   productName: string | null;
   category: string | null;
   supplementFactsText: string | null;
+  supplementFacts: {
+    servingSize: string | null;
+    servingsPerContainer: string | null;
+    activeIngredients: string[];
+    amountPerServing: string[];
+    dailyValuePercentages: string[];
+    otherIngredients: string[];
+    suggestedUse: string | null;
+    warnings: string | null;
+    storage: string | null;
+  } | null;
+  sourceEvidence?: {
+    supplementFacts?: {
+      sourceMethod: "ocr";
+      sourcePage: number | null;
+      sourceAsset: string | null;
+      confidence: "high" | "medium" | "low";
+      needsReview: boolean;
+      parseWarnings: string[];
+    };
+  };
   sourceReferences: string[];
   missingFields: string[];
 }
@@ -59,8 +80,26 @@ export interface InventoryRecord {
 export interface AssetsRecord {
   sku: string;
   coaUrl: string | null;
+  catalogTemplateUrl: string | null;
+  labelTemplateAiUrl: string | null;
+  mockupTemplateTifUrl: string | null;
   labelTemplateUrl: string | null;
   mockupUrl: string | null;
+  assets: Array<{
+    role: "coa" | "catalog_template" | "label_template" | "mockup_template";
+    format?: "ai" | "tif";
+    url: string;
+    source: string;
+    confidence: "high" | "medium" | "low";
+  }>;
+  assetReadiness: {
+    hasCoa: boolean;
+    hasLabelTemplateAi: boolean;
+    hasMockupTemplateTif: boolean;
+    readyForProductEditor: boolean;
+    readyForOptiPixelAssets: boolean;
+    readyForChannelImageGeneration: boolean;
+  };
   sourceReferences: string[];
   missingFields: string[];
 }
@@ -76,8 +115,12 @@ export interface AuditRow {
   hasPricing: boolean;
   hasInventory: boolean;
   hasCoa: boolean;
+  hasLabelTemplateAi: boolean;
+  hasMockupTemplateTif: boolean;
   hasLabelTemplate: boolean;
   hasMockup: boolean;
+  hasOcrSupplementFacts: boolean;
+  ocrNeedsReview: boolean;
   missingFieldCount: number;
   missingFields: string[];
   blockingDefectCount: number;
@@ -88,7 +131,9 @@ export interface AuditRow {
   usableForProductEditor: boolean;
   usableForGenerateIntelligence: boolean;
   usableForImageStudio: boolean;
+  usableForOptiPixel: boolean;
   usableForChannelOptimization: boolean;
+  readyForChannelImageGeneration: boolean;
   usableForOptiBay: boolean;
   usableForOptiWal: boolean;
   usableForOptizon: boolean;
@@ -403,7 +448,7 @@ export function buildAuditRows(input: {
       ...(facts?.missingFields ?? ["productName", "category", "supplementFactsText"]),
       ...(pricing?.missingFields ?? ["wholesaleCost", "msrp", "estimatedProfit", "membershipTierCosts"]),
       ...(inventory?.missingFields ?? ["rawInventoryValue", "inventoryStatus"]),
-      ...(assets?.missingFields ?? ["coaUrl", "labelTemplateUrl", "mockupUrl"]),
+      ...(assets?.missingFields ?? ["coaUrl", "labelTemplateAiUrl", "mockupTemplateTifUrl"]),
     ];
     const uniqueMissing = Array.from(new Set(missingFields)).sort((left, right) => left.localeCompare(right));
     const skuValidation = input.skuValidationBySku?.[sku];
@@ -418,8 +463,12 @@ export function buildAuditRows(input: {
       hasPricing: Boolean(pricing && pricing.wholesaleCost != null),
       hasInventory: Boolean(inventory && inventory.rawInventoryValue),
       hasCoa: Boolean(assets?.coaUrl),
+      hasLabelTemplateAi: Boolean(assets?.labelTemplateAiUrl),
+      hasMockupTemplateTif: Boolean(assets?.mockupTemplateTifUrl),
       hasLabelTemplate: Boolean(assets?.labelTemplateUrl),
       hasMockup: Boolean(assets?.mockupUrl),
+      hasOcrSupplementFacts: Boolean(facts?.sourceEvidence?.supplementFacts && facts.supplementFacts),
+      ocrNeedsReview: Boolean(facts?.sourceEvidence?.supplementFacts?.needsReview),
       missingFieldCount: uniqueMissing.length,
       missingFields: uniqueMissing,
       blockingDefectCount: skuValidation?.blockingDefects.length ?? 0,
@@ -430,11 +479,13 @@ export function buildAuditRows(input: {
       usableForProductEditor: Boolean(skuValidation?.readiness.usableForProductEditor),
       usableForGenerateIntelligence: Boolean(skuValidation?.readiness.usableForGenerateIntelligence),
       usableForImageStudio: Boolean(skuValidation?.readiness.usableForImageStudio),
+      usableForOptiPixel: Boolean(skuValidation?.readiness.usableForOptiPixel),
       usableForChannelOptimization: Boolean(
         skuValidation?.readiness.usableForOptiBay ||
           skuValidation?.readiness.usableForOptiWal ||
           skuValidation?.readiness.usableForOptizon
       ),
+      readyForChannelImageGeneration: Boolean(skuValidation?.readiness.readyForChannelImageGeneration),
       usableForOptiBay: Boolean(skuValidation?.readiness.usableForOptiBay),
       usableForOptiWal: Boolean(skuValidation?.readiness.usableForOptiWal),
       usableForOptizon: Boolean(skuValidation?.readiness.usableForOptizon),
@@ -462,8 +513,12 @@ export function toAuditCsv(rows: AuditRow[]): string {
     "hasPricing",
     "hasInventory",
     "hasCoa",
+    "hasLabelTemplateAi",
+    "hasMockupTemplateTif",
     "hasLabelTemplate",
     "hasMockup",
+    "hasOcrSupplementFacts",
+    "ocrNeedsReview",
     "missingFieldCount",
     "missingFields",
     "blockingDefectCount",
@@ -474,7 +529,9 @@ export function toAuditCsv(rows: AuditRow[]): string {
     "usableForProductEditor",
     "usableForGenerateIntelligence",
     "usableForImageStudio",
+    "usableForOptiPixel",
     "usableForChannelOptimization",
+    "readyForChannelImageGeneration",
     "usableForOptiBay",
     "usableForOptiWal",
     "usableForOptizon",
@@ -495,8 +552,12 @@ export function toAuditCsv(rows: AuditRow[]): string {
         String(row.hasPricing),
         String(row.hasInventory),
         String(row.hasCoa),
+        String(row.hasLabelTemplateAi),
+        String(row.hasMockupTemplateTif),
         String(row.hasLabelTemplate),
         String(row.hasMockup),
+        String(row.hasOcrSupplementFacts),
+        String(row.ocrNeedsReview),
         String(row.missingFieldCount),
         row.missingFields.join("|"),
         String(row.blockingDefectCount),
@@ -507,7 +568,9 @@ export function toAuditCsv(rows: AuditRow[]): string {
         String(row.usableForProductEditor),
         String(row.usableForGenerateIntelligence),
         String(row.usableForImageStudio),
+        String(row.usableForOptiPixel),
         String(row.usableForChannelOptimization),
+        String(row.readyForChannelImageGeneration),
         String(row.usableForOptiBay),
         String(row.usableForOptiWal),
         String(row.usableForOptizon),

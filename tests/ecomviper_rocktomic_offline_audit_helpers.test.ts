@@ -58,6 +58,7 @@ describe("rocktomic offline audit helpers", () => {
         productName: "Premium Magnesium Gummies",
         category: null,
         supplementFactsText: null,
+        supplementFacts: null,
         sourceReferences: ["catalog_pdf"],
         missingFields: ["category", "supplementFactsText"],
       },
@@ -87,8 +88,20 @@ describe("rocktomic offline audit helpers", () => {
       {
         sku: "ROC949",
         coaUrl: null,
+        catalogTemplateUrl: null,
+        labelTemplateAiUrl: null,
+        mockupTemplateTifUrl: null,
         labelTemplateUrl: null,
         mockupUrl: null,
+        assets: [],
+        assetReadiness: {
+          hasCoa: false,
+          hasLabelTemplateAi: false,
+          hasMockupTemplateTif: false,
+          readyForProductEditor: false,
+          readyForOptiPixelAssets: false,
+          readyForChannelImageGeneration: false,
+        },
         sourceReferences: [],
         missingFields: ["coaUrl", "labelTemplateUrl", "mockupUrl"],
       },
@@ -109,6 +122,8 @@ describe("rocktomic offline audit helpers", () => {
     const csv = toAuditCsv(auditRows);
     expect(csv).toContain("missingFields");
     expect(csv).toContain("validationStatus");
+    expect(csv).toContain("hasLabelTemplateAi");
+    expect(csv).toContain("usableForOptiPixel");
     expect(csv).toContain("blockingDefects");
     expect(csv).toContain("ROC949");
 
@@ -125,6 +140,9 @@ describe("rocktomic offline audit helpers", () => {
     expect(report.validationPolicyVersion).toBeTruthy();
     expect(report.supplierId).toBe("rocktomic");
     expect(report.skuValidationResults).toHaveLength(1);
+    expect(report.fieldCoverageSummary).toHaveProperty("assets.labelTemplateAiUrl");
+    expect(report.fieldCoverageSummary).toHaveProperty("assets.mockupTemplateTifUrl");
+    expect(report.fieldCoverageSummary).toHaveProperty("supplementFacts.ocrEvidence");
     expect(report.sourceErrors).toHaveLength(1);
   });
 

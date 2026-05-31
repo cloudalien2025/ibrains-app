@@ -1,5 +1,101 @@
 [
   {
+    "sku": "ROC001",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC002",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC004",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC006",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC008",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC009",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
     "sku": "ROC010",
     "productName": "Pump Non-Stim Pre-Workout Cherry Blast 312g w/ Natural Flavor",
     "wholesaleCost": 23.97,
@@ -271,6 +367,22 @@
     "missingFields": [
       "msrp",
       "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC112",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
     ]
   },
   {

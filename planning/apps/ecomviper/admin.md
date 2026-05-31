@@ -108,3 +108,17 @@ Merchant `/ecomviper` routes remain customer workflows and should not expose:
   - no DB import/migration
   - no runtime source fetching/extraction/validation side effects
   - no Product Editor/Generate Intelligence/Image Studio/OptiBay/OptiWal/Optizon behavior changes
+
+## Phase 3.5 Audit Surface Additions
+
+- Admin audit remains read-only and package-backed.
+- Additional visibility from enhanced offline artifacts includes:
+  - COA link coverage
+  - label template `.ai` coverage
+  - mockup template `.tif` coverage
+  - OCR supplement-facts coverage and review-needed counts
+  - OptiPixel/channel-image readiness rollups
+- Phase 3.5 keeps admin safety boundaries unchanged:
+  - no admin-triggered extraction/OCR/sync/import
+  - no runtime source fetching on admin render
+  - no Product Editor/Generate Intelligence/Image Studio/OptiBay/OptiWal/OptiZon behavior switch

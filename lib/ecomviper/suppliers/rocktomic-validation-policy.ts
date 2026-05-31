@@ -1,6 +1,6 @@
 import type { AssetsRecord, InventoryRecord, PricingRecord, SourceFactRecord } from "@/lib/ecomviper/suppliers/rocktomic-offline-audit";
 
-export const ROCKTOMIC_VALIDATION_POLICY_VERSION = "rocktomic_phase2_v1";
+export const ROCKTOMIC_VALIDATION_POLICY_VERSION = "rocktomic_phase3_5_v1";
 const PACKAGE_SOURCE_ERROR_FAIL_THRESHOLD = 0;
 
 export type RocktomicSkuType = "supplement" | "apparel" | "unknown";
@@ -17,9 +17,11 @@ export interface RocktomicReadinessFlags {
   usableForProductEditor: boolean;
   usableForGenerateIntelligence: boolean;
   usableForImageStudio: boolean;
+  usableForOptiPixel: boolean;
   usableForOptiBay: boolean;
   usableForOptiWal: boolean;
   usableForOptizon: boolean;
+  readyForChannelImageGeneration: boolean;
 }
 
 export interface RocktomicSkuValidationResult {
@@ -58,6 +60,9 @@ export interface RocktomicPackageValidationResult {
   usableWithWarningsSkuCount: number;
   blockedSkuCount: number;
   extractionErrorSkuCount: number;
+  ocrNeedsReviewSkuCount: number;
+  usableForOptiPixelSkuCount: number;
+  readyForChannelImageGenerationSkuCount: number;
   fieldCoverageSummary: Record<string, RocktomicFieldCoverageSummary>;
   blockingFieldCoverageSummary: Record<string, RocktomicFieldCoverageSummary>;
   warningFieldCoverageSummary: Record<string, RocktomicFieldCoverageSummary>;
@@ -118,6 +123,9 @@ const BLOCKING_FIELDS = [
   "supplementFacts.containerSize",
   "supplementFacts.productWeight",
   "assets.coaUrl",
+  "assets.labelTemplateAiUrl",
+  "assets.mockupTemplateTifUrl",
+  "supplementFacts.ocrEvidence",
   "assets.labelTemplateOrEquivalent",
   "assets.usableProductAsset",
 ] as const;
@@ -129,6 +137,8 @@ const WARNING_FIELDS = [
   "quality.manufacturingClaims",
   "quality.marketingBullets",
   "assets.mockupUrl",
+  "readiness.usableForOptiPixel",
+  "readiness.readyForChannelImageGeneration",
   "assets.secondaryAssetLinks",
   "apparel.sizingFields",
 ] as const;
@@ -155,17 +165,25 @@ function extractSizeToken(text: string): string | null {
   return text.match(sizePattern)?.[1]?.trim() || null;
 }
 
-function extractSupplementFactsSignals(params: { productName: string | null; supplementFactsText: string | null }): SupplementFactsSignals {
+function extractSupplementFactsSignals(params: {
+  productName: string | null;
+  supplementFactsText: string | null;
+  supplementFactsStructured?: SourceFactRecord["supplementFacts"] | null;
+}): SupplementFactsSignals {
   const facts = params.supplementFactsText || "";
+  const structured = params.supplementFactsStructured || null;
   const combined = `${params.productName || ""} ${facts}`;
   return {
-    hasServingSize: /serving\s*size/i.test(facts),
-    hasServingsPerContainer: /servings?\s*per\s*(container|bottle)|servings?\s*\/\s*container/i.test(facts),
+    hasServingSize: Boolean(structured?.servingSize) || /serving\s*size/i.test(facts),
+    hasServingsPerContainer:
+      Boolean(structured?.servingsPerContainer) || /servings?\s*per\s*(container|bottle)|servings?\s*\/\s*container/i.test(facts),
     hasActiveIngredients:
+      (structured?.activeIngredients.length || 0) > 0 ||
+      (structured?.amountPerServing.length || 0) > 0 ||
       /active\s+ingredients?/i.test(facts) ||
       /amount\s+per\s+serving/i.test(facts) ||
       /[0-9]+\s?(mg|mcg|g)\b/i.test(facts),
-    hasOtherIngredients: /other\s+ingredients?/i.test(facts),
+    hasOtherIngredients: (structured?.otherIngredients.length || 0) > 0 || /other\s+ingredients?/i.test(facts),
     containerSize: extractSizeToken(combined),
     productWeight: extractSizeToken(params.productName || ""),
   };
@@ -265,6 +283,7 @@ function evaluateSku(params: {
     const supplementSignals = extractSupplementFactsSignals({
       productName,
       supplementFactsText: params.sourceFacts?.supplementFactsText || null,
+      supplementFactsStructured: params.sourceFacts?.supplementFacts || null,
     });
 
     requiredBlockingFields.add("supplementFacts.servingSize");
@@ -332,7 +351,13 @@ function evaluateSku(params: {
     }
 
     requiredBlockingFields.add("assets.labelTemplateOrEquivalent");
-    if (params.assets?.labelTemplateUrl || params.assets?.mockupUrl) {
+    if (
+      params.assets?.labelTemplateAiUrl ||
+      params.assets?.mockupTemplateTifUrl ||
+      params.assets?.catalogTemplateUrl ||
+      params.assets?.labelTemplateUrl ||
+      params.assets?.mockupUrl
+    ) {
       satisfiedBlockingFields.add("assets.labelTemplateOrEquivalent");
     } else {
       blockingDefects.push(
@@ -345,17 +370,67 @@ function evaluateSku(params: {
     }
 
     requiredBlockingFields.add("assets.usableProductAsset");
-    if (params.assets?.labelTemplateUrl || params.assets?.mockupUrl || params.assets?.coaUrl) {
+    if (
+      params.assets?.labelTemplateAiUrl ||
+      params.assets?.mockupTemplateTifUrl ||
+      params.assets?.catalogTemplateUrl ||
+      params.assets?.labelTemplateUrl ||
+      params.assets?.mockupUrl ||
+      params.assets?.coaUrl
+    ) {
       satisfiedBlockingFields.add("assets.usableProductAsset");
     } else {
       blockingDefects.push(makeDefect("assets.usableProductAsset", "missing_usable_asset", "No usable product/source asset detected."));
+    }
+
+    requiredBlockingFields.add("assets.labelTemplateAiUrl");
+    if (params.assets?.labelTemplateAiUrl || params.assets?.labelTemplateUrl || params.assets?.catalogTemplateUrl) {
+      satisfiedBlockingFields.add("assets.labelTemplateAiUrl");
+    } else {
+      blockingDefects.push(
+        makeDefect("assets.labelTemplateAiUrl", "missing_label_template_ai", "Label template (.ai/equivalent) is required for supplement SKU.")
+      );
+    }
+
+    requiredBlockingFields.add("assets.mockupTemplateTifUrl");
+    if (params.assets?.mockupTemplateTifUrl || params.assets?.mockupUrl || params.assets?.catalogTemplateUrl) {
+      satisfiedBlockingFields.add("assets.mockupTemplateTifUrl");
+    } else {
+      blockingDefects.push(
+        makeDefect("assets.mockupTemplateTifUrl", "missing_mockup_template_tif", "3D mockup template (.tif/equivalent) is required for supplement SKU.")
+      );
+    }
+
+    requiredBlockingFields.add("supplementFacts.ocrEvidence");
+    const hasOcrEvidence = Boolean(params.sourceFacts?.sourceEvidence?.supplementFacts);
+    if (hasOcrEvidence) {
+      satisfiedBlockingFields.add("supplementFacts.ocrEvidence");
+    } else if (params.sourceFacts?.supplementFactsText) {
+      warningDefects.push(
+        makeDefect(
+          "supplementFacts.ocrEvidence",
+          "missing_ocr_provenance",
+          "Supplement facts text exists but OCR provenance/evidence is missing."
+        )
+      );
+      requiredBlockingFields.delete("supplementFacts.ocrEvidence");
+      requiredWarningFields.add("supplementFacts.ocrEvidence");
+    } else {
+      blockingDefects.push(
+        makeDefect(
+          "supplementFacts.ocrEvidence",
+          "missing_ocr_evidence",
+          "OCR supplement facts evidence is required for image-based supplement facts panels."
+        )
+      );
     }
   } else {
     notApplicableFields.push(
       "supplementFacts.servingSize",
       "supplementFacts.servingsPerContainer",
       "supplementFacts.activeIngredients",
-      "supplementFacts.otherIngredients"
+      "supplementFacts.otherIngredients",
+      "supplementFacts.ocrEvidence"
     );
   }
 
@@ -380,9 +455,9 @@ function evaluateSku(params: {
   requiredWarningFields.delete("quality.marketingBullets");
 
   requiredWarningFields.add("assets.mockupUrl");
-  if (params.assets?.mockupUrl) {
+  if (params.assets?.mockupUrl || params.assets?.mockupTemplateTifUrl) {
     satisfiedWarningFields.add("assets.mockupUrl");
-  } else if (params.assets?.labelTemplateUrl) {
+  } else if (params.assets?.labelTemplateUrl || params.assets?.labelTemplateAiUrl) {
     warningDefects.push(
       makeDefect("assets.mockupUrl", "missing_mockup_url", "Mockup URL is recommended when a label template exists.")
     );
@@ -392,9 +467,17 @@ function evaluateSku(params: {
   }
 
   requiredWarningFields.add("assets.secondaryAssetLinks");
-  if (params.assets?.labelTemplateUrl && params.assets?.mockupUrl) {
+  if (
+    (params.assets?.labelTemplateUrl || params.assets?.labelTemplateAiUrl) &&
+    (params.assets?.mockupUrl || params.assets?.mockupTemplateTifUrl)
+  ) {
     satisfiedWarningFields.add("assets.secondaryAssetLinks");
-  } else if (params.assets?.labelTemplateUrl || params.assets?.mockupUrl) {
+  } else if (
+    params.assets?.labelTemplateUrl ||
+    params.assets?.labelTemplateAiUrl ||
+    params.assets?.mockupUrl ||
+    params.assets?.mockupTemplateTifUrl
+  ) {
     warningDefects.push(
       makeDefect("assets.secondaryAssetLinks", "missing_secondary_assets", "Secondary asset links are recommended for merchandising quality.")
     );
@@ -410,6 +493,9 @@ function evaluateSku(params: {
     notApplicableFields.push("apparel.sizingFields");
     requiredWarningFields.delete("apparel.sizingFields");
   }
+
+  requiredWarningFields.add("readiness.usableForOptiPixel");
+  requiredWarningFields.add("readiness.readyForChannelImageGeneration");
 
   let status: RocktomicSkuValidationStatus = "usable";
   const missingFields = Array.from(new Set([...blockingDefects.map((defect) => defect.field), ...warningDefects.map((defect) => defect.field)])).sort(
@@ -428,7 +514,14 @@ function evaluateSku(params: {
   }
 
   const hasCoreFacts = Boolean(productName && params.pricing && params.inventory);
-  const hasAssetForImage = Boolean(params.assets?.labelTemplateUrl || params.assets?.mockupUrl);
+  const hasAssetForImage = Boolean(
+    params.assets?.labelTemplateUrl ||
+      params.assets?.mockupUrl ||
+      params.assets?.labelTemplateAiUrl ||
+      params.assets?.mockupTemplateTifUrl
+  );
+  const hasOptiPixelAssets = Boolean(params.assets?.labelTemplateAiUrl && params.assets?.mockupTemplateTifUrl);
+  const ocrNeedsReview = Boolean(params.sourceFacts?.sourceEvidence?.supplementFacts?.needsReview);
   const isSkuUsable = status === "usable" || status === "usable_with_warnings";
   const hasExtractionError = status === "extraction_error";
 
@@ -436,18 +529,41 @@ function evaluateSku(params: {
     usableForProductEditor: isSkuUsable && hasCoreFacts,
     usableForGenerateIntelligence: isSkuUsable && hasCoreFacts,
     usableForImageStudio: isSkuUsable && hasAssetForImage,
+    usableForOptiPixel: isSkuUsable && hasOptiPixelAssets && !ocrNeedsReview,
     usableForOptiBay: isSkuUsable && hasCoreFacts,
     usableForOptiWal: isSkuUsable && hasCoreFacts,
     usableForOptizon: isSkuUsable && hasCoreFacts,
+    readyForChannelImageGeneration: isSkuUsable && hasAssetForImage && !ocrNeedsReview,
   };
+
+  if (readiness.usableForOptiPixel) {
+    satisfiedWarningFields.add("readiness.usableForOptiPixel");
+  } else {
+    warningDefects.push(
+      makeDefect("readiness.usableForOptiPixel", "not_ready_for_optipixel", "SKU is not yet ready for OptiPixel asset workflows.")
+    );
+  }
+  if (readiness.readyForChannelImageGeneration) {
+    satisfiedWarningFields.add("readiness.readyForChannelImageGeneration");
+  } else {
+    warningDefects.push(
+      makeDefect(
+        "readiness.readyForChannelImageGeneration",
+        "not_ready_for_channel_image_generation",
+        "SKU is not yet ready for channel image generation."
+      )
+    );
+  }
 
   const readinessSummary = [
     boolSummary(readiness.usableForProductEditor, "product_editor_ready", "product_editor_not_ready"),
     boolSummary(readiness.usableForGenerateIntelligence, "generate_intelligence_ready", "generate_intelligence_not_ready"),
     boolSummary(readiness.usableForImageStudio, "image_studio_ready", "image_studio_not_ready"),
+    boolSummary(readiness.usableForOptiPixel, "optipixel_ready", "optipixel_not_ready"),
     boolSummary(readiness.usableForOptiBay, "optibay_ready", "optibay_not_ready"),
     boolSummary(readiness.usableForOptiWal, "optiwal_ready", "optiwal_not_ready"),
     boolSummary(readiness.usableForOptizon, "optizon_ready", "optizon_not_ready"),
+    boolSummary(readiness.readyForChannelImageGeneration, "channel_image_generation_ready", "channel_image_generation_not_ready"),
     boolSummary(hasExtractionError, "extraction_error_detected", "no_extraction_error"),
   ];
 
@@ -524,6 +640,13 @@ export function evaluateRocktomicPackageValidation(input: EvaluatePackageInput):
   const usableWithWarningsSkuCount = skuValidationResults.filter((sku) => sku.status === "usable_with_warnings").length;
   const blockedSkuCount = skuValidationResults.filter((sku) => sku.status === "blocked").length;
   const extractionErrorSkuCount = skuValidationResults.filter((sku) => sku.status === "extraction_error").length;
+  const ocrNeedsReviewSkuCount = skuValidationResults.filter((sku) =>
+    sku.warningDefects.some((defect) => defect.field === "supplementFacts.ocrEvidence")
+  ).length;
+  const usableForOptiPixelSkuCount = skuValidationResults.filter((sku) => sku.readiness.usableForOptiPixel).length;
+  const readyForChannelImageGenerationSkuCount = skuValidationResults.filter(
+    (sku) => sku.readiness.readyForChannelImageGeneration
+  ).length;
 
   let packageStatus: RocktomicPackageValidationStatus = "pass";
   if (
@@ -581,6 +704,9 @@ export function evaluateRocktomicPackageValidation(input: EvaluatePackageInput):
     usableWithWarningsSkuCount,
     blockedSkuCount,
     extractionErrorSkuCount,
+    ocrNeedsReviewSkuCount,
+    usableForOptiPixelSkuCount,
+    readyForChannelImageGenerationSkuCount,
     fieldCoverageSummary,
     blockingFieldCoverageSummary,
     warningFieldCoverageSummary,

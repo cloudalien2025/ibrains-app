@@ -28,6 +28,9 @@ describe("rocktomic offline validation runtime boundary", () => {
       const source = fs.readFileSync(file, "utf8");
       expect(source.includes("rocktomic-validation-policy")).toBe(false);
       expect(source.includes("rocktomic-offline-audit")).toBe(false);
+      expect(source.includes("rocktomic-pdf-assets")).toBe(false);
+      expect(source.includes("rocktomic-template-assets")).toBe(false);
+      expect(source.includes("rocktomic-supplement-facts-ocr")).toBe(false);
       expect(source.includes("build_rocktomic_supplier_data")).toBe(false);
     }
   });

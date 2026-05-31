@@ -25,7 +25,17 @@ export interface RocktomicSourceRegistrySummaryRow {
 }
 
 export interface RocktomicArtifactStatus {
-  artifact: "sources.json" | "sourceFacts.json" | "pricing.json" | "inventory.json" | "assets.json" | "audit.csv" | "validation-report.json";
+  artifact:
+    | "sources.json"
+    | "sourceFacts.json"
+    | "pricing.json"
+    | "inventory.json"
+    | "assets.json"
+    | "audit.csv"
+    | "validation-report.json"
+    | "catalog-link-evidence.json"
+    | "template-asset-evidence.json"
+    | "ocr-evidence.json";
   relativePath: string;
   exists: boolean;
   sizeBytes: number | null;
@@ -57,9 +67,11 @@ export interface RocktomicSkuValidationPreviewRow {
     usableForProductEditor: boolean;
     usableForGenerateIntelligence: boolean;
     usableForImageStudio: boolean;
+    usableForOptiPixel: boolean;
     usableForOptiBay: boolean;
     usableForOptiWal: boolean;
     usableForOptizon: boolean;
+    readyForChannelImageGeneration: boolean;
   };
   missingFields: string[];
   sourceNotes: string[];
@@ -77,6 +89,9 @@ export interface RocktomicAdminAuditViewModel {
   usableWithWarningsSkuCount: number;
   blockedSkuCount: number;
   extractionErrorSkuCount: number;
+  ocrNeedsReviewSkuCount: number;
+  usableForOptiPixelSkuCount: number;
+  readyForChannelImageGenerationSkuCount: number;
   fieldCoverageSummary: RocktomicCoverageRow[];
   blockingFieldCoverageSummary: RocktomicCoverageRow[];
   warningFieldCoverageSummary: RocktomicCoverageRow[];
@@ -138,6 +153,9 @@ const EXPECTED_ARTIFACTS: Array<Pick<RocktomicArtifactStatus, "artifact" | "rela
   { artifact: "assets.json", relativePath: "latest/assets.json" },
   { artifact: "audit.csv", relativePath: "latest/audit.csv" },
   { artifact: "validation-report.json", relativePath: "latest/validation-report.json" },
+  { artifact: "catalog-link-evidence.json", relativePath: "latest/catalog-link-evidence.json" },
+  { artifact: "template-asset-evidence.json", relativePath: "latest/template-asset-evidence.json" },
+  { artifact: "ocr-evidence.json", relativePath: "latest/ocr-evidence.json" },
 ];
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -305,9 +323,11 @@ function parseSkuValidationResults(input: unknown): {
           usableForProductEditor: asBool(readiness.usableForProductEditor),
           usableForGenerateIntelligence: asBool(readiness.usableForGenerateIntelligence),
           usableForImageStudio: asBool(readiness.usableForImageStudio),
+          usableForOptiPixel: asBool(readiness.usableForOptiPixel),
           usableForOptiBay: asBool(readiness.usableForOptiBay),
           usableForOptiWal: asBool(readiness.usableForOptiWal),
           usableForOptizon: asBool(readiness.usableForOptizon),
+          readyForChannelImageGeneration: asBool(readiness.readyForChannelImageGeneration),
         },
         missingFields: row.missingFields,
         sourceNotes: row.sourceNotes,
@@ -474,6 +494,9 @@ export async function getRocktomicAdminAuditViewModel(options: ReadOptions = {})
     usableWithWarningsSkuCount: asNumber(validation.usableWithWarningsSkuCount),
     blockedSkuCount: asNumber(validation.blockedSkuCount),
     extractionErrorSkuCount: asNumber(validation.extractionErrorSkuCount),
+    ocrNeedsReviewSkuCount: asNumber(validation.ocrNeedsReviewSkuCount),
+    usableForOptiPixelSkuCount: asNumber(validation.usableForOptiPixelSkuCount),
+    readyForChannelImageGenerationSkuCount: asNumber(validation.readyForChannelImageGenerationSkuCount),
     fieldCoverageSummary: buildCoverageRows(validation.fieldCoverageSummary),
     blockingFieldCoverageSummary: buildCoverageRows(validation.blockingFieldCoverageSummary),
     warningFieldCoverageSummary: buildCoverageRows(validation.warningFieldCoverageSummary),
