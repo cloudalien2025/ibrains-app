@@ -121,4 +121,20 @@ Merchant `/ecomviper` routes remain customer workflows and should not expose:
 - Phase 3.5 keeps admin safety boundaries unchanged:
   - no admin-triggered extraction/OCR/sync/import
   - no runtime source fetching on admin render
-  - no Product Editor/Generate Intelligence/Image Studio/OptiBay/OptiWal/OptiZon behavior switch
+- no Product Editor/Generate Intelligence/Image Studio/OptiBay/OptiWal/OptiZon behavior switch
+
+## Phase 3.6 Audit Surface Additions
+
+- Admin audit remains read-only and package-backed.
+- Additional read-only visibility now includes:
+  - AI label extraction attempted/succeeded counts
+  - AI extraction review-needed count
+  - non-PDF AI count
+  - no-extractable-text count
+  - AI extraction error count
+  - supplement-facts coverage split: AI vs OCR fallback vs total
+  - artifact presence for `ai-label-text-evidence.json`
+- Safety boundary unchanged:
+  - no admin-triggered extraction or OCR
+  - no runtime source fetching on admin render
+  - no DB import/migration

@@ -57,6 +57,24 @@ export default async function RocktomicAuditPage() {
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Channel Image Ready</p><p className="mt-2 text-lg font-semibold">{audit.readyForChannelImageGenerationSkuCount}</p></article>
       </div>
 
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">AI Extraction Attempted</p><p className="mt-2 text-lg font-semibold">{audit.aiLabelTextExtractionAttempted}</p></article>
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">AI Extraction Succeeded</p><p className="mt-2 text-lg font-semibold">{audit.aiLabelTextExtractionSucceeded}</p></article>
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">AI Needs Review</p><p className="mt-2 text-lg font-semibold">{audit.aiLabelTextNeedsReview}</p></article>
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Non-PDF AI</p><p className="mt-2 text-lg font-semibold">{audit.aiLabelTextNonPdfCompatible}</p></article>
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">No Extractable Text</p><p className="mt-2 text-lg font-semibold">{audit.aiLabelTextNoExtractableText}</p></article>
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">AI Extraction Errors</p><p className="mt-2 text-lg font-semibold">{audit.aiLabelTextExtractionErrors}</p></article>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-600">Supplement Facts Evidence Coverage</h3>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm">
+          <p>AI text coverage: {audit.aiTextFactsCoverage ? `${audit.aiTextFactsCoverage.presentSkuCount}/${audit.aiTextFactsCoverage.requiredSkuCount}` : "0/0"}</p>
+          <p>OCR coverage: {audit.ocrFactsCoverage ? `${audit.ocrFactsCoverage.presentSkuCount}/${audit.ocrFactsCoverage.requiredSkuCount}` : "0/0"}</p>
+          <p>Total coverage: {audit.supplementFactsCoverageTotal ? `${audit.supplementFactsCoverageTotal.presentSkuCount}/${audit.supplementFactsCoverageTotal.requiredSkuCount}` : "0/0"}</p>
+        </div>
+      </section>
+
       {audit.issues.length > 0 ? (
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
           <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-amber-800">Package Issues</h3>

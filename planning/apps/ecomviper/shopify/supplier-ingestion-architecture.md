@@ -244,3 +244,27 @@ Phase 3.5 guarantees:
 Detailed Phase 3.5 contract:
 
 - `planning/apps/ecomviper/shopify/rocktomic-asset-ocr-remediation.md`
+
+## Rocktomic AI Label Text Extraction (Phase 3.6)
+
+Phase 3.6 keeps ingestion runtime boundaries unchanged and upgrades only offline package extraction:
+
+1. `.ai` label templates are primary supplement-facts extraction source when PDF-compatible.
+2. OCR is fallback-only when AI extraction is unavailable/fails.
+3. Remote metadata (`ETag`, `Last-Modified`, `Content-Length`, `Content-Type`, template-page `Last Updated`) is tracked for freshness/change detection.
+4. Large `.ai`/`.tif` binaries are never persisted in repo/runtime storage; only derived evidence/facts/metadata are stored.
+
+New artifact:
+
+- `latest/ai-label-text-evidence.json`
+
+Phase 3.6 guarantees:
+
+- no render-path extraction/OCR
+- no admin render extraction side effects
+- no DB import/migration
+- no runtime Product Editor/Generate Intelligence/channel behavior switch
+
+Detailed Phase 3.6 contract:
+
+- `planning/apps/ecomviper/shopify/rocktomic-ai-label-text-extraction.md`

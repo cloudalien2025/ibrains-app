@@ -44,11 +44,20 @@ export interface SourceFactRecord {
     warnings: string | null;
     storage: string | null;
   } | null;
+  directions?: string | null;
+  warnings?: string | null;
   sourceEvidence?: {
     supplementFacts?: {
-      sourceMethod: "ocr";
+      sourceMethod: "ai_pdf_text" | "ocr";
       sourcePage: number | null;
       sourceAsset: string | null;
+      sourceUrl: string | null;
+      sourceFileName: string | null;
+      templatePageLastUpdated: string | null;
+      httpEtag: string | null;
+      httpLastModified: string | null;
+      httpContentLength: number | null;
+      httpContentType: string | null;
       confidence: "high" | "medium" | "low";
       needsReview: boolean;
       parseWarnings: string[];
@@ -85,6 +94,16 @@ export interface AssetsRecord {
   mockupTemplateTifUrl: string | null;
   labelTemplateUrl: string | null;
   mockupUrl: string | null;
+  templatePageLastUpdated?: string | null;
+  httpEtag?: string | null;
+  httpLastModified?: string | null;
+  httpContentLength?: number | null;
+  httpContentType?: string | null;
+  lastCheckedAt?: string | null;
+  extractedAt?: string | null;
+  extractionStatus?: string | null;
+  extractionMethod?: string | null;
+  readyForAiLabelTextExtraction?: boolean;
   assets: Array<{
     role: "coa" | "catalog_template" | "label_template" | "mockup_template";
     format?: "ai" | "tif";
@@ -120,6 +139,9 @@ export interface AuditRow {
   hasLabelTemplate: boolean;
   hasMockup: boolean;
   hasOcrSupplementFacts: boolean;
+  hasAiTextSupplementFacts: boolean;
+  aiExtractionStatus: string;
+  aiNeedsReview: boolean;
   ocrNeedsReview: boolean;
   missingFieldCount: number;
   missingFields: string[];
@@ -468,6 +490,11 @@ export function buildAuditRows(input: {
       hasLabelTemplate: Boolean(assets?.labelTemplateUrl),
       hasMockup: Boolean(assets?.mockupUrl),
       hasOcrSupplementFacts: Boolean(facts?.sourceEvidence?.supplementFacts && facts.supplementFacts),
+      hasAiTextSupplementFacts: Boolean(facts?.sourceEvidence?.supplementFacts?.sourceMethod === "ai_pdf_text" && facts.supplementFacts),
+      aiExtractionStatus: assets?.extractionStatus || "none",
+      aiNeedsReview: Boolean(
+        facts?.sourceEvidence?.supplementFacts?.sourceMethod === "ai_pdf_text" && facts.sourceEvidence?.supplementFacts?.needsReview
+      ),
       ocrNeedsReview: Boolean(facts?.sourceEvidence?.supplementFacts?.needsReview),
       missingFieldCount: uniqueMissing.length,
       missingFields: uniqueMissing,
@@ -518,6 +545,9 @@ export function toAuditCsv(rows: AuditRow[]): string {
     "hasLabelTemplate",
     "hasMockup",
     "hasOcrSupplementFacts",
+    "hasAiTextSupplementFacts",
+    "aiExtractionStatus",
+    "aiNeedsReview",
     "ocrNeedsReview",
     "missingFieldCount",
     "missingFields",
@@ -557,6 +587,9 @@ export function toAuditCsv(rows: AuditRow[]): string {
         String(row.hasLabelTemplate),
         String(row.hasMockup),
         String(row.hasOcrSupplementFacts),
+        String(row.hasAiTextSupplementFacts),
+        row.aiExtractionStatus,
+        String(row.aiNeedsReview),
         String(row.ocrNeedsReview),
         String(row.missingFieldCount),
         row.missingFields.join("|"),

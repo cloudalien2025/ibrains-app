@@ -84,3 +84,15 @@ Phase 3.5 prepares source asset readiness for future OptiPixel workflows (templa
 
 - Phase 4: controlled import/read of validated supplier data into/from shared ecommerce DB.
 - Future OptiPixel phase: define OptiPixel-specific runtime UI/data model once asset readiness is stable.
+
+## Phase 3.6 Follow-on
+
+Phase 3.6 builds on this remediation by switching supplement-facts primary extraction from OCR-first to AI-label-text-first:
+
+- PDF-compatible `.ai` label templates become primary source for supplement facts and label sections.
+- OCR remains fallback-only.
+- Freshness metadata and extraction evidence are retained without storing large binaries.
+
+See:
+
+- `planning/apps/ecomviper/shopify/rocktomic-ai-label-text-extraction.md`

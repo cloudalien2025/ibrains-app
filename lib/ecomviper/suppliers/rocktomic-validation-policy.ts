@@ -1,6 +1,6 @@
 import type { AssetsRecord, InventoryRecord, PricingRecord, SourceFactRecord } from "@/lib/ecomviper/suppliers/rocktomic-offline-audit";
 
-export const ROCKTOMIC_VALIDATION_POLICY_VERSION = "rocktomic_phase3_5_v1";
+export const ROCKTOMIC_VALIDATION_POLICY_VERSION = "rocktomic_phase3_6_v1";
 const PACKAGE_SOURCE_ERROR_FAIL_THRESHOLD = 0;
 
 export type RocktomicSkuType = "supplement" | "apparel" | "unknown";
@@ -61,6 +61,15 @@ export interface RocktomicPackageValidationResult {
   blockedSkuCount: number;
   extractionErrorSkuCount: number;
   ocrNeedsReviewSkuCount: number;
+  aiTextFactsCoverage: RocktomicFieldCoverageSummary;
+  ocrFactsCoverage: RocktomicFieldCoverageSummary;
+  supplementFactsCoverageTotal: RocktomicFieldCoverageSummary;
+  aiLabelTextExtractionAttempted: number;
+  aiLabelTextExtractionSucceeded: number;
+  aiLabelTextNeedsReview: number;
+  aiLabelTextNonPdfCompatible: number;
+  aiLabelTextNoExtractableText: number;
+  aiLabelTextExtractionErrors: number;
   usableForOptiPixelSkuCount: number;
   readyForChannelImageGenerationSkuCount: number;
   fieldCoverageSummary: Record<string, RocktomicFieldCoverageSummary>;
@@ -125,7 +134,7 @@ const BLOCKING_FIELDS = [
   "assets.coaUrl",
   "assets.labelTemplateAiUrl",
   "assets.mockupTemplateTifUrl",
-  "supplementFacts.ocrEvidence",
+  "supplementFacts.aiOrOcrEvidence",
   "assets.labelTemplateOrEquivalent",
   "assets.usableProductAsset",
 ] as const;
@@ -141,6 +150,7 @@ const WARNING_FIELDS = [
   "readiness.readyForChannelImageGeneration",
   "assets.secondaryAssetLinks",
   "apparel.sizingFields",
+  "supplementFacts.aiNeedsReview",
 ] as const;
 
 function normalizeText(value: string | null | undefined): string {
@@ -401,28 +411,48 @@ function evaluateSku(params: {
       );
     }
 
-    requiredBlockingFields.add("supplementFacts.ocrEvidence");
-    const hasOcrEvidence = Boolean(params.sourceFacts?.sourceEvidence?.supplementFacts);
-    if (hasOcrEvidence) {
-      satisfiedBlockingFields.add("supplementFacts.ocrEvidence");
+    requiredBlockingFields.add("supplementFacts.aiOrOcrEvidence");
+    const evidenceMethod = params.sourceFacts?.sourceEvidence?.supplementFacts?.sourceMethod || null;
+    const hasAiOrOcrEvidence = evidenceMethod === "ai_pdf_text" || evidenceMethod === "ocr";
+    if (hasAiOrOcrEvidence) {
+      satisfiedBlockingFields.add("supplementFacts.aiOrOcrEvidence");
     } else if (params.sourceFacts?.supplementFactsText) {
       warningDefects.push(
         makeDefect(
-          "supplementFacts.ocrEvidence",
-          "missing_ocr_provenance",
-          "Supplement facts text exists but OCR provenance/evidence is missing."
+          "supplementFacts.aiOrOcrEvidence",
+          "missing_facts_provenance",
+          "Supplement facts text exists but AI/OCR provenance evidence is missing."
         )
       );
-      requiredBlockingFields.delete("supplementFacts.ocrEvidence");
-      requiredWarningFields.add("supplementFacts.ocrEvidence");
+      requiredBlockingFields.delete("supplementFacts.aiOrOcrEvidence");
+      requiredWarningFields.add("supplementFacts.aiOrOcrEvidence");
     } else {
       blockingDefects.push(
         makeDefect(
-          "supplementFacts.ocrEvidence",
-          "missing_ocr_evidence",
-          "OCR supplement facts evidence is required for image-based supplement facts panels."
+          "supplementFacts.aiOrOcrEvidence",
+          "missing_ai_or_ocr_evidence",
+          "AI/OCR supplement facts evidence is required for image-based supplement facts panels."
         )
       );
+    }
+
+    const aiNeedsReview =
+      params.sourceFacts?.sourceEvidence?.supplementFacts?.sourceMethod === "ai_pdf_text" &&
+      params.sourceFacts?.sourceEvidence?.supplementFacts?.needsReview;
+    requiredWarningFields.add("supplementFacts.aiNeedsReview");
+    if (aiNeedsReview) {
+      warningDefects.push(
+        makeDefect(
+          "supplementFacts.aiNeedsReview",
+          "ai_facts_review_needed",
+          "AI-derived supplement facts were extracted but still require review."
+        )
+      );
+    } else if (params.sourceFacts?.sourceEvidence?.supplementFacts?.sourceMethod === "ai_pdf_text") {
+      satisfiedWarningFields.add("supplementFacts.aiNeedsReview");
+    } else {
+      notApplicableFields.push("supplementFacts.aiNeedsReview");
+      requiredWarningFields.delete("supplementFacts.aiNeedsReview");
     }
   } else {
     notApplicableFields.push(
@@ -430,7 +460,8 @@ function evaluateSku(params: {
       "supplementFacts.servingsPerContainer",
       "supplementFacts.activeIngredients",
       "supplementFacts.otherIngredients",
-      "supplementFacts.ocrEvidence"
+      "supplementFacts.aiOrOcrEvidence",
+      "supplementFacts.aiNeedsReview"
     );
   }
 
@@ -521,7 +552,11 @@ function evaluateSku(params: {
       params.assets?.mockupTemplateTifUrl
   );
   const hasOptiPixelAssets = Boolean(params.assets?.labelTemplateAiUrl && params.assets?.mockupTemplateTifUrl);
-  const ocrNeedsReview = Boolean(params.sourceFacts?.sourceEvidence?.supplementFacts?.needsReview);
+  const evidenceMethod = params.sourceFacts?.sourceEvidence?.supplementFacts?.sourceMethod || null;
+  const ocrNeedsReview =
+    evidenceMethod === "ocr" && Boolean(params.sourceFacts?.sourceEvidence?.supplementFacts?.needsReview);
+  const aiNeedsReview =
+    evidenceMethod === "ai_pdf_text" && Boolean(params.sourceFacts?.sourceEvidence?.supplementFacts?.needsReview);
   const isSkuUsable = status === "usable" || status === "usable_with_warnings";
   const hasExtractionError = status === "extraction_error";
 
@@ -529,11 +564,11 @@ function evaluateSku(params: {
     usableForProductEditor: isSkuUsable && hasCoreFacts,
     usableForGenerateIntelligence: isSkuUsable && hasCoreFacts,
     usableForImageStudio: isSkuUsable && hasAssetForImage,
-    usableForOptiPixel: isSkuUsable && hasOptiPixelAssets && !ocrNeedsReview,
+    usableForOptiPixel: isSkuUsable && hasOptiPixelAssets && !ocrNeedsReview && !aiNeedsReview,
     usableForOptiBay: isSkuUsable && hasCoreFacts,
     usableForOptiWal: isSkuUsable && hasCoreFacts,
     usableForOptizon: isSkuUsable && hasCoreFacts,
-    readyForChannelImageGeneration: isSkuUsable && hasAssetForImage && !ocrNeedsReview,
+    readyForChannelImageGeneration: isSkuUsable && hasAssetForImage && !ocrNeedsReview && !aiNeedsReview,
   };
 
   if (readiness.usableForOptiPixel) {
@@ -641,8 +676,42 @@ export function evaluateRocktomicPackageValidation(input: EvaluatePackageInput):
   const blockedSkuCount = skuValidationResults.filter((sku) => sku.status === "blocked").length;
   const extractionErrorSkuCount = skuValidationResults.filter((sku) => sku.status === "extraction_error").length;
   const ocrNeedsReviewSkuCount = skuValidationResults.filter((sku) =>
-    sku.warningDefects.some((defect) => defect.field === "supplementFacts.ocrEvidence")
+    sku.warningDefects.some(
+      (defect) => defect.field === "supplementFacts.aiNeedsReview" || defect.field === "supplementFacts.aiOrOcrEvidence"
+    )
   ).length;
+
+  const supplementRequiredSkus = skuValidationResults.filter((sku) => sku.skuType === "supplement");
+  const sourceFactsBySku = input.sourceFactsBySku;
+
+  const aiEvidencePresentCount = supplementRequiredSkus.filter(
+    (sku) => sourceFactsBySku[sku.sku]?.sourceEvidence?.supplementFacts?.sourceMethod === "ai_pdf_text"
+  ).length;
+  const ocrEvidencePresentCount = supplementRequiredSkus.filter(
+    (sku) => sourceFactsBySku[sku.sku]?.sourceEvidence?.supplementFacts?.sourceMethod === "ocr"
+  ).length;
+  const totalEvidencePresentCount = supplementRequiredSkus.filter((sku) => {
+    const method = sourceFactsBySku[sku.sku]?.sourceEvidence?.supplementFacts?.sourceMethod;
+    return method === "ai_pdf_text" || method === "ocr";
+  }).length;
+
+  const aiLabelTextExtractionAttempted = Object.values(input.assetsBySku).filter(
+    (asset) =>
+      asset?.extractionStatus === "success" ||
+      asset?.extractionStatus === "reused_cached" ||
+      asset?.extractionStatus === "non_pdf_ai" ||
+      asset?.extractionStatus === "no_extractable_text" ||
+      asset?.extractionStatus === "extraction_error"
+  ).length;
+  const aiLabelTextExtractionSucceeded = Object.values(input.assetsBySku).filter(
+    (asset) => asset?.extractionStatus === "success" || asset?.extractionStatus === "reused_cached"
+  ).length;
+  const aiLabelTextNeedsReview = Object.values(input.sourceFactsBySku).filter(
+    (fact) => fact?.sourceEvidence?.supplementFacts?.sourceMethod === "ai_pdf_text" && fact.sourceEvidence?.supplementFacts?.needsReview
+  ).length;
+  const aiLabelTextNonPdfCompatible = Object.values(input.assetsBySku).filter((asset) => asset?.extractionStatus === "non_pdf_ai").length;
+  const aiLabelTextNoExtractableText = Object.values(input.assetsBySku).filter((asset) => asset?.extractionStatus === "no_extractable_text").length;
+  const aiLabelTextExtractionErrors = Object.values(input.assetsBySku).filter((asset) => asset?.extractionStatus === "extraction_error").length;
   const usableForOptiPixelSkuCount = skuValidationResults.filter((sku) => sku.readiness.usableForOptiPixel).length;
   const readyForChannelImageGenerationSkuCount = skuValidationResults.filter(
     (sku) => sku.readiness.readyForChannelImageGeneration
@@ -705,6 +774,27 @@ export function evaluateRocktomicPackageValidation(input: EvaluatePackageInput):
     blockedSkuCount,
     extractionErrorSkuCount,
     ocrNeedsReviewSkuCount,
+    aiTextFactsCoverage: {
+      requiredSkuCount: supplementRequiredSkus.length,
+      presentSkuCount: aiEvidencePresentCount,
+      missingSkuCount: Math.max(0, supplementRequiredSkus.length - aiEvidencePresentCount),
+    },
+    ocrFactsCoverage: {
+      requiredSkuCount: supplementRequiredSkus.length,
+      presentSkuCount: ocrEvidencePresentCount,
+      missingSkuCount: Math.max(0, supplementRequiredSkus.length - ocrEvidencePresentCount),
+    },
+    supplementFactsCoverageTotal: {
+      requiredSkuCount: supplementRequiredSkus.length,
+      presentSkuCount: totalEvidencePresentCount,
+      missingSkuCount: Math.max(0, supplementRequiredSkus.length - totalEvidencePresentCount),
+    },
+    aiLabelTextExtractionAttempted,
+    aiLabelTextExtractionSucceeded,
+    aiLabelTextNeedsReview,
+    aiLabelTextNonPdfCompatible,
+    aiLabelTextNoExtractableText,
+    aiLabelTextExtractionErrors,
     usableForOptiPixelSkuCount,
     readyForChannelImageGenerationSkuCount,
     fieldCoverageSummary,

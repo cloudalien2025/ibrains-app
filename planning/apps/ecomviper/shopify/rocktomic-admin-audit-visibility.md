@@ -84,3 +84,20 @@ The admin route remains:
 - read-only
 - package-backed
 - non-extractive/non-syncing at render time
+
+## Phase 3.6 Compatibility Note
+
+Phase 3.6 extends offline artifacts and counters with AI label extraction summaries.
+
+Admin audit now includes read-only visibility for:
+
+- AI extraction attempted/succeeded/review-needed/error counters
+- non-PDF AI and no-extractable-text counts
+- supplement-facts coverage split (`aiTextFactsCoverage`, `ocrFactsCoverage`, `supplementFactsCoverageTotal`)
+- artifact presence for `ai-label-text-evidence.json`
+
+The route remains:
+
+- read-only
+- package-backed
+- non-extractive/non-syncing at render time

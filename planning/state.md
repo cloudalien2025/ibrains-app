@@ -254,6 +254,54 @@ Last updated: 2026-05-31 (UTC)
   - Phase 6: Generate Intelligence binding
   - Phase 7: shared ecommerce usage generalization across ecommerce apps
 
+## Sprint Checkpoint: Phase 3.6 Rocktomic AI Label Text Extraction + OCR Fallback (Local Branch)
+
+- Branch: `sprint-019-rocktomic-ai-label-text-extraction`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks complete; MR/deploy verification pending.
+- Scope implemented locally:
+  - Added offline AI label extraction module:
+    - `lib/ecomviper/suppliers/rocktomic-ai-label-text.ts`
+  - Enhanced templates-page extraction to resolve per-SKU `.ai`/`.tif` assets via templates-page Azure listing metadata:
+    - `lib/ecomviper/suppliers/rocktomic-template-assets.ts`
+  - Updated offline builder pipeline:
+    - `scripts/ecomviper/build_rocktomic_supplier_data.ts`
+    - AI `.ai` extraction is primary for supplement facts
+    - OCR is fallback-only for AI non-success cases
+    - adds `ai-label-text-evidence.json`
+  - Updated artifact contracts:
+    - `sourceFacts.json` includes `ai_pdf_text` provenance/confidence/review flags
+    - `assets.json` includes remote freshness metadata and AI extraction status
+    - `validation-report.json` includes AI/OCR/total supplement facts coverage + AI extraction counters
+    - `audit.csv` includes AI extraction status columns
+  - Updated read-only admin audit visibility:
+    - `/admin/ecomviper/suppliers/rocktomic/audit`
+    - displays AI extraction coverage/status counters and `ai-label-text-evidence.json` presence
+  - Added focused tests for:
+    - AI compatibility and parsing
+    - metadata/change-detection behavior
+    - templates-page Azure listing extraction
+    - validation/admin/runtime-boundary compatibility
+- Generated offline summary from current local Phase 3.6 run:
+  - SKUs discovered: `164`
+  - COA coverage: `124`
+  - labelTemplateAi coverage: `147`
+  - mockupTemplateTif coverage: `147`
+  - AI text extraction successes: `145/147`
+  - AI non-PDF: `0`
+  - AI no-extractable-text: `2`
+  - OCR attempted fallback rows: `0` (no fixture + no fallback text rows for failed AI SKUs)
+  - supplement facts total coverage: `136/141`
+  - blocked SKUs: `99`
+- Honest boundary confirmation:
+  - no data import to `ibrains-ecommerce-prod-postgres`
+  - no ecommerce DB schema migration
+  - no Product Editor/Generate Intelligence runtime behavior switch
+  - no extraction on user-facing routes or admin render
+  - no permanent `.ai`/`.tif` binary storage in repo data artifacts
+- Recommended next phase:
+  - Phase 4 — controlled validated supplier data import/read path into/from shared ecommerce database.
+
 ## Sprint Checkpoint: Rocktomic Supplier Data Package Phase 1 (Offline All-SKU Audit)
 
 - Branch: `rocktomic-offline-all-sku-audit-phase1`

@@ -142,7 +142,7 @@ describe("rocktomic offline audit helpers", () => {
     expect(report.skuValidationResults).toHaveLength(1);
     expect(report.fieldCoverageSummary).toHaveProperty("assets.labelTemplateAiUrl");
     expect(report.fieldCoverageSummary).toHaveProperty("assets.mockupTemplateTifUrl");
-    expect(report.fieldCoverageSummary).toHaveProperty("supplementFacts.ocrEvidence");
+    expect(report.fieldCoverageSummary).toHaveProperty("supplementFacts.aiOrOcrEvidence");
     expect(report.sourceErrors).toHaveLength(1);
   });
 
