@@ -179,6 +179,53 @@ Last updated: 2026-05-31 (UTC)
   - Phase 6: Generate Intelligence binding
   - Phase 7: shared ecommerce generalization across apps
 
+## Sprint Closure Update: Phase 3 Rocktomic Admin Audit Visibility
+
+- Sprint/branch: `sprint-017-rocktomic-admin-audit-visibility`
+- MR:
+  - `!281`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/281`
+  - source branch commit SHA: `f95529c8e585663ac6458b8f8dca1ff399a74664`
+  - merge commit SHA: `c36939a449226145f49b3606317bc1eea03beddc`
+  - MR pipeline `2565507868`: success
+- Main/deploy pipeline:
+  - pipeline `2565510586`: success
+  - verify/build/deploy jobs: success
+- Branch cleanup:
+  - remote source branch deletion: completed via merge (`--remove-source-branch`)
+  - local source branch deletion: completed (`git branch -d sprint-017-rocktomic-admin-audit-visibility`)
+  - local repository reset: clean `main` synced to `origin/main`
+- Production release verification:
+  - `/api/meta/release`:
+    - `git_sha=c36939a449226145f49b3606317bc1eea03beddc`
+    - `build_id=2565510586`
+    - `deployed_at=2026-05-31T16:08:41Z`
+    - `release_metadata_complete=true`
+  - smoke script: `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai` passed
+  - route timings:
+    - `/api/health`: `200` in `0.106687s`
+    - `/api/meta/release`: `200` in `0.088246s`
+    - `/brains`: `307` in `0.055688s`
+    - `/ecomviper`: `307` in `0.068457s`
+    - `/ecomviper/settings`: `307` in `0.054439s`
+    - `/ecomviper/dropshipping/rocktomic`: `307` in `0.069999s`
+  - socket health: close-wait sockets `0` (pass)
+- Signed-out admin route verification:
+  - `/admin` -> `307` to `/sign-in?redirect_url=%2Fadmin`
+  - `/admin/ecomviper` -> `307` to `/sign-in?redirect_url=%2Fadmin%2Fecomviper`
+  - `/admin/ecomviper/suppliers/rocktomic/audit` -> `307` to `/sign-in?redirect_url=%2Fadmin%2Fecomviper%2Fsuppliers%2Frocktomic%2Faudit`
+- Signed-in/admin verification status:
+  - manual signed-in admin UI verification remains session-dependent and was not executed in this CLI run.
+- Honest boundary confirmation:
+  - no data import to `ibrains-ecommerce-prod-postgres`
+  - no production ecommerce schema migration
+  - no Product Editor / Generate Intelligence / Image Studio / OptiBay / OptiWal / Optizon runtime behavior switch
+  - no runtime source fetch/OCR/extraction/validation side effects added
+- Recommended next phases:
+  - Phase 4: controlled validated supplier data import/read path for shared ecommerce database
+  - Phase 5: Product Editor read-only supplier facts binding
+  - Phase 6: Generate Intelligence binding
+  - Phase 7: shared ecommerce usage generalization across ecommerce apps
+
 ## Sprint Checkpoint: Rocktomic Supplier Data Package Phase 1 (Offline All-SKU Audit)
 
 - Branch: `rocktomic-offline-all-sku-audit-phase1`
