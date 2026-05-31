@@ -1,0 +1,55 @@
+# EcomViper Admin Surface
+
+Last updated: 2026-05-31 (UTC)
+
+## Why This Exists
+
+Supplier intelligence diagnostics and all-SKU source quality auditing are platform operations and should not live inside merchant-facing `/ecomviper` workflows.
+
+Admin V1 moves supplier operations to internal routes so merchant UX stays focused on product workflow.
+
+## Route Scope
+
+- `/admin/ecomviper`
+- `/admin/ecomviper/suppliers`
+- `/admin/ecomviper/suppliers/rocktomic`
+- `/admin/ecomviper/suppliers/rocktomic/audit`
+- `/admin/ecomviper/suppliers/rocktomic/builds`
+
+## V1 Features
+
+- supplier dataset health summary
+- source registry status
+- all-SKU audit table with readiness/status diagnostics
+- build/sync history table
+- links between summary, audit, and builds
+
+## All-SKU Audit Purpose
+
+Audit is the primary internal quality surface for supplier intelligence.
+
+It provides per-SKU status across:
+
+- product facts
+- pricing
+- inventory
+- COA link
+- label/mockup assets
+- supplement facts extraction state
+- key features
+- generate-readiness rollup
+
+## Hard Safety Rules
+
+Admin routes are read-only for V1 and do not perform extraction/sync during page render.
+
+Missing records should render as missing/partial/extraction-needed states instead of triggering live fetch/parsing.
+
+## Merchant Separation
+
+Merchant `/ecomviper` routes remain customer workflows and should not expose:
+
+- source sync internals
+- parser diagnostics
+- all-SKU admin audit controls
+- internal supplier registry diagnostics

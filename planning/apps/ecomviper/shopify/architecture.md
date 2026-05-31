@@ -86,3 +86,13 @@ Settings and supplier diagnostics read global normalized counts and global membe
 - COA link critical path is per-SKU catalog hyperlink extraction; COA repository parsing is optional.
 - Inventory `low_stock` maps to merchant action state `Action Required: Mark Out of Stock`.
 - Pricing may use an explicitly labeled default tier when merchant tier is unset and normalized pricing exists.
+
+## Admin Foundation Boundary (2026-05-31)
+
+Internal supplier operations now use `/admin/ecomviper/...` routes:
+
+- summary: `/admin/ecomviper/suppliers/rocktomic`
+- all-SKU audit: `/admin/ecomviper/suppliers/rocktomic/audit`
+- build history: `/admin/ecomviper/suppliers/rocktomic/builds`
+
+Merchant `/ecomviper` remains supplier-neutral in customer UI language while admin may expose internal supplier labels and raw diagnostics.

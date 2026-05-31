@@ -126,3 +126,17 @@ Hotfix 009.9 COA + extraction policy:
 - Per-SKU COA URL extraction from catalog row hyperlink is the active required path.
 - COA repository feed is optional and not in the critical path for Product Editor/PDP binding.
 - Missing text-layer supplement facts on a matched SKU should resolve to `ocr_required` state, not generic `unknown`.
+
+## Admin Foundation V1 Boundary (2026-05-31)
+
+Internal supplier operations now have a dedicated admin route family under `/admin/ecomviper/...`.
+
+Admin render paths are read-only and may query normalized tables/status rows only. They must not trigger:
+
+- source sync execution
+- source downloads
+- OCR/extraction
+- OpenAI calls
+- long-running parsing during request render
+
+If normalized rows are missing, admin should show missing/partial diagnostics instead of running extraction live.
