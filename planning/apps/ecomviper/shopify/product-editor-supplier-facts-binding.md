@@ -85,3 +85,35 @@ Phase 5 preserves runtime boundaries:
 
 - Phase 6: bind Generate Intelligence to shared supplier facts.
 - Future OptiPixel phase: consume `ecommerce_supplier_assets`/remote metadata for image workflows.
+
+## Phase 5 Closure (2026-05-31 UTC)
+
+Delivery closure status:
+
+- Phase 5 MR merged: `!291`
+- merge SHA: `7f40e11984d54842527ca76f816dd7e7d057bc8b`
+- deploy pipeline: success (`2565788605`)
+- release verified at `/api/meta/release` with:
+  - `git_sha=7f40e11984d54842527ca76f816dd7e7d057bc8b`
+  - `build_id=2565788605`
+
+Behavior confirmation:
+
+- Product Editor Supplier Source Facts panel is read-only.
+- Product Editor matching/display uses readiness dimensions (not global status alone):
+  - `ingredientMatchingReadiness`
+  - `productEditorFactsReadiness`
+  - `complianceEvidenceReadiness`
+  - `optiPixelAssetReadiness`
+- Missing COA is shown as compliance warning, not ingredient blocker.
+- Missing pricing is shown as pricing warning/unavailable state, not ingredient blocker.
+- No Generate Intelligence binding was introduced in Phase 5.
+- No Product Editor supplier writes/import/sync/extraction/OCR/AI-label processing was introduced.
+
+Operational verification notes:
+
+- Shared ecommerce DB verify/check passed using production connection with compatibility suffix (`&uselibpqcompat=true`):
+  - `npm run ecommerce:check-db`
+  - `npm run ecommerce:verify-rocktomic-import`
+- Signed-out route protections remained intact for admin and Product Editor routes.
+- Signed-in Product Editor manual verification was not executed in this CLI-only closure run (no authenticated browser session in runner).
