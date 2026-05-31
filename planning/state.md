@@ -2061,3 +2061,45 @@ Warning:
 - `planning/questions.md`
 - `planning/risks.md`
 - `planning/state.md`
+
+## Admin Foundation Closure Update: Internal iBrains Admin + EcomViper Supplier Intelligence Console
+
+- Sprint/lane: `admin-foundation-ecomviper-supplier-intelligence`
+- MR:
+  - `!267`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/267`
+  - source branch commit SHA: `5a8bb2ee05669d35be1985406f3d8148410e3e72`
+  - merge commit SHA: `085d550561917f4be32f1e99c35f141ed1a436e8`
+  - MR pipeline `2564720323`: success
+  - main/deploy pipeline `2564722663`: success
+  - deploy job `14618100340`: success
+- Branch cleanup:
+  - remote source branch deletion: confirmed (branch ref absent on `origin`)
+  - local source branch deletion: completed
+  - local repository reset: `main` fast-forwarded and clean
+- Production release verification:
+  - `/api/meta/release`:
+    - `git_sha=085d550561917f4be32f1e99c35f141ed1a436e8`
+    - `build_id=2564722663`
+    - `deployed_at=2026-05-31T03:40:48Z`
+    - `release_metadata_complete=true`
+  - route timings:
+    - `/api/health`: `200` in `0.063806s`
+    - `/api/meta/release`: `200` in `0.055915s`
+    - `/brains`: `307` in `0.050549s`
+    - `/ecomviper`: `307` in `0.051947s`
+    - `/admin`: `307` in `0.068412s`
+    - `/admin/ecomviper/suppliers/rocktomic/audit`: `307` in `0.065573s`
+  - smoke script: `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai` passed
+  - socket health: `CLOSE-WAIT` count `0`; `:3001` socket states stable (`LISTEN` + expected `TIME-WAIT`)
+  - nginx error tails: no new entries in `/var/log/nginx/app.ibrains.ai.error.log` and `/var/log/nginx/error.log`
+- Signed-out verification:
+  - `/admin` redirects to `/sign-in?redirect_url=%2Fadmin`
+  - `/brains` redirects to `/sign-in?redirect_url=%2Fbrains`
+  - `/ecomviper` redirects to `/sign-in?redirect_url=%2Fecomviper`
+- Signed-in verification status:
+  - allowlisted admin route verification (`/admin` and all `/admin/ecomviper/...` pages): blocked in this CLI run (no authenticated browser session)
+  - signed-in non-admin denial verification: blocked in this CLI run (no authenticated browser session)
+- Known log note:
+  - historical app log tail still contains prior `Failed to proxy https://localhost:3001/... EPROTO` entries from earlier runs; no new nginx error-log growth observed in this closure run.
+- Recommended next sprint:
+  - run manual signed-in browser verification for allowlisted admin and non-admin denial paths, then continue stabilization backlog.
