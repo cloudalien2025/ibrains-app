@@ -111,6 +111,23 @@ Hotfix 009.9 terminology updates:
 - Product Editor COA surfaces should prioritize per-SKU link availability language (`View COA`, `COA Link: not found in catalog row`, `COA Link: extraction failed`) instead of repository-pending wording.
 - Commerce surfaces should use explicit default-tier labels when fallback pricing is applied (for example `Non Member Pricing (default)`), not `Not selected`.
 
+Sprint 010 Product Editor PDP Gallery redesign:
+- `/ecomviper/products/[productId-or-handle]` uses a top hero section with:
+  - large ecommerce-style product gallery (main image + selectable thumbnails)
+  - adjacent product summary card with SKU/vendor/type/status/commerce/COA timestamps
+- The old small Product Rail is removed from primary layout.
+- Primary image browsing is top-of-workspace; Assets tab remains source-link and asset-URL management.
+- Gallery image ordering is deterministic:
+  - front/primary
+  - supplement facts/back label
+  - side/directions/warnings
+  - 3-pack
+  - 6-pack
+  - lifestyle
+  - original order fallback
+- Merchant-facing Product Editor identity sections must avoid extraction/debug/internal key language (for example raw source diagnostics keys).
+- Product Editor render remains display-only and must not trigger supplier sync, OCR/PDF extraction, or OpenAI generation at render time.
+
 ## Non-Goals
 
 - This standard does not define brand color palettes for every brain.

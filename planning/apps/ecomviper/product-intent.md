@@ -1,6 +1,6 @@
 # EcomViper Product Intent
 
-Last updated: 2026-05-29 (UTC)
+Last updated: 2026-05-31 (UTC)
 
 EcomViper is the multi-channel ecommerce operations family inside iBrains.
 
@@ -53,6 +53,18 @@ Channel behavior and requirements are defined in channel planning docs and imple
 - OpenAI-powered generation is server-side only and must remain fact-grounded + compliance-safe.
 - Missing OpenAI server configuration must show a clear unavailable state without breaking workflow.
 - Image Studio execution remains deferred to Sprint 009+ (placeholder only in Sprint 008).
+
+## Sprint 010 Product Editor UX Direction
+
+- Product Editor should read like an ecommerce product command center, not a narrow form rail.
+- Hero area pattern:
+  - left: large product gallery with active thumbnail selection
+  - right: compact product summary and operational commerce/trust facts
+- Keep existing actions and tabs:
+  - `Preview PDP`, `Save Changes`, `Generate Intelligence`
+  - `Overview`, `Ingredients`, `Trust & Compliance`, `Commerce`, `Agentic Visibility`, `Assets`, `SEO & Schema`
+- Merchant-facing UI must avoid extraction/internal debug language in top identity sections.
+- Render path remains presentation-only and must not trigger supplier extraction/sync/OCR/OpenAI work.
 
 ## Future Public Surface Direction (Preserved)
 

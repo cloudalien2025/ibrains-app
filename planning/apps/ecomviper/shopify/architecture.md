@@ -1,4 +1,4 @@
-# Shopify Architecture (Sprint 009.4)
+# Shopify Architecture (Sprint 010)
 
 Last updated: 2026-05-31 (UTC)
 
@@ -14,6 +14,26 @@ Last updated: 2026-05-31 (UTC)
   - iBrains logo always links to `/brains`
   - header account controls are always present (Settings, Notifications, user identity, log out)
 - Layout migration is presentation-only for this sprint and does not change supplier/source data execution behavior.
+
+## Product Editor PDP Gallery Contract (Sprint 010)
+
+- Product Editor route `/ecomviper/products/[productId-or-handle]` keeps shared shell:
+  - global iBrains header (flush top, logo links to `/brains`)
+  - EcomViper sidebar
+  - main workspace
+- Top-of-workspace hero is mandatory:
+  - large main image
+  - selectable thumbnails
+  - adjacent product summary card and core actions
+- Old Product Rail is removed from primary route layout.
+- Deterministic image ordering helper is used before render:
+  - front/primary, facts/back, side/warnings, 3-pack, 6-pack, lifestyle, fallback original order.
+- Gallery accepts Shopify image URLs and hosted/generated asset URLs.
+- Render-time safety:
+  - no supplier sync runs
+  - no PDF/OCR extraction
+  - no OpenAI generation
+  - no heavy source parsing in UI render path
 
 ## Core Rules
 

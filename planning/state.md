@@ -50,6 +50,20 @@ Last updated: 2026-05-31 (UTC)
 - Shopify Hotfix Sprint 009.9: In progress (`hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`, deterministic all-SKU sourceFacts field mapping + Product Editor/Generate Intelligence binding + settings tier auth save reliability).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
 
+## Sprint Checkpoint: EcomViper Product Editor PDP Gallery Redesign (Local Branch)
+
+- Branch: `ecomviper-product-editor-pdp-gallery-redesign`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused tests complete; MR/deploy verification pending.
+- Scope implemented locally:
+  - Product Editor hero redesign with top-of-page ecommerce gallery (main image + selectable thumbnails).
+  - Deterministic image ordering helper for Shopify + hosted/generated assets (`front -> facts -> side -> 3-pack -> 6-pack -> lifestyle -> fallback`).
+  - Product Summary card added beside gallery with SKU/vendor/type/status/COA/commerce/timestamp context.
+  - Old Product Rail removed from primary Product Editor layout.
+  - Tabs/actions preserved (`Preview PDP`, `Save Changes`, `Generate Intelligence`, all existing tabs).
+  - Merchant-facing summary surfaces avoid internal extraction/debug key language.
+  - Render path remains display-only (no supplier sync/OCR/PDF/OpenAI run triggered by render).
+
 ## Global iBrains Shell + Dashboard Modernization Checkpoint (Local Branch)
 
 - Branch: `global-ibrains-shell-dashboard-modernization`

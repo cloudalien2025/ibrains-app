@@ -1,4 +1,4 @@
-# PDP Intelligence (Sprint 009.4)
+# PDP Intelligence (Sprint 010)
 
 Last updated: 2026-05-31 (UTC)
 
@@ -93,3 +93,10 @@ Hotfix 009.9 behavior:
 
 - Generation should consume Product Editor `sourceFacts` field families (key features, dietary attributes, certifications, manufacturing claims) before supplier fallback fields.
 - When `supplement_facts_status=ocr_required`, generation must not invent ingredient details.
+
+## Product Editor Gallery Relationship (Sprint 010)
+
+- eBay PDP template remains a UX reference pattern (large image + thumbnail selector + top facts).
+- EcomViper Product Editor implements this as native React workspace UI, not copied eBay HTML.
+- Gallery and summary are display-layer consumers of existing `sourceFacts`/record state.
+- Gallery redesign must not change supplier ingestion, extraction, OCR, or generation execution paths.

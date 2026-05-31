@@ -1,6 +1,6 @@
 # EcomViper Overview
 
-Last updated: 2026-05-29 (UTC)
+Last updated: 2026-05-31 (UTC)
 
 EcomViper is the iBrains parent app family for multi-channel commerce operations.
 
@@ -62,6 +62,17 @@ These planning roots are active in the current repository structure.
 - Generated intelligence is editable, saved server-side, and reloaded on reopen for the same signed-in user.
 - OpenAI generation runs server-side only and degrades safely to `generation_unavailable` when credentials are missing.
 - Image Studio remains a placeholder and is deferred to Sprint 009+.
+
+## Product Editor Gallery Standard (Sprint 010)
+
+- `/ecomviper/products/[productId-or-handle]` uses a top hero-gallery model:
+  - large primary product image
+  - selectable thumbnail gallery
+  - compact product summary/action context beside gallery
+- Product imagery is part of main workspace content, not sidebar navigation.
+- Product Rail is removed from primary layout to avoid duplicate image rails.
+- Gallery supports Shopify images plus hosted/generated asset URLs when available.
+- Merchant identity zones avoid extraction-debug/internal key wording.
 
 ## Planning Navigation
 
