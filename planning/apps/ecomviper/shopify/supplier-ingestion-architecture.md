@@ -198,3 +198,22 @@ Phase 2 still does not:
 Detailed policy contract:
 
 - `planning/apps/ecomviper/shopify/rocktomic-validation-policy.md`
+
+## Rocktomic Admin Audit Visibility (Phase 3)
+
+Phase 3 adds a read-only operator surface for the offline package and validation artifacts:
+
+- route: `/admin/ecomviper/suppliers/rocktomic/audit`
+- reader: `lib/ecomviper/suppliers/rocktomic-admin-audit.ts`
+
+Phase 3 guarantees:
+
+1. no source download/parsing during admin render
+2. no extraction/validation execution side effect in render path
+3. no DB import/migration
+4. no Product Editor/Generate Intelligence binding changes
+5. no sync button/worker additions
+
+Detailed Phase 3 contract:
+
+- `planning/apps/ecomviper/shopify/rocktomic-admin-audit-visibility.md`

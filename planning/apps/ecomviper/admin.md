@@ -91,3 +91,20 @@ Merchant `/ecomviper` routes remain customer workflows and should not expose:
 - Phase 2 introduces offline validation policy and package-level status outputs only.
 - Admin runtime pages remain read-only and unchanged in Phase 2.
 - Phase 3 is the first phase planned to add explicit admin validation visibility surfaces from package outputs.
+
+## Phase 3 Delivery (Rocktomic Admin Audit Visibility)
+
+- Implemented read-only operator surface at:
+  - `/admin/ecomviper/suppliers/rocktomic/audit`
+- Route reads offline package artifacts via server-only reader:
+  - `lib/ecomviper/suppliers/rocktomic-admin-audit.ts`
+- Route displays:
+  - package status + policy metadata
+  - SKU status counts and coverage summaries
+  - package/source defects and top SKU defects
+  - SKU validation preview with readiness flags
+  - artifact presence/status (`sources.json`, `sourceFacts.json`, `pricing.json`, `inventory.json`, `assets.json`, `audit.csv`, `validation-report.json`)
+- Hard boundaries preserved:
+  - no DB import/migration
+  - no runtime source fetching/extraction/validation side effects
+  - no Product Editor/Generate Intelligence/Image Studio/OptiBay/OptiWal/Optizon behavior changes
