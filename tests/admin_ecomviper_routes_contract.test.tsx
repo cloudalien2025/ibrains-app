@@ -3,34 +3,25 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 const mocks = vi.hoisted(() => ({
   getSupplierAdminSummary: vi.fn(),
-  getSupplierAuditData: vi.fn(),
   getSupplierBuildHistory: vi.fn(),
+  getRocktomicAdminAuditViewModel: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/ecomviper/supplier-intelligence", () => ({
-  ADMIN_AUDIT_FILTER_OPTIONS: [
-    { value: "all", label: "All" },
-    { value: "ready", label: "Ready" },
-    { value: "partial", label: "Partial" },
-    { value: "missing_pricing", label: "Missing Pricing" },
-    { value: "missing_inventory", label: "Missing Inventory" },
-    { value: "missing_coa", label: "Missing COA" },
-    { value: "missing_assets", label: "Missing Assets" },
-    { value: "missing_key_features", label: "Missing Key Features" },
-    { value: "supplement_facts_not_extracted", label: "Supplement Facts Not Extracted" },
-    { value: "missing_product", label: "Unmatched / Missing Product Record" },
-  ],
   getSupplierAdminSummary: mocks.getSupplierAdminSummary,
-  getSupplierAuditData: mocks.getSupplierAuditData,
   getSupplierBuildHistory: mocks.getSupplierBuildHistory,
+}));
+
+vi.mock("@/lib/ecomviper/suppliers/rocktomic-admin-audit", () => ({
+  getRocktomicAdminAuditViewModel: mocks.getRocktomicAdminAuditViewModel,
 }));
 
 describe("admin ecomviper routes contract", () => {
   beforeEach(() => {
     vi.resetModules();
     mocks.getSupplierAdminSummary.mockReset();
-    mocks.getSupplierAuditData.mockReset();
     mocks.getSupplierBuildHistory.mockReset();
+    mocks.getRocktomicAdminAuditViewModel.mockReset();
 
     mocks.getSupplierAdminSummary.mockResolvedValue({
       supplierId: "rocktomic",
@@ -61,33 +52,82 @@ describe("admin ecomviper routes contract", () => {
       ],
     });
 
-    mocks.getSupplierAuditData.mockResolvedValue({
-      summary: {
-        totalSupplierSkus: 2,
-        readySkus: 1,
-        partialSkus: 1,
-        missingCoa: 1,
-        missingPricing: 1,
-        missingInventory: 1,
-        supplementFactsNotExtracted: 1,
-      },
-      filteredCount: 2,
-      rows: [
+    mocks.getRocktomicAdminAuditViewModel.mockResolvedValue({
+      supplierSlug: "rocktomic",
+      supplierName: "Rocktomic",
+      packageGeneratedAt: "2026-05-31T00:00:00.000Z",
+      validationPolicyVersion: "rocktomic_phase2_v1",
+      packageStatus: "fail",
+      totalSkusDiscovered: 156,
+      totalSkusValidated: 156,
+      usableSkuCount: 0,
+      usableWithWarningsSkuCount: 4,
+      blockedSkuCount: 152,
+      extractionErrorSkuCount: 0,
+      fieldCoverageSummary: [],
+      blockingFieldCoverageSummary: [],
+      warningFieldCoverageSummary: [],
+      sourceErrors: ["catalog_pdf: parse failed"],
+      packageDefects: ["package: blocked_sku_count: blocked SKUs exist"],
+      topSkuDefects: [
         {
-          sku: "ROC948",
-          productName: "Magnesium Gummies",
-          productFactsStatus: "ready",
-          pricingStatus: "ready",
-          inventoryStatus: "ready",
-          coaLinkStatus: "ready",
-          labelMockupStatus: "ready",
-          supplementFactsStatus: "ready",
-          keyFeaturesStatus: "ready",
-          generateReadiness: "ready",
-          lastSyncedAt: "2026-05-30T00:00:00.000Z",
-          missingProductRecord: false,
+          sku: "ROC010",
+          productName: "Pump Formula",
+          skuType: "supplement",
+          status: "blocked",
+          blockingDefectCount: 3,
+          warningDefectCount: 0,
+          blockingDefects: ["assets.coaUrl: missing"],
+          warningDefects: [],
+          missingFields: ["coaUrl"],
+          sourceNotes: [],
         },
       ],
+      skuValidationPreview: [
+        {
+          sku: "ROC010",
+          productName: "Pump Formula",
+          skuType: "supplement",
+          status: "blocked",
+          blockingDefectCount: 3,
+          warningDefectCount: 0,
+          readiness: {
+            usableForProductEditor: false,
+            usableForGenerateIntelligence: false,
+            usableForImageStudio: false,
+            usableForOptiBay: false,
+            usableForOptiWal: false,
+            usableForOptizon: false,
+          },
+          missingFields: ["coaUrl"],
+          sourceNotes: [],
+        },
+      ],
+      totalSkuValidationResults: 156,
+      sourceRegistrySummary: [
+        {
+          id: "catalog_pdf",
+          name: "Catalog PDF",
+          type: "pdf",
+          urlLabel: "example.com/catalog.pdf",
+          urlPreview: "https://example.com/catalog.pdf",
+          notes: "catalog",
+          status: "present",
+        },
+      ],
+      artifactStatuses: [
+        {
+          artifact: "validation-report.json",
+          relativePath: "latest/validation-report.json",
+          exists: true,
+          sizeBytes: 1024,
+          lastModifiedAt: "2026-05-31T00:00:00.000Z",
+          error: null,
+        },
+      ],
+      auditCsvPresent: true,
+      auditCsvRowCount: 156,
+      issues: [],
     });
 
     mocks.getSupplierBuildHistory.mockResolvedValue([
@@ -137,17 +177,17 @@ describe("admin ecomviper routes contract", () => {
     expect(html).toContain('data-testid="admin-rocktomic-source-registry-table"');
   });
 
-  it("renders /admin/ecomviper/suppliers/rocktomic/audit table + filters", async () => {
+  it("renders /admin/ecomviper/suppliers/rocktomic/audit package status + sku table", async () => {
     const pageMod = await import("@/app/admin/ecomviper/suppliers/rocktomic/audit/page");
-    const html = renderToStaticMarkup(
-      await pageMod.default({ searchParams: Promise.resolve({ filter: "all", q: "ROC" }) })
-    );
+    const html = renderToStaticMarkup(await pageMod.default());
 
-    expect(html).toContain("All-SKU Source Audit");
+    expect(html).toContain("Rocktomic Supplier Audit");
+    expect(html).toContain("Package status");
+    expect(html).toContain("Total SKUs Discovered");
+    expect(html).toContain("Validation Status");
     expect(html).toContain('data-testid="admin-rocktomic-audit-table"');
-    expect(html).toContain("Search SKU / Product Name");
-    expect(html).toContain("Missing Pricing");
-    expect(html).toContain("Generate Readiness");
+    expect(html).toContain("Artifact Status");
+    expect(html).toContain("Top SKU Defects");
   });
 
   it("renders /admin/ecomviper/suppliers/rocktomic/builds run history", async () => {

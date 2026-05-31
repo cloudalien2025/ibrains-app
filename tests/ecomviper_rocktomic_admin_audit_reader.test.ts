@@ -1,0 +1,217 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getRocktomicAdminAuditViewModel } from "@/lib/ecomviper/suppliers/rocktomic-admin-audit";
+
+interface FixtureOptions {
+  includeValidationReport?: boolean;
+  includeAuditCsv?: boolean;
+  packageStatus?: "pass" | "pass_with_warnings" | "fail";
+}
+
+async function writeFixturePackage(options: FixtureOptions = {}): Promise<string> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "rocktomic-admin-audit-"));
+  const packageDir = path.join(root, "data/ecomviper/suppliers/rocktomic");
+  const latestDir = path.join(packageDir, "latest");
+  await fs.mkdir(latestDir, { recursive: true });
+
+  const sources = {
+    supplier: "rocktomic",
+    version: 1,
+    sources: [
+      {
+        id: "catalog_pdf",
+        name: "Catalog PDF",
+        url: "https://example.com/catalog.pdf",
+        type: "pdf",
+        notes: "Primary catalog",
+      },
+      {
+        id: "inventory_report",
+        name: "Inventory Report",
+        url: "https://example.com/inventory.csv",
+        type: "google_sheet",
+        notes: "Inventory source",
+      },
+    ],
+  };
+
+  await fs.writeFile(path.join(packageDir, "sources.json"), JSON.stringify(sources, null, 2));
+  await fs.writeFile(path.join(latestDir, "sourceFacts.json"), JSON.stringify([
+    {
+      sku: "ROC001",
+      sourceReferences: ["catalog_pdf"],
+    },
+  ]));
+  await fs.writeFile(path.join(latestDir, "pricing.json"), JSON.stringify([
+    {
+      sku: "ROC001",
+      sourceReferences: ["catalog_pdf"],
+    },
+  ]));
+  await fs.writeFile(path.join(latestDir, "inventory.json"), JSON.stringify([
+    {
+      sku: "ROC001",
+      sourceReferences: ["inventory_report"],
+    },
+  ]));
+  await fs.writeFile(path.join(latestDir, "assets.json"), JSON.stringify([
+    {
+      sku: "ROC001",
+      sourceReferences: [],
+    },
+  ]));
+
+  if (options.includeAuditCsv !== false) {
+    await fs.writeFile(path.join(latestDir, "audit.csv"), ["sku,validationStatus", "ROC001,usable", "ROC002,blocked"].join("\n"));
+  }
+
+  if (options.includeValidationReport !== false) {
+    const report = {
+      generatedAt: "2026-05-31T00:00:00.000Z",
+      supplierId: "rocktomic",
+      validationPolicyVersion: "rocktomic_phase2_v1",
+      packageStatus: options.packageStatus || "fail",
+      totalSkusDiscovered: 2,
+      totalSkusValidated: 2,
+      usableSkuCount: 1,
+      usableWithWarningsSkuCount: 0,
+      blockedSkuCount: 1,
+      extractionErrorSkuCount: 0,
+      fieldCoverageSummary: {
+        sku: { requiredSkuCount: 2, presentSkuCount: 2, missingSkuCount: 0 },
+      },
+      blockingFieldCoverageSummary: {
+        "assets.coaUrl": { requiredSkuCount: 2, presentSkuCount: 1, missingSkuCount: 1 },
+      },
+      warningFieldCoverageSummary: {
+        "assets.mockupUrl": { requiredSkuCount: 2, presentSkuCount: 1, missingSkuCount: 1 },
+      },
+      sourceErrors: [{ sourceId: "inventory_report", error: "sheet timeout" }],
+      packageDefects: [{ field: "package", code: "blocked_sku_count", message: "Blocked SKUs detected" }],
+      skuValidationResults: [
+        {
+          sku: "ROC001",
+          productName: "Daily Greens",
+          skuType: "supplement",
+          status: "usable",
+          blockingDefects: [],
+          warningDefects: [],
+          missingFields: [],
+          sourceNotes: [],
+          readiness: {
+            usableForProductEditor: true,
+            usableForGenerateIntelligence: true,
+            usableForImageStudio: true,
+            usableForOptiBay: true,
+            usableForOptiWal: true,
+            usableForOptizon: true,
+          },
+        },
+        {
+          sku: "ROC002",
+          productName: "Night Formula",
+          skuType: "supplement",
+          status: "blocked",
+          blockingDefects: [{ field: "assets.coaUrl", code: "missing_coa_url", message: "COA missing" }],
+          warningDefects: [{ field: "assets.mockupUrl", code: "missing_mockup", message: "Mockup missing" }],
+          missingFields: ["coaUrl", "mockupUrl"],
+          sourceNotes: ["catalog_pdf: partial extraction"],
+          readiness: {
+            usableForProductEditor: false,
+            usableForGenerateIntelligence: false,
+            usableForImageStudio: false,
+            usableForOptiBay: false,
+            usableForOptiWal: false,
+            usableForOptizon: false,
+          },
+        },
+      ],
+    };
+
+    await fs.writeFile(path.join(latestDir, "validation-report.json"), JSON.stringify(report, null, 2));
+  }
+
+  return root;
+}
+
+describe("rocktomic admin audit reader", () => {
+  const tempRoots: string[] = [];
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(async () => {
+    for (const root of tempRoots) {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+    tempRoots.length = 0;
+  });
+
+  it("loads package files and summarizes status/counts", async () => {
+    const root = await writeFixturePackage();
+    tempRoots.push(root);
+
+    const vm = await getRocktomicAdminAuditViewModel({ rootDir: root, previewLimit: 10, topDefectLimit: 10 });
+
+    expect(vm.packageStatus).toBe("fail");
+    expect(vm.totalSkusDiscovered).toBe(2);
+    expect(vm.totalSkusValidated).toBe(2);
+    expect(vm.usableSkuCount).toBe(1);
+    expect(vm.blockedSkuCount).toBe(1);
+    expect(vm.auditCsvPresent).toBe(true);
+    expect(vm.auditCsvRowCount).toBe(2);
+    expect(vm.sourceRegistrySummary).toHaveLength(2);
+  });
+
+  it("handles missing validation-report.json gracefully", async () => {
+    const root = await writeFixturePackage({ includeValidationReport: false });
+    tempRoots.push(root);
+
+    const vm = await getRocktomicAdminAuditViewModel({ rootDir: root });
+
+    expect(vm.packageStatus).toBe("unavailable");
+    expect(vm.validationPolicyVersion).toBeNull();
+    expect(vm.sourceErrors.some((entry) => entry.includes("validation-report.json is missing"))).toBe(true);
+    expect(vm.issues.some((entry) => entry.includes("validation-report.json"))).toBe(true);
+  });
+
+  it("handles missing audit.csv gracefully", async () => {
+    const root = await writeFixturePackage({ includeAuditCsv: false });
+    tempRoots.push(root);
+
+    const vm = await getRocktomicAdminAuditViewModel({ rootDir: root });
+
+    expect(vm.auditCsvPresent).toBe(false);
+    expect(vm.auditCsvRowCount).toBe(0);
+    expect(vm.issues.some((entry) => entry.includes("latest/audit.csv"))).toBe(true);
+  });
+
+  it("surfaces blocking and warning defects in top SKU defects", async () => {
+    const root = await writeFixturePackage();
+    tempRoots.push(root);
+
+    const vm = await getRocktomicAdminAuditViewModel({ rootDir: root, topDefectLimit: 1 });
+
+    expect(vm.topSkuDefects).toHaveLength(1);
+    expect(vm.topSkuDefects[0]?.sku).toBe("ROC002");
+    expect(vm.topSkuDefects[0]?.blockingDefectCount).toBe(1);
+    expect(vm.topSkuDefects[0]?.warningDefectCount).toBe(1);
+  });
+
+  it("does not call network fetch and does not require ecommerce/database env vars", async () => {
+    const root = await writeFixturePackage({ packageStatus: "pass_with_warnings" });
+    tempRoots.push(root);
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    delete process.env.ECOMMERCE_DATABASE_URL;
+    delete process.env.DATABASE_URL;
+
+    const vm = await getRocktomicAdminAuditViewModel({ rootDir: root });
+
+    expect(vm.packageStatus).toBe("pass_with_warnings");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

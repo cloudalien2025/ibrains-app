@@ -135,3 +135,9 @@ Likely ecommerce-platform concerns (eventual move toward `ECOMMERCE_DATABASE_URL
 ## Phase 4 Preview
 
 - Phase 4 is the intended phase for controlled import/read binding of validated supplier data into the shared ecommerce database.
+
+## Phase 3 Clarification
+
+- Phase 3 admin audit visibility reads offline package artifacts only and does not import supplier data into `ibrains-ecommerce-prod-postgres`.
+- `DATABASE_URL` and `ECOMMERCE_DATABASE_URL` boundaries remain unchanged in Phase 3.
+- No runtime ecommerce behavior switch occurs in Phase 3 outside admin read-only package visibility.

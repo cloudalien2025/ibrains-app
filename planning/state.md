@@ -152,6 +152,33 @@ Last updated: 2026-05-31 (UTC)
 - Recommended next phase:
   - Phase 3 — Admin validation visibility and operator review surface for package status and SKU-level defect triage.
 
+## Sprint Checkpoint: Phase 3 Rocktomic Admin Audit Visibility (Local Branch)
+
+- Branch: `sprint-017-rocktomic-admin-audit-visibility`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks in progress; MR/deploy verification pending.
+- Scope implemented locally:
+  - Added server-only offline package reader:
+    - `lib/ecomviper/suppliers/rocktomic-admin-audit.ts`
+  - Enhanced admin route:
+    - `/admin/ecomviper/suppliers/rocktomic/audit`
+    - file: `app/admin/ecomviper/suppliers/rocktomic/audit/page.tsx`
+  - Added focused reader tests:
+    - `tests/ecomviper_rocktomic_admin_audit_reader.test.ts`
+  - Updated admin route contract tests for new Phase 3 audit visibility shape.
+  - Added planning doc:
+    - `planning/apps/ecomviper/shopify/rocktomic-admin-audit-visibility.md`
+- Phase boundary confirmation:
+  - no supplier data import into `ibrains-ecommerce-prod-postgres`
+  - no production ecommerce schema migration
+  - no Product Editor / Generate Intelligence / Image Studio / OptiBay / OptiWal / Optizon behavior switch
+  - no runtime source fetching, OCR, extraction, or validation side effects from admin render
+- Recommended next phases:
+  - Phase 4: controlled validated supplier data import/read path for shared ecommerce DB
+  - Phase 5: Product Editor read-only supplier facts binding
+  - Phase 6: Generate Intelligence binding
+  - Phase 7: shared ecommerce generalization across apps
+
 ## Sprint Checkpoint: Rocktomic Supplier Data Package Phase 1 (Offline All-SKU Audit)
 
 - Branch: `rocktomic-offline-all-sku-audit-phase1`

@@ -129,6 +129,21 @@ Policy source-of-truth:
 
 - `planning/apps/ecomviper/shopify/rocktomic-validation-policy.md`
 
+## Rocktomic Admin Audit Visibility (Phase 3)
+
+- `/admin/ecomviper/suppliers/rocktomic/audit` now renders offline package and validation visibility for operators.
+- The page is read-only and consumes package artifacts only:
+  - `data/ecomviper/suppliers/rocktomic/sources.json`
+  - `data/ecomviper/suppliers/rocktomic/latest/*`
+- Phase 3 does not:
+  - import supplier data into shared ecommerce DB
+  - change Product Editor / Generate Intelligence / Image Studio / OptiBay / OptiWal / Optizon runtime behavior
+  - introduce sync buttons or background workers
+
+Admin visibility contract source:
+
+- `planning/apps/ecomviper/shopify/rocktomic-admin-audit-visibility.md`
+
 ## Planning Navigation
 
 For family-level direction, start with:
