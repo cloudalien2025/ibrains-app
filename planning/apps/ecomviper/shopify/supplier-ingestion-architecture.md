@@ -168,3 +168,11 @@ Phase 1 rules:
 3. Missing source values must not be silently collapsed into final `Unknown` source facts.
 4. `validation-report.json` is informational in Phase 1 (coverage + defects), not a blocking production gate.
 5. No Product Editor, Generate Intelligence, admin UI, background worker, sync-button, or DB-import behavior changes are introduced in this phase.
+
+## Shared Ecommerce Database Foundation (Phase 1.5)
+
+- Supplier ingestion persistence is ecommerce-platform data and is intended to converge on `ECOMMERCE_DATABASE_URL` via explicit future migration/binding phases.
+- `DATABASE_URL` remains the core iBrains platform DB boundary and is not replaced in this phase.
+- `ibrains-ecommerce-prod-postgres` is the target shared ecommerce database.
+- `ecomviper-prod-postgres` is legacy/deprecated and ignored for forward architecture unless future explicit recovery scope says otherwise.
+- Phase 1.5 performs no production data migration, no schema migration, and no runtime supplier-ingestion DB switch.

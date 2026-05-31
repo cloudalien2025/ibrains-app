@@ -78,3 +78,10 @@ Merchant `/ecomviper` routes remain customer workflows and should not expose:
 - parser diagnostics
 - all-SKU admin audit controls
 - internal supplier registry diagnostics
+
+## Shared Ecommerce Database Boundary (Phase 1.5)
+
+- Admin supplier intelligence is part of ecommerce-platform operations and should align to `ECOMMERCE_DATABASE_URL` in explicit future binding phases.
+- `DATABASE_URL` remains reserved for core iBrains platform concerns.
+- `ecomviper-prod-postgres` is legacy/deprecated and not a planning source of truth.
+- Phase 1.5 does not migrate admin data, change admin runtime DB behavior, or add new admin sync controls.
