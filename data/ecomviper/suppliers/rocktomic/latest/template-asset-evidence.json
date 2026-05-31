@@ -1,0 +1,10 @@
+{
+  "assetsBySku": [],
+  "evidence": [],
+  "counts": {
+    "skusDetected": 0,
+    "labelTemplatesFound": 0,
+    "mockupTemplatesFound": 0,
+    "readyForOptiPixelAssets": 0
+  }
+}

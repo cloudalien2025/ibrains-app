@@ -1,5 +1,65 @@
 [
   {
+    "sku": "ROC001",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC002",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC004",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC006",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC008",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC009",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
     "sku": "ROC010",
     "rawInventoryValue": "IN STOCK - This means that you may sell this item",
     "inventoryStatus": "in_stock",
@@ -125,6 +185,16 @@
       "inventory_report"
     ],
     "missingFields": []
+  },
+  {
+    "sku": "ROC112",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
   },
   {
     "sku": "ROC1120",

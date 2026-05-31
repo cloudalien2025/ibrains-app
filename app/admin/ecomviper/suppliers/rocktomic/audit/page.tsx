@@ -45,13 +45,16 @@ export default async function RocktomicAuditPage() {
         </div>
       </header>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6" data-testid="admin-rocktomic-audit-summary-cards">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-9" data-testid="admin-rocktomic-audit-summary-cards">
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total SKUs Discovered</p><p className="mt-2 text-lg font-semibold">{audit.totalSkusDiscovered}</p></article>
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total SKUs Validated</p><p className="mt-2 text-lg font-semibold">{audit.totalSkusValidated}</p></article>
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Usable</p><p className="mt-2 text-lg font-semibold">{audit.usableSkuCount}</p></article>
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Usable With Warnings</p><p className="mt-2 text-lg font-semibold">{audit.usableWithWarningsSkuCount}</p></article>
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Blocked</p><p className="mt-2 text-lg font-semibold">{audit.blockedSkuCount}</p></article>
         <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Extraction Errors</p><p className="mt-2 text-lg font-semibold">{audit.extractionErrorSkuCount}</p></article>
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">OCR Needs Review</p><p className="mt-2 text-lg font-semibold">{audit.ocrNeedsReviewSkuCount}</p></article>
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">OptiPixel Ready</p><p className="mt-2 text-lg font-semibold">{audit.usableForOptiPixelSkuCount}</p></article>
+        <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs uppercase tracking-[0.12em] text-slate-500">Channel Image Ready</p><p className="mt-2 text-lg font-semibold">{audit.readyForChannelImageGenerationSkuCount}</p></article>
       </div>
 
       {audit.issues.length > 0 ? (
@@ -263,7 +266,7 @@ export default async function RocktomicAuditPage() {
                   <td className="py-2 pr-3">{row.blockingDefectCount}</td>
                   <td className="py-2 pr-3">{row.warningDefectCount}</td>
                   <td className="py-2 pr-3">
-                    PE:{boolMark(row.readiness.usableForProductEditor)} | GI:{boolMark(row.readiness.usableForGenerateIntelligence)} | IS:{boolMark(row.readiness.usableForImageStudio)} | OB:{boolMark(row.readiness.usableForOptiBay)} | OW:{boolMark(row.readiness.usableForOptiWal)} | OZ:{boolMark(row.readiness.usableForOptizon)}
+                    PE:{boolMark(row.readiness.usableForProductEditor)} | GI:{boolMark(row.readiness.usableForGenerateIntelligence)} | IS:{boolMark(row.readiness.usableForImageStudio)} | OP:{boolMark(row.readiness.usableForOptiPixel)} | OB:{boolMark(row.readiness.usableForOptiBay)} | OW:{boolMark(row.readiness.usableForOptiWal)} | OZ:{boolMark(row.readiness.usableForOptizon)} | CIG:{boolMark(row.readiness.readyForChannelImageGeneration)}
                   </td>
                   <td className="py-2 pr-3">{defectPreview(row.missingFields)}</td>
                   <td className="py-2 pr-3">{defectPreview(row.sourceNotes)}</td>

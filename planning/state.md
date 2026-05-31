@@ -218,6 +218,34 @@ Last updated: 2026-05-31 (UTC)
 - Honest boundary confirmation:
   - no data import to `ibrains-ecommerce-prod-postgres`
   - no production ecommerce schema migration
+
+## Sprint Checkpoint: Phase 3.5 Rocktomic Asset/OCR Remediation (Local Branch)
+
+- Branch: `sprint-018-rocktomic-asset-ocr-remediation`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks in progress; MR/deploy verification pending.
+- Scope implemented locally:
+  - Added offline extraction modules:
+    - `lib/ecomviper/suppliers/rocktomic-pdf-assets.ts`
+    - `lib/ecomviper/suppliers/rocktomic-template-assets.ts`
+    - `lib/ecomviper/suppliers/rocktomic-supplement-facts-ocr.ts`
+  - Upgraded offline builder pipeline:
+    - `scripts/ecomviper/build_rocktomic_supplier_data.ts`
+    - emits additional artifacts:
+      - `catalog-link-evidence.json`
+      - `template-asset-evidence.json`
+      - `ocr-evidence.json`
+  - Enhanced package outputs and validation/readiness summaries:
+    - `sourceFacts.json`, `assets.json`, `audit.csv`, `validation-report.json`
+  - Extended read-only admin audit visibility for OCR/asset readiness counters.
+  - Added focused tests for PDF link mapping, template extraction, OCR parsing, and runtime-boundary safety.
+- Honest boundary confirmation:
+  - no supplier data import into `ibrains-ecommerce-prod-postgres`
+  - no ecommerce DB schema migration
+  - no Product Editor / Generate Intelligence / OptiBay / OptiWal / OptiZon runtime behavior switch
+  - no runtime source fetch/OCR/extraction side effects in admin render
+- Recommended next phase:
+  - Phase 4 — controlled import/read of validated supplier data into/from shared ecommerce database.
   - no Product Editor / Generate Intelligence / Image Studio / OptiBay / OptiWal / Optizon runtime behavior switch
   - no runtime source fetch/OCR/extraction/validation side effects added
 - Recommended next phases:

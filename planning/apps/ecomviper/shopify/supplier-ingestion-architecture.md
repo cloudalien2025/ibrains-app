@@ -217,3 +217,30 @@ Phase 3 guarantees:
 Detailed Phase 3 contract:
 
 - `planning/apps/ecomviper/shopify/rocktomic-admin-audit-visibility.md`
+
+## Rocktomic Asset + OCR Remediation (Phase 3.5)
+
+Phase 3.5 extends the offline builder only and keeps runtime ingestion boundaries unchanged.
+
+Added offline extraction layers:
+
+1. Catalog PDF annotation evidence extraction (page/rect/URL/near-text classification).
+2. Templates-page per-SKU `.ai` and `.tif` extraction.
+3. OCR evidence parsing contract for supplement-facts panels (fixture-safe parser + confidence/review flags).
+
+New offline artifacts:
+
+- `latest/catalog-link-evidence.json`
+- `latest/template-asset-evidence.json`
+- `latest/ocr-evidence.json`
+
+Phase 3.5 guarantees:
+
+- no render-path extraction/OCR
+- no admin-triggered extraction side effects
+- no DB import/migration
+- no Product Editor/Generate Intelligence/channel runtime behavior switch
+
+Detailed Phase 3.5 contract:
+
+- `planning/apps/ecomviper/shopify/rocktomic-asset-ocr-remediation.md`

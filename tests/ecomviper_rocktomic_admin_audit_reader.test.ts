@@ -62,6 +62,9 @@ async function writeFixturePackage(options: FixtureOptions = {}): Promise<string
       sourceReferences: [],
     },
   ]));
+  await fs.writeFile(path.join(latestDir, "catalog-link-evidence.json"), JSON.stringify({ evidence: [] }));
+  await fs.writeFile(path.join(latestDir, "template-asset-evidence.json"), JSON.stringify({ evidence: [] }));
+  await fs.writeFile(path.join(latestDir, "ocr-evidence.json"), JSON.stringify([]));
 
   if (options.includeAuditCsv !== false) {
     await fs.writeFile(path.join(latestDir, "audit.csv"), ["sku,validationStatus", "ROC001,usable", "ROC002,blocked"].join("\n"));
@@ -79,6 +82,9 @@ async function writeFixturePackage(options: FixtureOptions = {}): Promise<string
       usableWithWarningsSkuCount: 0,
       blockedSkuCount: 1,
       extractionErrorSkuCount: 0,
+      ocrNeedsReviewSkuCount: 1,
+      usableForOptiPixelSkuCount: 0,
+      readyForChannelImageGenerationSkuCount: 0,
       fieldCoverageSummary: {
         sku: { requiredSkuCount: 2, presentSkuCount: 2, missingSkuCount: 0 },
       },
@@ -104,9 +110,11 @@ async function writeFixturePackage(options: FixtureOptions = {}): Promise<string
             usableForProductEditor: true,
             usableForGenerateIntelligence: true,
             usableForImageStudio: true,
+            usableForOptiPixel: false,
             usableForOptiBay: true,
             usableForOptiWal: true,
             usableForOptizon: true,
+            readyForChannelImageGeneration: false,
           },
         },
         {
@@ -122,9 +130,11 @@ async function writeFixturePackage(options: FixtureOptions = {}): Promise<string
             usableForProductEditor: false,
             usableForGenerateIntelligence: false,
             usableForImageStudio: false,
+            usableForOptiPixel: false,
             usableForOptiBay: false,
             usableForOptiWal: false,
             usableForOptizon: false,
+            readyForChannelImageGeneration: false,
           },
         },
       ],

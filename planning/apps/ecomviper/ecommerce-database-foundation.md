@@ -141,3 +141,10 @@ Likely ecommerce-platform concerns (eventual move toward `ECOMMERCE_DATABASE_URL
 - Phase 3 admin audit visibility reads offline package artifacts only and does not import supplier data into `ibrains-ecommerce-prod-postgres`.
 - `DATABASE_URL` and `ECOMMERCE_DATABASE_URL` boundaries remain unchanged in Phase 3.
 - No runtime ecommerce behavior switch occurs in Phase 3 outside admin read-only package visibility.
+
+## Phase 3.5 Clarification
+
+- Phase 3.5 improves offline package extraction quality (PDF annotation links, template assets, OCR evidence) only.
+- Phase 3.5 does not import supplier data into `ibrains-ecommerce-prod-postgres`.
+- Phase 3.5 does not change runtime DB bindings for Product Editor/Admin/Generate Intelligence/channel brains.
+- `DATABASE_URL` core-boundary and `ECOMMERCE_DATABASE_URL` ecommerce-boundary remain unchanged.

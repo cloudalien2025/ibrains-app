@@ -144,6 +144,24 @@ Admin visibility contract source:
 
 - `planning/apps/ecomviper/shopify/rocktomic-admin-audit-visibility.md`
 
+## Rocktomic Asset + OCR Remediation (Phase 3.5)
+
+- Phase 3.5 upgrades offline package extraction quality for:
+  - catalog PDF annotation links (COA + template + pricing-sheet evidence)
+  - templates page `.ai`/`.tif` per-SKU assets
+  - OCR-derived supplement facts evidence with confidence/review metadata
+- Phase 3.5 is still offline-only:
+  - no DB import/migration
+  - no runtime Product Editor/Generate Intelligence/Image Studio/OptiBay/OptiWal/OptiZon behavior changes
+  - no OptiPixel runtime/UI in this phase
+- OptiPixel direction:
+  - OptiPixel is the future standalone ecommerce image intelligence brain
+  - EcomViper/channel apps should eventually consume OptiPixel outputs instead of duplicating image-creation logic
+
+Phase 3.5 contract source:
+
+- `planning/apps/ecomviper/shopify/rocktomic-asset-ocr-remediation.md`
+
 ## Planning Navigation
 
 For family-level direction, start with:
