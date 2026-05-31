@@ -1,0 +1,2112 @@
+{
+  "generatedAt": "2026-05-31T13:48:15.409Z",
+  "totalSkusDiscovered": 156,
+  "recordsWritten": {
+    "sourceFacts": 156,
+    "pricing": 156,
+    "inventory": 156,
+    "assets": 156,
+    "audit": 156
+  },
+  "coverageCounts": {
+    "productName": 145,
+    "category": 0,
+    "supplementFactsText": 0,
+    "wholesaleCost": 142,
+    "msrp": 0,
+    "estimatedProfit": 0,
+    "inventoryStatus": 154,
+    "rawInventoryValue": 154,
+    "coaUrl": 0,
+    "labelTemplateUrl": 0,
+    "mockupUrl": 0
+  },
+  "missingFieldCounts": {
+    "category": 156,
+    "coaUrl": 156,
+    "estimatedProfit": 156,
+    "labelTemplateUrl": 156,
+    "mockupUrl": 156,
+    "msrp": 156,
+    "supplementFactsText": 156,
+    "membershipTierCosts": 14,
+    "productName": 11,
+    "wholesaleCost": 14,
+    "inventoryStatus": 2,
+    "rawInventoryValue": 2
+  },
+  "skuLevelDefects": [
+    {
+      "sku": "ROC010",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC011",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC012",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC013",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC014",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC015",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC016",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC017",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC018",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC100",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "productName",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC102",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "inventoryStatus",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "rawInventoryValue",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC105",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC107M",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC110M",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC1120",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC1125",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC1205",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC121",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC1215",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC123",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC126",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC210N",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC220",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC2201N",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC223",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC2232",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC224",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC2241N",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC2251",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC2272",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC2292",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC260V",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC263V",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC281",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC2811",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC282",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC2821",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC2841",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC2851",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC2861",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC301",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC302",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC303",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC304",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC401",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC402",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC450",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC501",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC502",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC503",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC504",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC506",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC507",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC507W",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC508",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC509",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC601",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC603",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC604",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC605",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC606",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC607",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC608",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC609",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC610",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC611",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC612",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC613",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC617",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC618",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC619",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC620",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "productName",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC621",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "productName",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC622",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "productName",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC623",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "productName",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC714",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC717",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC720",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC721",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC723",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC725",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC727",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC728",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC729",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC730",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC731",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC732",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC733",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC734",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC735",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC736",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC738",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC739",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC740",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC741",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC743",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC744",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC745",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC801",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC802",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC803",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC805",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC808",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC812",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC814",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC816",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC817",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC818",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC822",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC823",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC824",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC826",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC830",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC831",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC835",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC840",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC841",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC903M",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC908",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "productName",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC910",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "productName",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC911",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "productName",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC914",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC915",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC918",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC919",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC920",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC921",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "inventoryStatus",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "productName",
+        "rawInventoryValue",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC922",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC923",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC924",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC925",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC927",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC928",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC929",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC930",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC934",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC937",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC939",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC941",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "productName",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC943",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC944",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC945",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC946",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC947",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC948",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC949",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC980",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC981",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC982",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC983",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC984",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC985",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC986",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC987",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "ROC988",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "mockupUrl",
+        "msrp",
+        "supplementFactsText"
+      ],
+      "sourceNotes": []
+    },
+    {
+      "sku": "UNDEFINED",
+      "missingFields": [
+        "category",
+        "coaUrl",
+        "estimatedProfit",
+        "labelTemplateUrl",
+        "membershipTierCosts",
+        "mockupUrl",
+        "msrp",
+        "productName",
+        "supplementFactsText",
+        "wholesaleCost"
+      ],
+      "sourceNotes": []
+    }
+  ],
+  "sourceErrors": []
+}

@@ -50,6 +50,30 @@ Last updated: 2026-05-31 (UTC)
 - Shopify Hotfix Sprint 009.9: In progress (`hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`, deterministic all-SKU sourceFacts field mapping + Product Editor/Generate Intelligence binding + settings tier auth save reliability).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
 
+## Sprint Checkpoint: Rocktomic Supplier Data Package Phase 1 (Offline All-SKU Audit)
+
+- Branch: `rocktomic-offline-all-sku-audit-phase1`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused tests complete; MR/deploy verification pending.
+- Scope implemented locally:
+  - Added canonical source registry at `data/ecomviper/suppliers/rocktomic/sources.json`.
+  - Added offline-only build script: `scripts/ecomviper/build_rocktomic_supplier_data.ts`.
+  - Added deterministic helper module: `lib/ecomviper/suppliers/rocktomic-offline-audit.ts`.
+  - Added focused helper tests: `tests/ecomviper_rocktomic_offline_audit_helpers.test.ts`.
+  - Added npm command: `npm run ecomviper:build-rocktomic-supplier-data`.
+  - Generated package outputs under `data/ecomviper/suppliers/rocktomic/latest/`:
+    - `sourceFacts.json`
+    - `pricing.json`
+    - `inventory.json`
+    - `assets.json`
+    - `audit.csv`
+    - `validation-report.json`
+- Phase boundary:
+  - Offline extraction/audit only.
+  - No Product Editor/Admin UI/Generate Intelligence changes.
+  - No database import/background worker/sync-button work.
+  - No runtime Rocktomic source fetching from app routes.
+
 ## Sprint Checkpoint: EcomViper Product Editor PDP Gallery Redesign (Local Branch)
 
 - Branch: `ecomviper-product-editor-pdp-gallery-redesign`

@@ -1,0 +1,49 @@
+{
+  "supplier": "rocktomic",
+  "version": 1,
+  "generatedBy": "manual-canonical-registry",
+  "sources": [
+    {
+      "id": "catalog_pdf",
+      "name": "Supplement & Apparel Catalog",
+      "url": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf?t=1780083599627",
+      "type": "pdf",
+      "notes": "Primary catalog source with SKU-level product facts and COA hyperlinks where present."
+    },
+    {
+      "id": "label_mockup_templates",
+      "name": "Label & 3D Mockup Templates",
+      "url": "https://rocktomicplatform.blob.core.windows.net/client-resources/templates.html?t=1780083599627",
+      "type": "html",
+      "notes": "Template index for label and mockup assets."
+    },
+    {
+      "id": "order_refund_policy",
+      "name": "Order Refund Policy Template",
+      "url": "https://rocktomicplatform.blob.core.windows.net/client-resources/Order-Refund-Policy-Template.docx?t=1780083599627",
+      "type": "docx",
+      "notes": "Policy template source; SKU-level mapping is not expected."
+    },
+    {
+      "id": "msrp_profit_margins_report",
+      "name": "Full MSRP and Estimated Profit Margins Report",
+      "url": "https://docs.google.com/spreadsheets/d/15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU/edit?usp=sharing",
+      "type": "google_sheet",
+      "notes": "Pricing source expected to contain wholesale, MSRP, and estimated margin/profit context by SKU."
+    },
+    {
+      "id": "plds_catalog",
+      "name": "PLDS Catalog",
+      "url": "https://docs.google.com/spreadsheets/d/15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU/edit?usp=sharing",
+      "type": "google_sheet",
+      "notes": "Catalog/pricing sheet sharing the same source document with a SKU-oriented table."
+    },
+    {
+      "id": "inventory_report",
+      "name": "Inventory Report",
+      "url": "https://docs.google.com/spreadsheets/d/1oOjqXsaCAjSOkA1lXrasNtUVtrsxvyxcFcolD8n6YXY/edit?usp=sharing",
+      "type": "google_sheet",
+      "notes": "Inventory source expected to expose SKU-level stock state and/or quantity."
+    }
+  ]
+}
