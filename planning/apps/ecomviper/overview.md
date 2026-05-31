@@ -88,6 +88,16 @@ These planning roots are active in the current repository structure.
 - Merchant Product Editor UI excludes internal developer diagnostics (for example Workspace Metadata/source debug keys).
 - Gallery add-image workflow supports computer upload, URL add, and future Image Studio hook.
 
+## Rocktomic Offline Data Package (Phase 1)
+
+- Added offline supplier package generator for all-SKU audit output:
+  - script: `scripts/ecomviper/build_rocktomic_supplier_data.ts`
+  - command: `npm run ecomviper:build-rocktomic-supplier-data`
+- Package target:
+  - `data/ecomviper/suppliers/rocktomic/sources.json`
+  - `data/ecomviper/suppliers/rocktomic/latest/*`
+- Phase 1 is offline-only and does not change user-facing routes, Product Editor, Generate Intelligence, or admin runtime behavior.
+
 ## Planning Navigation
 
 For family-level direction, start with:

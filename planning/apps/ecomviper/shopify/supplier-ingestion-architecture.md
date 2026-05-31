@@ -140,3 +140,31 @@ Admin render paths are read-only and may query normalized tables/status rows onl
 - long-running parsing during request render
 
 If normalized rows are missing, admin should show missing/partial diagnostics instead of running extraction live.
+
+## Rocktomic Offline Package Phase 1 (All-SKU Audit)
+
+Phase 1 introduces an offline-only supplier package builder and does not alter runtime app behavior.
+
+Offline package root:
+
+- `data/ecomviper/suppliers/rocktomic/`
+  - `sources.json`
+  - `latest/sourceFacts.json`
+  - `latest/pricing.json`
+  - `latest/inventory.json`
+  - `latest/assets.json`
+  - `latest/audit.csv`
+  - `latest/validation-report.json`
+
+Builder entrypoint:
+
+- `scripts/ecomviper/build_rocktomic_supplier_data.ts`
+- manual run command: `npm run ecomviper:build-rocktomic-supplier-data`
+
+Phase 1 rules:
+
+1. Source fetching/parsing is CLI-only and must not run from app routes/components.
+2. Package output is review-oriented and includes explicit missing/defect fields per SKU.
+3. Missing source values must not be silently collapsed into final `Unknown` source facts.
+4. `validation-report.json` is informational in Phase 1 (coverage + defects), not a blocking production gate.
+5. No Product Editor, Generate Intelligence, admin UI, background worker, sync-button, or DB-import behavior changes are introduced in this phase.
