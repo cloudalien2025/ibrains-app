@@ -116,3 +116,22 @@ Post-deploy verification:
 12. Check browser console for crashes/errors and app/nginx logs for 504s or timeout growth.
 13. Verify Settings tier save succeeds while signed in (no false `Sign-in required` response on valid session).
 14. Verify Product Editor low-stock SKU renders `Action Required: Mark Out of Stock`.
+
+## Admin Surface Verification (Admin Foundation V1)
+
+Signed-out checks:
+
+1. `/admin` redirects/protects through sign-in flow.
+2. `/brains` and `/ecomviper` auth behavior remains unchanged.
+
+Signed-in allowlisted admin checks:
+
+1. `/admin` loads.
+2. `/admin/ecomviper` loads.
+3. `/admin/ecomviper/suppliers/rocktomic` loads.
+4. `/admin/ecomviper/suppliers/rocktomic/audit` loads.
+5. `/admin/ecomviper/suppliers/rocktomic/builds` loads.
+
+Safety contract:
+
+- Admin pages must not run source sync, OCR, or source extraction in page render path.

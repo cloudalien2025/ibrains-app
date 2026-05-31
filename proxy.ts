@@ -17,6 +17,7 @@ const isProtectedRoute = createRouteMatcher([
   "/add-brain(.*)",
   "/settings(.*)",
   "/billing(.*)",
+  "/admin(.*)",
   "/ecomviper(.*)",
   "/optibay(.*)",
   "/optiwal(.*)",

@@ -45,6 +45,7 @@ Last updated: 2026-05-31 (UTC)
 - Shopify Hotfix Sprint 010.1: Completed and merged (`hotfix-010-1-ecomviper-saturation-swr`, Rocktomic stale-while-revalidate cache + duplicate-source fetch dedupe + disconnected-workspace ingestion skip, production deployed).
 - Shopify Stabilization Sprint 011: In progress (`stabilization-ecomviper-performance-architecture-audit`, end-to-end performance/architecture/production-safety audit and hardening).
 - Shopify Stabilization Sprint 009.6: In progress (`stabilization-009-6-supplier-data-pipeline-normalized-sku-intelligence`, normalized supplier sync pipeline + SKU intelligence persistence hardening).
+- Admin Foundation Sprint: In progress (`admin-foundation-ecomviper-supplier-intelligence`, internal `/admin` route foundation + EcomViper supplier intelligence console).
 - Shopify Hotfix Sprint 009.8 Data Binding: Merged and production deployed (`hotfix-009-8-global-supplier-data-scope-product-editor-binding`, global supplier normalized data boundary + merchant membership/Product Editor binding correction); mandatory signed-in desktop/mobile verification is still blocked pending an authenticated browser session.
 - Shopify Hotfix Sprint 009.9: In progress (`hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`, deterministic all-SKU sourceFacts field mapping + Product Editor/Generate Intelligence binding + settings tier auth save reliability).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
@@ -110,6 +111,18 @@ Last updated: 2026-05-31 (UTC)
   - mandatory signed-in desktop/mobile browser verification for SKU-level UI flows is still manual-session dependent and was not completed in this CLI run.
 - Recommended next sprint:
   - perform signed-in desktop/mobile verification closure pass for Hotfix 009.9, then resume `Shopify Stabilization Sprint 011`.
+
+## Admin Foundation Checkpoint: EcomViper Supplier Intelligence Console (Local Branch)
+
+- Branch: `admin-foundation-ecomviper-supplier-intelligence`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused admin/auth tests in progress; MR/deploy verification pending.
+- Scope implemented locally:
+  - protected `/admin` route family with server-side Clerk + env allowlist authorization guard,
+  - internal admin shell and route hierarchy for EcomViper supplier operations,
+  - Rocktomic supplier summary, all-SKU audit, and build-history read-only pages,
+  - admin data readers constrained to global normalized tables + sync status/run records,
+  - no runtime supplier extraction/sync execution in admin page renders.
 
 ## Hotfix Verification Update: Shopify Hotfix 009.8 Global Supplier Data Scope + Product Editor Binding
 

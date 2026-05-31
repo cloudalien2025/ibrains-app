@@ -94,3 +94,12 @@ Hotfix 009.9 terminology updates:
 
 - This standard does not define brand color palettes for every brain.
 - This standard does not replace route-level auth or security guardrails.
+
+## Internal Admin Surface (Sprint Admin Foundation)
+
+- `/admin` is an internal operations shell and is separate from customer-facing `/brains` and `/brain` routes.
+- Route convention:
+  - customer workflow: `/brain`
+  - internal operations: `/admin/brain`
+- Admin surfaces may expose supplier/system diagnostics that must remain hidden from merchant-facing routes.
+- Admin V1 is read-only diagnostics-first and should not trigger heavy extraction/build actions during route render.

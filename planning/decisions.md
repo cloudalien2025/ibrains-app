@@ -269,3 +269,13 @@ Last updated: 2026-05-28 (UTC)
   - `/optibay`, `/optiwal`, and `/optizon` remain standalone top-level brain routes with their own console shells and `/brains` dashboard back-link.
 - Rationale: Sprint 021 standardized back links but left residual parent-child launcher UX in EcomViper, which contradicted the standalone-brain route model and confused workspace ownership.
 - Rationale: Enforces a consistent standalone brain model across authenticated routes and removes residual parent-child launcher language from legacy commerce UI shells.
+
+## D-024 Split Internal Operations to /admin/[brain] Route Family
+
+- Status: Accepted
+- Decision:
+  - Merchant/customer workflows remain on standalone `/brain` routes.
+  - Internal platform operations move to `/admin/[brain]`.
+  - Admin route access is enforced by Clerk sign-in plus server-side `ADMIN_EMAIL_ALLOWLIST` authorization.
+  - Admin supplier pages are read-only diagnostics in V1 and must not run extraction/sync work in route render.
+- Rationale: Prevents merchant UI pollution with internal diagnostics, keeps platform operations secure, and avoids expensive supplier extraction during web requests.
