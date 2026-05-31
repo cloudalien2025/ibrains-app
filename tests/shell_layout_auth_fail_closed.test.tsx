@@ -25,6 +25,10 @@ vi.mock("@/components/auth/configured-clerk-provider", () => ({
     createElement("div", { "data-testid": "configured-clerk-provider" }, children),
 }));
 
+vi.mock("@/components/ibrains/ibrains-global-header", () => ({
+  default: () => createElement("header", { "data-testid": "ibrains-global-header" }, "header"),
+}));
+
 vi.mock("@/lib/auth/clerkSessionToken", () => ({
   resolveVerifiedClerkSessionUserId: mocks.resolveVerifiedClerkSessionUserId,
 }));

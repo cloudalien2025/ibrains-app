@@ -83,10 +83,9 @@ export default async function EcomViperSettingsPage() {
   }
 
   return (
-    <main className="ibrains-shell min-h-screen p-4" data-testid="ecomviper-settings-page">
-      <div className="mx-auto max-w-6xl space-y-4">
+    <div className="space-y-4" data-testid="ecomviper-settings-page">
         <header className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">EcomViper Settings / Diagnostics</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">EcomViper / Settings</p>
           <h1 className="mt-1 text-xl font-semibold text-[#0F172A]">Shopify + Supplier Configuration</h1>
           <p className="mt-1 text-sm text-[#475569]">
             `/ecomviper/shopify` now redirects to this settings surface so Shopify no longer runs as a separate child workspace.
@@ -163,7 +162,6 @@ export default async function EcomViperSettingsPage() {
             </table>
           </div>
         </section>
-      </div>
-    </main>
+    </div>
   );
 }

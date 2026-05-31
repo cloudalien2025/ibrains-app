@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -8,6 +8,21 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/admin/require-admin", () => ({
   requireAdmin: mocks.requireAdmin,
+}));
+
+vi.mock("@/components/auth/configured-clerk-provider", () => ({
+  default: ({ children }: { children: ReactNode }) =>
+    createElement("div", { "data-testid": "clerk-provider" }, children),
+}));
+
+vi.mock("@/components/ibrains/ibrains-workspace-shell", () => ({
+  default: ({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) =>
+    createElement(
+      "div",
+      { className: "ibrains-shell" },
+      createElement("aside", null, sidebar),
+      createElement("section", null, children)
+    ),
 }));
 
 describe("admin layout auth contract", () => {

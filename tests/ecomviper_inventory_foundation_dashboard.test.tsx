@@ -14,14 +14,6 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
-vi.mock("@/components/brains/back-to-brains-link", async () => {
-  const React = await import("react");
-  return {
-    default: ({ className }: { className?: string }) =>
-      React.createElement("a", { href: "/brains", className }, "← iBrains Dashboard"),
-  };
-});
-
 function baseRows(): EcomViperProductInventoryRow[] {
   return [
     {
@@ -87,7 +79,7 @@ describe("ecomviper inventory foundation dashboard", () => {
     delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
   });
 
-  it("renders iBrains Dashboard header + sidebar IA without duplicate horizontal module navigation", async () => {
+  it("renders a compact table-first workspace without duplicate module navigation", async () => {
     await act(async () => {
       root.render(
         <EcomViperDashboardClient
@@ -109,16 +101,9 @@ describe("ecomviper inventory foundation dashboard", () => {
     const text = container.textContent || "";
     expect(text).toContain("EcomViper");
     expect(text).toContain("Products");
-    expect(text).toContain("Image Studio");
-    expect(text).toContain("Dropshipping");
-    expect(text).toContain("Agentic Visibility");
-    expect(text).toContain("Settings");
-    expect(text).not.toContain("Overview");
-    expect(text).toContain("iBrains Dashboard");
+    expect(text).toContain("Products Workspace");
+    expect(text).toContain("Shopify operations console");
     expect(text).not.toContain("BrainOS");
-    const backLink = container.querySelector('a[href="/brains"]');
-    expect(backLink).not.toBeNull();
-    expect(backLink?.textContent).toContain("iBrains Dashboard");
   });
 
   it("filters products by supplier match and supports row navigation", async () => {

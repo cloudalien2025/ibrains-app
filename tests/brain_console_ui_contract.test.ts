@@ -15,7 +15,6 @@ describe("brain console ui contract", () => {
 
   it("wires Back to Brains into every canonical standalone brain console", () => {
     const filesUsingSharedBackLink = [
-      "app/ecomviper/ecomviper-dashboard-client.tsx",
       "app/optibay/layout.tsx",
       "app/optiwal/layout.tsx",
       "app/optizon/page.tsx",
@@ -34,6 +33,19 @@ describe("brain console ui contract", () => {
     expect(reelifySource).toContain('import StudioDomaraClient from "@/app/casaflix/studio-domara-client"');
   });
 
+  it("uses the shared iBrains workspace shell on EcomViper routes", () => {
+    const ecomLayoutSource = readSource("app/ecomviper/layout.tsx");
+    const sidebarSource = readSource("components/ibrains/ecomviper-sidebar.tsx");
+
+    expect(ecomLayoutSource).toContain("IbrainsWorkspaceShell");
+    expect(ecomLayoutSource).toContain("ecomviper-shell-sidebar");
+    expect(ecomLayoutSource).toContain("ecomviper-shell-workspace");
+    expect(sidebarSource).toContain('data-testid="ecomviper-brain-sidebar"');
+    expect(sidebarSource).toContain("Products");
+    expect(sidebarSource).toContain("Dropshipping");
+    expect(sidebarSource).toContain("Settings");
+  });
+
   it("removes incorrect OptiBay/OptiWal/OptiZon parent-child back-link language", () => {
     const optiFiles = [
       "app/optibay/layout.tsx",
@@ -48,19 +60,7 @@ describe("brain console ui contract", () => {
     }
   });
 
-  it("renders EcomViper and iPetzo in standard sidebar/workspace shell structure", () => {
-    const ecomSource = readSource("app/ecomviper/ecomviper-dashboard-client.tsx");
-    expect(ecomSource).toContain('data-testid="ecomviper-brain-sidebar"');
-    expect(ecomSource).toContain('data-testid="ecomviper-brain-workspace"');
-    expect(ecomSource).toContain("BackToBrainsLink");
-    expect(ecomSource).not.toContain("Open OptiWal");
-    expect(ecomSource).not.toContain("Open OptiBay");
-    expect(ecomSource).not.toContain("Open OptiZon");
-    expect(ecomSource).not.toContain('href="/optiwal"');
-    expect(ecomSource).not.toContain('href="/optibay"');
-    expect(ecomSource).not.toContain('href="/optizon"');
-    expect(ecomSource).toContain("BackToBrainsLink");
-
+  it("renders iPetzo in standard sidebar/workspace shell structure", () => {
     const ipetzoSource = readSource("app/ipetzo/page.tsx");
     expect(ipetzoSource).toContain('data-testid="ipetzo-brain-sidebar"');
     expect(ipetzoSource).toContain('data-testid="ipetzo-brain-workspace"');
@@ -69,7 +69,7 @@ describe("brain console ui contract", () => {
 
   it("keeps standalone brain route source free of /apps links", () => {
     const brainRouteSources = [
-      "app/ecomviper/ecomviper-dashboard-client.tsx",
+      "app/ecomviper/layout.tsx",
       "app/optibay/layout.tsx",
       "app/optiwal/layout.tsx",
       "app/optizon/page.tsx",

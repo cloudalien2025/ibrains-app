@@ -10,6 +10,20 @@ EcomViper is the iBrains parent app family for multi-channel commerce operations
 - OptiBay (`/optibay`), OptiWal (`/optiwal`), and OptiZon (`/optizon`) are standalone commerce brains, not nested `/ecomviper` modules.
 - EcomViper console UX may reference other commerce brains only through `/brains` (My Brains), not direct launcher cards/links.
 
+## Shared Shell Contract
+
+- `/ecomviper` and all `/ecomviper/*` pages use the global iBrains header + EcomViper sidebar + workspace layout.
+- Global header rules:
+  - zero blank space above header
+  - iBrains logo links to `/brains`
+  - includes Settings, Notifications, signed-in user identity, and Clerk log out
+- EcomViper sidebar baseline:
+  - Products
+  - Image Studio (placeholder)
+  - Dropshipping
+  - Agentic Visibility (placeholder)
+  - Settings
+
 ## Channel Planning Structure
 
 Channel-specific planning belongs under:

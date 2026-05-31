@@ -279,3 +279,16 @@ Last updated: 2026-05-28 (UTC)
   - Admin route access is enforced by Clerk sign-in plus server-side `ADMIN_EMAIL_ALLOWLIST` authorization.
   - Admin supplier pages are read-only diagnostics in V1 and must not run extraction/sync work in route render.
 - Rationale: Prevents merchant UI pollution with internal diagnostics, keeps platform operations secure, and avoids expensive supplier extraction during web requests.
+
+## D-025 Standardize Global iBrains Shell Across /brains, /brain, and /admin/brain
+
+- Status: Accepted
+- Decision:
+  - All iBrains dashboard/admin surfaces use one shared global header component.
+  - Header invariants:
+    - zero blank space above header
+    - iBrains logo/wordmark always links to `/brains`
+    - Settings + Notifications + signed-in identity + real Clerk log out controls are always present
+  - `/brain` and `/admin/brain` routes use one shared shell structure: global header + left sidebar + right workspace.
+  - `/brains` launcher uses the same global header and removes duplicated hero identity sections.
+- Rationale: Route families had diverged into disconnected standalone layouts, causing inconsistent navigation, duplicated identity blocks, and uneven operator UX.

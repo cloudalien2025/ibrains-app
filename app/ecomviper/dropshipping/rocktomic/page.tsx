@@ -19,7 +19,7 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
   const auth = await requireSignedInUser().catch(() => ({ userId: null, unauthorizedResponse: null }));
   if (!auth.userId) {
     return (
-      <main className="ibrains-shell min-h-screen p-6" data-testid="ecomviper-rocktomic-page">
+      <div data-testid="ecomviper-rocktomic-page">
         <article className="mx-auto max-w-3xl rounded-2xl border border-[#D9E4F0] bg-white/95 p-6">
           <h1 className="text-2xl font-semibold text-[#0F172A]">Supplier diagnostics unavailable</h1>
           <p className="mt-2 text-sm text-[#475569]">Sign in before loading supplier feed diagnostics.</p>
@@ -27,7 +27,7 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
             Back to iBrains Dashboard
           </Link>
         </article>
-      </main>
+      </div>
     );
   }
   const snapshot = await getRocktomicSourceIngestionSnapshot({
@@ -41,10 +41,9 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
   const lookup = sku ? lookupRocktomicSupplierProductBySku(sku, snapshot.products) : null;
 
   return (
-    <main className="ibrains-shell min-h-screen p-6" data-testid="ecomviper-rocktomic-page">
-      <div className="mx-auto max-w-6xl space-y-4">
+    <div className="space-y-4" data-testid="ecomviper-rocktomic-page">
         <header className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">Dropshipping / Supplier Feed</p>
+          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">EcomViper / Dropshipping / Supplier Feed</p>
           <h1 className="mt-2 text-2xl font-semibold text-[#0F172A]">Supplier Feed Diagnostics</h1>
           <p className="mt-2 text-sm text-[#475569]">
             Source-backed catalog, pricing, inventory, and asset ingestion diagnostics. Merchants do not upload supplier files in normal workflow.
@@ -153,7 +152,6 @@ export default async function RocktomicDropshippingPage({ searchParams }: Rockto
             </table>
           </div>
         </section>
-      </div>
-    </main>
+    </div>
   );
 }
