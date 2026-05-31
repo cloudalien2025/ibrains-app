@@ -192,3 +192,14 @@ Phase 4 non-goals preserved:
 - no Generate Intelligence binding switch
 - no admin render DB requirement by default
 - no runtime route extraction/fetch/sync side effects
+
+## Phase 4.2 Clarification
+
+Phase 4.2 is offline builder reliability hardening only.
+
+- no change to `DATABASE_URL` (core iBrains boundary)
+- no change to `ECOMMERCE_DATABASE_URL` import/read boundary
+- no new runtime DB dependency from route render paths
+- no Product Editor/Generate Intelligence binding in this phase
+
+Phase 4.2 improves supplier package freshness reliability so Phase 5 can bind read-only supplier facts with predictable package rebuild SLAs.

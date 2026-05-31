@@ -290,3 +290,23 @@ Safety:
 Detailed Phase 4 contract:
 
 - `planning/apps/ecomviper/shopify/rocktomic-shared-ecommerce-db-import.md`
+
+## Phase 4.2 Offline Builder Reliability Layer
+
+Before Phase 5 binding work, the offline Rocktomic package builder is hardened for deterministic operator execution:
+
+1. stage-level timing with machine-readable report (`latest/build-timing-report.json`)
+2. configurable stage/total/network timeout budgets
+3. bounded remote concurrency (`ROCKTOMIC_BUILD_ASSET_CONCURRENCY`)
+4. incremental freshness reuse for unchanged AI/template evidence
+5. atomic promote from `builds/<buildId>` to `latest/`
+6. failure diagnostics preserved without corrupting current `latest` package
+
+Control flags:
+
+- `ROCKTOMIC_BUILD_AI_EXTRACTION_MODE=incremental|force|skip`
+- `ROCKTOMIC_BUILD_FORCE_REFRESH=1`
+- `ROCKTOMIC_BUILD_SKIP_AI_EXTRACTION=1`
+- `ROCKTOMIC_BUILD_DRY_RUN=1`
+
+Runtime boundaries remain unchanged: no route-render extraction/fetch, no sync workers, no Product Editor/Generate Intelligence runtime switch in Phase 4.2.

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-31T18:38:32.479Z",
+  "generatedAt": "2026-05-31T20:59:18.140Z",
   "supplierId": "rocktomic",
   "packageVersion": 1,
   "validationPolicyVersion": "rocktomic_phase3_6_v1",
@@ -27,10 +27,10 @@
     "missingSkuCount": 5
   },
   "aiLabelTextExtractionAttempted": 147,
-  "aiLabelTextExtractionSucceeded": 145,
+  "aiLabelTextExtractionSucceeded": 147,
   "aiLabelTextNeedsReview": 77,
   "aiLabelTextNonPdfCompatible": 0,
-  "aiLabelTextNoExtractableText": 2,
+  "aiLabelTextNoExtractableText": 0,
   "aiLabelTextExtractionErrors": 0,
   "usableForOptiPixelSkuCount": 61,
   "readyForChannelImageGenerationSkuCount": 61,
@@ -18315,7 +18315,7 @@
     }
   ],
   "sourceErrors": [],
-  "packageGeneratedAt": "2026-05-31T18:38:32.479Z",
+  "packageGeneratedAt": "2026-05-31T20:59:18.140Z",
   "supplierSlug": "rocktomic",
   "recordsWritten": {
     "sourceFacts": 164,

@@ -1,6 +1,6 @@
 {
   "supplierSlug": "rocktomic",
-  "generatedAt": "2026-05-31T18:38:32.479Z",
+  "generatedAt": "2026-05-31T20:59:18.140Z",
   "policyVersion": "rocktomic_phase3_6_v1",
   "records": [
     {
@@ -14,7 +14,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 17:58:56 GMT",
       "httpContentLength": 3558325,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.878Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.394Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -48,7 +48,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:20.951Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC011",
@@ -61,7 +66,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:00:53 GMT",
       "httpContentLength": 3552652,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.879Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.395Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -89,7 +94,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:21.391Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC012",
@@ -102,7 +112,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:01:36 GMT",
       "httpContentLength": 3548264,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.879Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.396Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -142,7 +152,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:21.365Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC013",
@@ -155,7 +170,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:02:18 GMT",
       "httpContentLength": 3547814,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.879Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.398Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -192,7 +207,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:20.445Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC014",
@@ -205,7 +225,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:02:54 GMT",
       "httpContentLength": 3537282,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.893Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.410Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -243,7 +263,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:22.582Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC015",
@@ -256,7 +281,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:03:46 GMT",
       "httpContentLength": 3566117,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.894Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.413Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -293,7 +318,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:23.006Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC016",
@@ -306,7 +336,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:24:51 GMT",
       "httpContentLength": 4599029,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.895Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.451Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -335,7 +365,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:23.584Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC017",
@@ -348,7 +383,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:25:28 GMT",
       "httpContentLength": 4599159,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.896Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.453Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -377,7 +412,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:22.098Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC018",
@@ -390,7 +430,7 @@
       "httpLastModified": "Thu, 12 Sep 2024 14:14:05 GMT",
       "httpContentLength": 3548989,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.904Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.457Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -430,7 +470,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:24.706Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC102",
@@ -443,7 +488,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:23:23 GMT",
       "httpContentLength": 2427105,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.905Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.460Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -474,7 +519,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:23.856Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC105",
@@ -487,7 +537,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:24:06 GMT",
       "httpContentLength": 2366342,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.945Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.496Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -525,7 +575,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:24.325Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC107M",
@@ -538,7 +593,7 @@
       "httpLastModified": "Thu, 01 Aug 2024 17:08:20 GMT",
       "httpContentLength": 2069671,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.947Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.499Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -573,7 +628,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:24.086Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC110M",
@@ -586,7 +646,7 @@
       "httpLastModified": "Thu, 01 Aug 2024 17:11:33 GMT",
       "httpContentLength": 4411577,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.956Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.501Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -625,7 +685,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:27.248Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC1120",
@@ -638,7 +703,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:27:08 GMT",
       "httpContentLength": 4456486,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.964Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.504Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -679,7 +744,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:26.561Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC1125",
@@ -692,7 +762,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:27:48 GMT",
       "httpContentLength": 4455913,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.987Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.543Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -732,7 +802,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:25.297Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC1205",
@@ -745,7 +820,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:28:37 GMT",
       "httpContentLength": 4456461,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:10.992Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.549Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -786,7 +861,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:25.870Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC121",
@@ -799,7 +879,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:30:06 GMT",
       "httpContentLength": 2023651,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.000Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.551Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -836,7 +916,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:26.811Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC1215",
@@ -849,7 +934,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:29:23 GMT",
       "httpContentLength": 4455840,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.011Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.554Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -891,7 +976,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:28.827Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC123",
@@ -904,7 +994,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:30:54 GMT",
       "httpContentLength": 4146925,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.031Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.588Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -942,7 +1032,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:28.024Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC126",
@@ -955,7 +1050,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:32:45 GMT",
       "httpContentLength": 2379645,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.034Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.591Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -993,7 +1088,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:27.578Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC210N",
@@ -1006,7 +1106,7 @@
       "httpLastModified": "Thu, 01 Aug 2024 17:13:12 GMT",
       "httpContentLength": 2152474,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.046Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.596Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1041,7 +1141,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:28.323Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC220",
@@ -1054,7 +1159,7 @@
       "httpLastModified": "Mon, 24 Nov 2025 20:12:01 GMT",
       "httpContentLength": 2158287,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.060Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.598Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1089,7 +1194,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:29.553Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC2201N",
@@ -1102,7 +1212,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:30:12 GMT",
       "httpContentLength": 4460015,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.078Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.632Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1140,7 +1250,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:29.349Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC223",
@@ -1153,7 +1268,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:46:10 GMT",
       "httpContentLength": 4651449,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.082Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.638Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1182,7 +1297,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:30.648Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC2232",
@@ -1195,7 +1315,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:47:11 GMT",
       "httpContentLength": 5077944,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.108Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.642Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1236,7 +1356,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:30.104Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC224",
@@ -1249,7 +1374,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:48:09 GMT",
       "httpContentLength": 2160988,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.111Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.645Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1284,7 +1409,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:31.483Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC2241N",
@@ -1297,7 +1427,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:30:56 GMT",
       "httpContentLength": 4458974,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.129Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.681Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1338,7 +1468,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:32.008Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC2251",
@@ -1351,7 +1486,7 @@
       "httpLastModified": "Thu, 27 Mar 2025 16:20:21 GMT",
       "httpContentLength": 4252804,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.134Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.683Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1388,7 +1523,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:31.179Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC2272",
@@ -1401,7 +1541,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:50:03 GMT",
       "httpContentLength": 4560338,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.158Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.690Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1442,7 +1582,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:32.451Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC2292",
@@ -1455,7 +1600,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:32:22 GMT",
       "httpContentLength": 4464878,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.162Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.695Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1499,7 +1644,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:33.028Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC260V",
@@ -1512,7 +1662,7 @@
       "httpLastModified": "Mon, 24 Nov 2025 20:02:33 GMT",
       "httpContentLength": 1371673,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.180Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.724Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1540,7 +1690,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:33.618Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC263V",
@@ -1553,7 +1708,7 @@
       "httpLastModified": "Mon, 24 Nov 2025 20:04:42 GMT",
       "httpContentLength": 1364591,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.181Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.726Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1581,7 +1736,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:33.172Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC281",
@@ -1594,7 +1754,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:50:57 GMT",
       "httpContentLength": 2231810,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.214Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.732Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1627,7 +1787,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:33.917Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC2811",
@@ -1640,7 +1805,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:33:13 GMT",
       "httpContentLength": 3612188,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.219Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.744Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1678,7 +1843,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:34.291Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC282",
@@ -1691,7 +1861,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:51:45 GMT",
       "httpContentLength": 2229448,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.226Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.770Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1725,7 +1895,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:33.483Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC2821",
@@ -1738,7 +1913,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:33:54 GMT",
       "httpContentLength": 3610581,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.231Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.773Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1776,7 +1951,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:35.631Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC2841",
@@ -1789,7 +1969,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:34:35 GMT",
       "httpContentLength": 3609434,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.266Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.779Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1824,7 +2004,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:34.785Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC2851",
@@ -1837,7 +2022,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:35:17 GMT",
       "httpContentLength": 3608656,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.268Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.792Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1872,7 +2057,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:36.285Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC2861",
@@ -1885,7 +2075,7 @@
       "httpLastModified": "Mon, 12 Aug 2024 18:35:57 GMT",
       "httpContentLength": 3617354,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.270Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.817Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1921,7 +2111,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:35.233Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC301",
@@ -1934,7 +2129,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:52:28 GMT",
       "httpContentLength": 2381223,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.278Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.819Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -1967,7 +2162,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:35.894Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC302",
@@ -1980,7 +2180,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:53:16 GMT",
       "httpContentLength": 2392978,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.314Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.831Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2017,7 +2217,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:37.166Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC303",
@@ -2030,7 +2235,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:54:10 GMT",
       "httpContentLength": 2393724,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.316Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.847Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2065,7 +2270,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:36.958Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC304",
@@ -2078,7 +2288,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:55:32 GMT",
       "httpContentLength": 2357856,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.321Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.863Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2112,7 +2322,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:36.585Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC401",
@@ -2125,7 +2340,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:56:15 GMT",
       "httpContentLength": 2215468,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.332Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.866Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2168,7 +2383,12 @@
       "parseWarnings": [
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:37.397Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC402",
@@ -2181,7 +2401,7 @@
       "httpLastModified": "Thu, 19 Mar 2026 17:08:43 GMT",
       "httpContentLength": 4409350,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.369Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.878Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2221,7 +2441,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:37.857Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC450",
@@ -2234,7 +2459,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:57:52 GMT",
       "httpContentLength": 4379176,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.371Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.890Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2272,7 +2497,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:39.302Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC501",
@@ -2285,7 +2515,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:58:37 GMT",
       "httpContentLength": 2120280,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.376Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.906Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2332,7 +2562,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:38.532Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC502",
@@ -2345,10 +2580,10 @@
       "httpLastModified": "Fri, 02 Aug 2024 19:59:18 GMT",
       "httpContentLength": 2100361,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.388Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.908Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
-      "extractionStatus": "no_extractable_text",
+      "extractionStatus": "reused_cached",
       "extractedAt": "2026-05-31T18:38:15.915Z",
       "extractionMethod": "ai_pdf_text",
       "tempDownloadedBytes": 2100361,
@@ -2358,7 +2593,12 @@
       "confidence": null,
       "needsReview": true,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:38:15.915Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "http_not_modified_304"
     },
     {
       "sku": "ROC503",
@@ -2371,7 +2611,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:00:10 GMT",
       "httpContentLength": 2947480,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.414Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.922Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2405,7 +2645,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:38.200Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC504",
@@ -2418,7 +2663,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:01:08 GMT",
       "httpContentLength": 2383531,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.416Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.937Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2467,7 +2712,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:39.578Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC506",
@@ -2480,7 +2730,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:02:32 GMT",
       "httpContentLength": 2049101,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.422Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.958Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2521,7 +2771,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:38.774Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC507",
@@ -2534,7 +2789,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:03:21 GMT",
       "httpContentLength": 2510247,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.456Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.973Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2563,7 +2818,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:40.499Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC507W",
@@ -2576,7 +2836,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:04:01 GMT",
       "httpContentLength": 2554106,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.463Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.984Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2605,7 +2865,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:39.869Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC508",
@@ -2618,7 +2883,7 @@
       "httpLastModified": "Thu, 18 Jul 2024 12:35:58 GMT",
       "httpContentLength": 3092483,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.467Z",
+      "lastCheckedAt": "2026-05-31T20:59:16.999Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2660,7 +2925,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:40.200Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC509",
@@ -2673,7 +2943,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:34:25 GMT",
       "httpContentLength": 3074306,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.500Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.003Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2713,7 +2983,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:41.240Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC601",
@@ -2726,7 +3001,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:36:02 GMT",
       "httpContentLength": 2118234,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.505Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.013Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2769,7 +3044,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:40.710Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC603",
@@ -2782,7 +3062,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:37:01 GMT",
       "httpContentLength": 5199638,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.510Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.018Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2810,7 +3090,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:41.718Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC604",
@@ -2823,7 +3108,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:37:59 GMT",
       "httpContentLength": 5200041,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.544Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.033Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2851,7 +3136,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:40.863Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC605",
@@ -2864,7 +3154,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:40:31 GMT",
       "httpContentLength": 5087574,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.547Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.051Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2905,7 +3195,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:42.269Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC606",
@@ -2918,7 +3213,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:41:30 GMT",
       "httpContentLength": 4238726,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:11.553Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.059Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -2959,7 +3254,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:41.643Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC607",
@@ -2972,7 +3272,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:42:56 GMT",
       "httpContentLength": 2153568,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:15.915Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.063Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3004,7 +3304,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:43.136Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC608",
@@ -3017,7 +3322,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:45:07 GMT",
       "httpContentLength": 5432237,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:15.919Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.078Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3058,7 +3363,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:42.827Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC609",
@@ -3071,7 +3381,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:46:06 GMT",
       "httpContentLength": 3456143,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:15.920Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.096Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3102,7 +3412,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:43.962Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC610",
@@ -3115,7 +3430,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:47:01 GMT",
       "httpContentLength": 6638654,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:15.922Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.097Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3148,7 +3463,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:44.737Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC611",
@@ -3161,7 +3481,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:47:43 GMT",
       "httpContentLength": 2364744,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:15.930Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.107Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3190,7 +3510,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:43.383Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC612",
@@ -3203,7 +3528,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:49:36 GMT",
       "httpContentLength": 2089462,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:15.965Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.124Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3244,7 +3569,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:43.601Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC613",
@@ -3257,7 +3587,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:50:44 GMT",
       "httpContentLength": 2089285,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:15.968Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.144Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3296,7 +3626,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:45.953Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC617",
@@ -3309,7 +3644,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:51:59 GMT",
       "httpContentLength": 4120051,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:15.971Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.146Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3353,7 +3688,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:45.661Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC618",
@@ -3366,7 +3706,7 @@
       "httpLastModified": "Fri, 04 Oct 2024 17:42:29 GMT",
       "httpContentLength": 4122424,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:15.976Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.151Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3404,7 +3744,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:45.212Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC619",
@@ -3417,10 +3762,10 @@
       "httpLastModified": "Fri, 18 Jul 2025 17:29:52 GMT",
       "httpContentLength": 4167784,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.006Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.171Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
-      "extractionStatus": "no_extractable_text",
+      "extractionStatus": "reused_cached",
       "extractedAt": "2026-05-31T18:38:31.736Z",
       "extractionMethod": "ai_pdf_text",
       "tempDownloadedBytes": 4167784,
@@ -3430,7 +3775,12 @@
       "confidence": null,
       "needsReview": true,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:38:31.736Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "http_not_modified_304"
     },
     {
       "sku": "ROC714",
@@ -3443,7 +3793,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:52:46 GMT",
       "httpContentLength": 2615882,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.016Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.187Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3472,7 +3822,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:46.190Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC717",
@@ -3485,7 +3840,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:53:29 GMT",
       "httpContentLength": 2100011,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.018Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.189Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3518,7 +3873,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:46.952Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC720",
@@ -3531,7 +3891,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:54:18 GMT",
       "httpContentLength": 4540190,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.023Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.193Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3562,7 +3922,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:47.469Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC721",
@@ -3575,7 +3940,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:55:27 GMT",
       "httpContentLength": 4288759,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.060Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.236Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3617,7 +3982,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:46.753Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC723",
@@ -3630,7 +4000,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:57:12 GMT",
       "httpContentLength": 4543698,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.062Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.239Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3659,7 +4029,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:48.020Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC725",
@@ -3672,7 +4047,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:58:05 GMT",
       "httpContentLength": 4300788,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.066Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.242Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3716,7 +4091,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:48.911Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC727",
@@ -3729,7 +4109,7 @@
       "httpLastModified": "Fri, 02 Aug 2024 20:59:41 GMT",
       "httpContentLength": 4279856,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.103Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.262Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3767,7 +4147,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:48.478Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC728",
@@ -3780,7 +4165,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 13:23:35 GMT",
       "httpContentLength": 4297022,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.105Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.279Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3823,7 +4208,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:50.466Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC729",
@@ -3836,7 +4226,7 @@
       "httpLastModified": "Tue, 10 Jun 2025 17:10:43 GMT",
       "httpContentLength": 4316069,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.108Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.284Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3876,7 +4266,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:50.054Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC730",
@@ -3889,7 +4284,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:35:18 GMT",
       "httpContentLength": 4299181,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.148Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.286Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3932,7 +4327,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:49.471Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC731",
@@ -3945,7 +4345,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:36:37 GMT",
       "httpContentLength": 4315525,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.151Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.290Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -3973,7 +4373,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:50.515Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC732",
@@ -3986,7 +4391,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:37:25 GMT",
       "httpContentLength": 4572281,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.153Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.307Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4014,7 +4419,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:50.560Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC733",
@@ -4027,7 +4437,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:38:12 GMT",
       "httpContentLength": 4545827,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.191Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.330Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4056,7 +4466,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:51.611Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC734",
@@ -4069,7 +4484,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:39:01 GMT",
       "httpContentLength": 4293564,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.197Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.332Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4108,7 +4523,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:51.047Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC735",
@@ -4121,7 +4541,7 @@
       "httpLastModified": "Mon, 02 Jun 2025 18:13:17 GMT",
       "httpContentLength": 4347485,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:16.200Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.335Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4162,7 +4582,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:52.142Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC736",
@@ -4175,7 +4600,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:40:48 GMT",
       "httpContentLength": 4302534,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.736Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.352Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4217,7 +4642,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:53.236Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC738",
@@ -4230,7 +4660,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:42:31 GMT",
       "httpContentLength": 4310001,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.738Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.375Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4258,7 +4688,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:53.360Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC739",
@@ -4271,7 +4706,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:43:18 GMT",
       "httpContentLength": 4287522,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.740Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.377Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4316,7 +4751,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:52.695Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC740",
@@ -4329,7 +4769,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:44:06 GMT",
       "httpContentLength": 4298594,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.742Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.379Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4369,7 +4809,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:53.813Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC741",
@@ -4382,7 +4827,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:45:00 GMT",
       "httpContentLength": 4305290,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.753Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.399Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4424,7 +4869,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:54.906Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC743",
@@ -4437,7 +4887,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:46:32 GMT",
       "httpContentLength": 4280423,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.796Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.419Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4478,7 +4928,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:54.450Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC744",
@@ -4491,7 +4946,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:47:29 GMT",
       "httpContentLength": 4274964,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.800Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.424Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4534,7 +4989,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:55.918Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC745",
@@ -4547,7 +5007,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:48:38 GMT",
       "httpContentLength": 4247695,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.804Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.426Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4593,7 +5053,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:55.382Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC801",
@@ -4606,7 +5071,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:49:28 GMT",
       "httpContentLength": 2398397,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.809Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.447Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4650,7 +5115,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:56.624Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC802",
@@ -4663,7 +5133,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:50:10 GMT",
       "httpContentLength": 2651536,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.841Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.464Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4692,7 +5162,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:56.231Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC803",
@@ -4705,7 +5180,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:50:59 GMT",
       "httpContentLength": 5183995,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.843Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.468Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4733,7 +5208,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:56.277Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC805",
@@ -4746,7 +5226,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:51:41 GMT",
       "httpContentLength": 2366593,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.844Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.472Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4780,7 +5260,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:57.197Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC808",
@@ -4793,7 +5278,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:52:36 GMT",
       "httpContentLength": 2159573,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.848Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.495Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4831,7 +5316,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:57.510Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC812",
@@ -4844,7 +5334,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:54:18 GMT",
       "httpContentLength": 2130994,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.885Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.512Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4898,7 +5388,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:56.942Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC814",
@@ -4911,7 +5406,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 18:55:09 GMT",
       "httpContentLength": 2194135,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.887Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.515Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4943,7 +5438,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:57.785Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC816",
@@ -4956,7 +5456,7 @@
       "httpLastModified": "Thu, 19 Mar 2026 17:08:19 GMT",
       "httpContentLength": 4498288,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.889Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.517Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -4984,7 +5484,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:57.825Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC817",
@@ -4997,7 +5502,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 19:04:05 GMT",
       "httpContentLength": 6786267,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.891Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.544Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5025,7 +5530,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:58.723Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC818",
@@ -5038,7 +5548,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 19:04:53 GMT",
       "httpContentLength": 2069200,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.930Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.559Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5077,7 +5587,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:58.667Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC822",
@@ -5090,7 +5605,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 19:06:24 GMT",
       "httpContentLength": 2366545,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.931Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.564Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5125,7 +5640,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:58.141Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC823",
@@ -5138,7 +5658,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 19:51:31 GMT",
       "httpContentLength": 2087064,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.933Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.566Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5178,7 +5698,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:58.364Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC824",
@@ -5191,7 +5716,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 19:52:18 GMT",
       "httpContentLength": 4276393,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.935Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.591Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5223,7 +5748,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:00.265Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC826",
@@ -5236,7 +5766,7 @@
       "httpLastModified": "Thu, 19 Mar 2026 17:07:57 GMT",
       "httpContentLength": 4092199,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.974Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.602Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5272,7 +5802,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:59.128Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC830",
@@ -5285,7 +5820,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 19:54:00 GMT",
       "httpContentLength": 4459815,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.977Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.609Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5328,7 +5863,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:01.001Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC831",
@@ -5341,7 +5881,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 19:54:45 GMT",
       "httpContentLength": 4744929,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.979Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.611Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5377,7 +5917,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:27:59.783Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC835",
@@ -5390,7 +5935,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:07:13 GMT",
       "httpContentLength": 2715565,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:31.981Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.639Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5425,7 +5970,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:00.541Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC840",
@@ -5438,7 +5988,7 @@
       "httpLastModified": "Thu, 29 Jan 2026 18:20:42 GMT",
       "httpContentLength": 1030127,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.019Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.652Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5493,7 +6043,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:01.662Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC841",
@@ -5506,7 +6061,7 @@
       "httpLastModified": "Wed, 06 May 2026 20:00:18 GMT",
       "httpContentLength": 4297808,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.021Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.657Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5553,7 +6108,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:01.502Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC903M",
@@ -5566,7 +6126,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:08:03 GMT",
       "httpContentLength": 4121399,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.024Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.661Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5609,7 +6169,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:03.141Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC908",
@@ -5622,7 +6187,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:09:37 GMT",
       "httpContentLength": 4278697,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.029Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.690Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5650,7 +6215,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:01.706Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC910",
@@ -5663,7 +6233,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:11:09 GMT",
       "httpContentLength": 2001442,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.064Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.698Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5696,7 +6266,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:02.433Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC911",
@@ -5709,7 +6284,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:11:56 GMT",
       "httpContentLength": 1967328,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.066Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.701Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5737,7 +6312,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:03.154Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC914",
@@ -5750,7 +6330,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:13:55 GMT",
       "httpContentLength": 2324341,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.068Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.704Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5782,7 +6362,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:02.027Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC915",
@@ -5795,7 +6380,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:14:27 GMT",
       "httpContentLength": 6851970,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.070Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.734Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5823,7 +6408,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:03.215Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC917",
@@ -5836,7 +6426,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:15:01 GMT",
       "httpContentLength": 2404216,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.106Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.737Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5868,7 +6458,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:04.770Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC918",
@@ -5881,7 +6476,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:15:39 GMT",
       "httpContentLength": 2109574,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.108Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.740Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5913,7 +6508,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:03.448Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC919",
@@ -5926,7 +6526,7 @@
       "httpLastModified": "Tue, 10 Jun 2025 17:09:07 GMT",
       "httpContentLength": 4292464,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.109Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.748Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -5963,7 +6563,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:04.044Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC920",
@@ -5976,7 +6581,7 @@
       "httpLastModified": "Fri, 26 Dec 2025 13:53:39 GMT",
       "httpContentLength": 6351845,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.114Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.776Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6008,7 +6613,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:05.636Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC922",
@@ -6021,7 +6631,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:17:28 GMT",
       "httpContentLength": 4319915,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.154Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.780Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6053,7 +6663,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:04.506Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC923",
@@ -6066,7 +6681,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:18:04 GMT",
       "httpContentLength": 2051233,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.158Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.782Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6098,7 +6713,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:06.588Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC924",
@@ -6111,7 +6731,7 @@
       "httpLastModified": "Mon, 09 Mar 2026 17:05:16 GMT",
       "httpContentLength": 4319618,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.162Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.795Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6143,7 +6763,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:06.269Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC925",
@@ -6156,7 +6781,7 @@
       "httpLastModified": "Fri, 26 Dec 2025 13:54:30 GMT",
       "httpContentLength": 4411251,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.163Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.820Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6188,7 +6813,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:07.348Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC927",
@@ -6201,7 +6831,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:24:46 GMT",
       "httpContentLength": 2380071,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.200Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.822Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6233,7 +6863,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:08.075Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC928",
@@ -6246,7 +6881,7 @@
       "httpLastModified": "Mon, 09 Mar 2026 17:05:48 GMT",
       "httpContentLength": 4299973,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.207Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.823Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6278,7 +6913,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:08.639Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC929",
@@ -6291,7 +6931,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:38:03 GMT",
       "httpContentLength": 2947854,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.209Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.839Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6349,7 +6989,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:07.782Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC930",
@@ -6362,7 +7007,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:38:41 GMT",
       "httpContentLength": 3104447,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.211Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.861Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6394,7 +7039,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:09.245Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC934",
@@ -6407,7 +7057,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:39:18 GMT",
       "httpContentLength": 2040250,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.248Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.864Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6440,7 +7090,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:08.855Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC937",
@@ -6453,7 +7108,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:41:19 GMT",
       "httpContentLength": 4988050,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.254Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.867Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6481,7 +7136,12 @@
         "missing_servings_per_container",
         "missing_active_ingredients"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:09.336Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC939",
@@ -6494,7 +7154,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:44:28 GMT",
       "httpContentLength": 4460581,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.255Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.885Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6540,7 +7200,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:11.280Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC941",
@@ -6553,7 +7218,7 @@
       "httpLastModified": "Mon, 05 Aug 2024 20:45:42 GMT",
       "httpContentLength": 6117330,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.260Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.905Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6588,7 +7253,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:10.693Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC943",
@@ -6601,7 +7271,7 @@
       "httpLastModified": "Wed, 30 Apr 2025 18:45:29 GMT",
       "httpContentLength": 4288145,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.290Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.908Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6639,7 +7309,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:09.937Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC944",
@@ -6652,7 +7327,7 @@
       "httpLastModified": "Mon, 09 Feb 2026 18:00:15 GMT",
       "httpContentLength": 4336700,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.296Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.912Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6694,7 +7369,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:12.189Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC945",
@@ -6707,7 +7387,7 @@
       "httpLastModified": "Tue, 10 Jun 2025 17:08:50 GMT",
       "httpContentLength": 4293200,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.298Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.928Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6746,7 +7426,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:11.720Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC946",
@@ -6759,7 +7444,7 @@
       "httpLastModified": "Tue, 10 Jun 2025 17:08:32 GMT",
       "httpContentLength": 4316059,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.300Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.948Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6797,7 +7482,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:14.158Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC947",
@@ -6810,7 +7500,7 @@
       "httpLastModified": "Tue, 10 Jun 2025 17:08:13 GMT",
       "httpContentLength": 4291783,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.335Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.950Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6848,7 +7538,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:12.700Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC948",
@@ -6861,7 +7556,7 @@
       "httpLastModified": "Tue, 10 Jun 2025 17:07:56 GMT",
       "httpContentLength": 4298302,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.339Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.961Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6899,7 +7594,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:13.207Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC949",
@@ -6912,7 +7612,7 @@
       "httpLastModified": "Tue, 10 Jun 2025 17:07:34 GMT",
       "httpContentLength": 4286036,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.345Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.971Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6949,7 +7649,12 @@
       "confidence": "high",
       "needsReview": false,
       "parseWarnings": [],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:14.631Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC980",
@@ -6962,7 +7667,7 @@
       "httpLastModified": "Fri, 12 Sep 2025 17:04:55 GMT",
       "httpContentLength": 4567680,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.347Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.993Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -6997,7 +7702,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:13.639Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC981",
@@ -7010,7 +7720,7 @@
       "httpLastModified": "Fri, 12 Sep 2025 17:05:54 GMT",
       "httpContentLength": 4464254,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.378Z",
+      "lastCheckedAt": "2026-05-31T20:59:17.995Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -7042,7 +7752,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:15.692Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC982",
@@ -7055,7 +7770,7 @@
       "httpLastModified": "Fri, 12 Sep 2025 17:06:55 GMT",
       "httpContentLength": 4464977,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.390Z",
+      "lastCheckedAt": "2026-05-31T20:59:18.012Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -7089,7 +7804,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:15.131Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC983",
@@ -7102,7 +7822,7 @@
       "httpLastModified": "Fri, 12 Sep 2025 17:07:51 GMT",
       "httpContentLength": 5752992,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.393Z",
+      "lastCheckedAt": "2026-05-31T20:59:18.023Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -7136,7 +7856,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:16.426Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC986",
@@ -7149,7 +7874,7 @@
       "httpLastModified": "Fri, 12 Sep 2025 17:08:43 GMT",
       "httpContentLength": 4462395,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.407Z",
+      "lastCheckedAt": "2026-05-31T20:59:18.063Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -7183,7 +7908,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:17.052Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     },
     {
       "sku": "ROC988",
@@ -7196,7 +7926,7 @@
       "httpLastModified": "Fri, 12 Sep 2025 17:09:52 GMT",
       "httpContentLength": 4462112,
       "httpContentType": "application/postscript",
-      "lastCheckedAt": "2026-05-31T18:38:32.428Z",
+      "lastCheckedAt": "2026-05-31T20:59:18.068Z",
       "source": "templates_page",
       "compatibility": "pdf_compatible",
       "extractionStatus": "reused_cached",
@@ -7234,7 +7964,12 @@
         "missing_serving_size",
         "missing_servings_per_container"
       ],
-      "errorDetail": null
+      "errorDetail": null,
+      "reusedFromPreviousBuild": true,
+      "previousExtractedAt": "2026-05-31T18:28:17.718Z",
+      "changedDetected": false,
+      "changeReason": null,
+      "extractionSkippedReason": "unchanged_metadata"
     }
   ]
 }

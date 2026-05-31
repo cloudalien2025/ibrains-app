@@ -133,6 +133,61 @@ describe("rocktomic AI label text extraction", () => {
     expect(shouldDownload).toBe(false);
   });
 
+  it("requires refresh when etag changed", () => {
+    const previous = {
+      sku: "ROC011",
+      url: "https://rocktomicplatform.blob.core.windows.net/roc011/ROC011.ai",
+      fileName: "ROC011.ai",
+      format: "ai",
+      assetRole: "label_template",
+      templatePageLastUpdated: "Mon, 12 Aug 2024 18:00:53 GMT",
+      httpEtag: '"old"',
+      httpLastModified: "Mon, 12 Aug 2024 18:00:53 GMT",
+      httpContentLength: 10,
+      httpContentType: "application/postscript",
+      lastCheckedAt: "2026-05-31T00:00:00.000Z",
+      source: "templates_page",
+      compatibility: "pdf_compatible",
+      extractionStatus: "success",
+      extractedAt: "2026-05-31T00:00:01.000Z",
+      extractionMethod: "ai_pdf_text",
+      tempDownloadedBytes: 10,
+      rawText: "Supplement Facts",
+      normalizedLabelText: "Supplement Facts",
+      parsedFacts: {
+        servingSize: "1 Scoop",
+        servingsPerContainer: "30",
+        activeIngredients: ["A"],
+        amountPerServing: ["A 100mg"],
+        dailyValuePercentages: [],
+        otherIngredients: ["B"],
+        directions: null,
+        warnings: null,
+        storage: null,
+      },
+      confidence: "high",
+      needsReview: false,
+      parseWarnings: [],
+      errorDetail: null,
+    } satisfies RocktomicAiLabelTextEvidenceRecord;
+
+    const shouldDownload = shouldDownloadForExtraction(previous, {
+      url: previous.url,
+      fileName: previous.fileName,
+      format: "ai",
+      assetRole: "label_template",
+      templatePageLastUpdated: previous.templatePageLastUpdated,
+      httpEtag: '"new"',
+      httpLastModified: previous.httpLastModified,
+      httpContentLength: previous.httpContentLength,
+      httpContentType: previous.httpContentType,
+      lastCheckedAt: "2026-06-01T00:00:00.000Z",
+      source: "templates_page",
+    });
+
+    expect(shouldDownload).toBe(true);
+  });
+
   it("returns success evidence for AI extraction and does not expose query parameters in logs", async () => {
     const fetchImpl: typeof fetch = async (url, init) => {
       if (init?.method === "HEAD") {
@@ -157,6 +212,69 @@ describe("rocktomic AI label text extraction", () => {
     expect(result.extractionMethod).toBe("ai_pdf_text");
     expect(result.parsedFacts?.servingSize).toContain("One Scoop");
     expect(maskAssetUrlForLogs(result.url)).not.toContain("sig=");
+  });
+
+  it("reuses previous extraction when GET returns 304 not modified", async () => {
+    const previous = {
+      sku: "ROC011",
+      url: "https://rocktomicplatform.blob.core.windows.net/roc011/ROC011.ai",
+      fileName: "ROC011.ai",
+      format: "ai",
+      assetRole: "label_template",
+      templatePageLastUpdated: "Mon, 12 Aug 2024 18:00:53 GMT",
+      httpEtag: '"etag-value"',
+      httpLastModified: "Mon, 12 Aug 2024 18:00:53 GMT",
+      httpContentLength: 1024,
+      httpContentType: "application/pdf",
+      lastCheckedAt: "2026-05-31T00:00:00.000Z",
+      source: "templates_page",
+      compatibility: "pdf_compatible",
+      extractionStatus: "success",
+      extractedAt: "2026-05-31T00:00:01.000Z",
+      extractionMethod: "ai_pdf_text",
+      tempDownloadedBytes: 1024,
+      rawText: "Supplement Facts",
+      normalizedLabelText: "Supplement Facts",
+      parsedFacts: {
+        servingSize: "1 Scoop",
+        servingsPerContainer: "30",
+        activeIngredients: ["A"],
+        amountPerServing: ["A 100mg"],
+        dailyValuePercentages: [],
+        otherIngredients: ["B"],
+        directions: null,
+        warnings: null,
+        storage: null,
+      },
+      confidence: "high",
+      needsReview: false,
+      parseWarnings: [],
+      errorDetail: null,
+    } satisfies RocktomicAiLabelTextEvidenceRecord;
+
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      if (init?.method === "HEAD") {
+        return new Response("", {
+          status: 200,
+          headers: { etag: '"etag-value"', "content-type": "application/pdf", "content-length": "1024" },
+        });
+      }
+      return new Response(null, { status: 304 });
+    };
+
+    const result = await extractRocktomicAiLabelTextForSku({
+      sku: "ROC011",
+      assetUrl: previous.url,
+      fileName: previous.fileName,
+      templatePageLastUpdated: previous.templatePageLastUpdated,
+      previousEvidence: previous,
+      forceRefresh: true,
+      fetchImpl,
+    });
+
+    expect(result.extractionStatus).toBe("reused_cached");
+    expect(result.reusedFromPreviousBuild).toBe(true);
+    expect(result.extractionSkippedReason).toBe("http_not_modified_304");
   });
 
   it("normalizes template last updated and handles malformed values", () => {
