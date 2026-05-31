@@ -1,6 +1,6 @@
 # iBrains Dashboard Design Standard
 
-Last updated: 2026-05-30 (UTC)
+Last updated: 2026-05-31 (UTC)
 
 ## Scope
 
@@ -85,6 +85,10 @@ Hotfix 009.8 supplier terminology:
 - Settings primary diagnostics label is `Supplier Source Diagnostics`.
 - Dropshipping diagnostics primary heading is `Supplier Feed Diagnostics`.
 - Merchant-facing EcomViper surfaces should describe platform-managed feed data as supplier/source records without making the supplier brand the primary page label.
+
+Hotfix 009.9 terminology updates:
+- Product Editor COA surfaces should prioritize per-SKU link availability language (`View COA`, `COA Link: not found in catalog row`, `COA Link: extraction failed`) instead of repository-pending wording.
+- Commerce surfaces should use explicit default-tier labels when fallback pricing is applied (for example `Non Member Pricing (default)`), not `Not selected`.
 
 ## Non-Goals
 

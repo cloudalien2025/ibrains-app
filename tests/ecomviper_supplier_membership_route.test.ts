@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextResponse } from "next/server";
 
 const requireSignedInUserMock = vi.fn();
 const getTierMock = vi.fn();
@@ -52,5 +53,29 @@ describe("ecomviper supplier membership settings route", () => {
     expect(saveTierMock).toHaveBeenCalledWith({ userId: "user-2", supplierKey: "rocktomic", tier: "Starter" });
     expect(json.ok).toBe(true);
     expect(json.membershipTier).toBe("Starter");
+  });
+
+  it("rejects unsigned membership-tier save", async () => {
+    requireSignedInUserMock.mockResolvedValue({
+      userId: null,
+      unauthorizedResponse: NextResponse.json(
+        { error: { code: "UNAUTHORIZED", message: "Sign-in required" } },
+        { status: 401 }
+      ),
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/settings/supplier-membership/route");
+    const request = new Request("http://localhost/api/ecomviper/settings/supplier-membership", {
+      method: "POST",
+      body: JSON.stringify({ membershipTier: "Starter" }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const response = await POST(request as never);
+    const json = (await response.json()) as { error?: { message?: string } };
+
+    expect(response.status).toBe(401);
+    expect(saveTierMock).not.toHaveBeenCalled();
+    expect(json.error?.message).toBe("Sign-in required");
   });
 });

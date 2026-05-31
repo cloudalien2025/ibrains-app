@@ -1,6 +1,6 @@
 # Shopify Architecture (Sprint 009.4)
 
-Last updated: 2026-05-30 (UTC)
+Last updated: 2026-05-31 (UTC)
 
 ## Core Rules
 
@@ -78,3 +78,11 @@ Correct Product Editor flow:
 6. Render saved/generated PDP intelligence separately and mark stale if supplier sync is newer.
 
 Settings and supplier diagnostics read global normalized counts and global membership tiers after auth. The selected tier save path remains merchant-scoped.
+
+## Hotfix 009.9 Deterministic All-SKU Binding
+
+- Source mapping must remain generic for all synced SKUs; no SKU-specific hardcoding.
+- Product Editor and Generate Intelligence consume the same sourceFacts contract.
+- COA link critical path is per-SKU catalog hyperlink extraction; COA repository parsing is optional.
+- Inventory `low_stock` maps to merchant action state `Action Required: Mark Out of Stock`.
+- Pricing may use an explicitly labeled default tier when merchant tier is unset and normalized pricing exists.

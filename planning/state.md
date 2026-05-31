@@ -46,7 +46,35 @@ Last updated: 2026-05-31 (UTC)
 - Shopify Stabilization Sprint 011: In progress (`stabilization-ecomviper-performance-architecture-audit`, end-to-end performance/architecture/production-safety audit and hardening).
 - Shopify Stabilization Sprint 009.6: In progress (`stabilization-009-6-supplier-data-pipeline-normalized-sku-intelligence`, normalized supplier sync pipeline + SKU intelligence persistence hardening).
 - Shopify Hotfix Sprint 009.8 Data Binding: Merged and production deployed (`hotfix-009-8-global-supplier-data-scope-product-editor-binding`, global supplier normalized data boundary + merchant membership/Product Editor binding correction); mandatory signed-in desktop/mobile verification is still blocked pending an authenticated browser session.
+- Shopify Hotfix Sprint 009.9: In progress (`hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`, deterministic all-SKU sourceFacts field mapping + Product Editor/Generate Intelligence binding + settings tier auth save reliability).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
+
+## Hotfix Implementation Checkpoint: Shopify Hotfix 009.9 (Local Branch)
+
+- Branch: `hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused tests complete; MR/deploy verification pending.
+- Implemented locally:
+  - deterministic Product Editor sourceFacts precedence for all SKUs (including source-owned key features/certifications/dietary/manufacturing/testing field families),
+  - explicit OCR/source-sync/missing state messaging in sourceFacts display text,
+  - low-stock mapping update to `Action Required: Mark Out of Stock`,
+  - pricing effective-tier fallback labeling (`(default)`) without `Not selected` wording while computing default-tier costs,
+  - COA card/assets wording aligned to per-SKU catalog hyperlink contract with non-blocking `COA Document Parsing: pending`,
+  - Generate Intelligence diagnostics include `coa_link_status` and reuse sourceFacts-mapped compliance fields,
+  - proxy path update for `/api/ecomviper/settings/*` and `/api/ecomviper/pdp-intelligence` to run through Clerk context for authenticated session resolution.
+- Focused local validation (passed):
+  - `tests/ecomviper_supplier_membership_route.test.ts`
+  - `tests/ecomviper_product_editor_source_mapping.test.tsx`
+  - `tests/ecomviper_pdp_intelligence_route.test.ts`
+  - `tests/ecomviper_pdp_intelligence_generation.test.ts`
+  - `tests/ecomviper_global_supplier_scope_binding.test.ts`
+  - `tests/ecomviper_rocktomic_source_ingestion.test.ts`
+  - `tests/proxy_apps_auth_protection.test.ts`
+  - `tests/ecomviper_settings_membership_ui_contract.test.ts`
+  - `tests/ecomviper_settings_route_safety.test.tsx`
+  - `tests/ecomviper_route_render_sync_safety.test.ts`
+  - `tests/ecomviper_product_editor_sync_required_message.test.tsx`
+  - `tests/ecomviper_inventory_status_fallback.test.ts`
 
 ## Hotfix Verification Update: Shopify Hotfix 009.8 Global Supplier Data Scope + Product Editor Binding
 

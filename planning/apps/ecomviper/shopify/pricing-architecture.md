@@ -1,6 +1,6 @@
 # Pricing Architecture (Hotfix 009.4)
 
-Last updated: 2026-05-30 (UTC)
+Last updated: 2026-05-31 (UTC)
 
 ## Source Inputs
 
@@ -53,4 +53,6 @@ Rules:
 - If no merchant tier is selected, Product Editor shows `Select membership tier in Settings to calculate cost and profit.` and does not calculate wholesale/profit/margin.
 - If a tier is selected but the SKU/tier cost is missing, Product Editor shows `Cost not found for selected tier.`
 - If no pricing record exists for the SKU, Product Editor shows `Pricing record not found for SKU.`
-- Any fallback/default tier must be explicitly labeled; silent default-cost calculation is not allowed.
+- If no merchant tier is selected but pricing record includes a default tier (prefer `Non Member Pricing`), Product Editor may compute from that default only when explicitly labeled:
+  - `Pricing Tier: Non Member Pricing (default)` (or detected default tier label)
+- Silent default-cost calculation is not allowed.

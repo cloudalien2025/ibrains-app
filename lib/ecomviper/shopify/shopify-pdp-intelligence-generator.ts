@@ -83,7 +83,7 @@ function trimFactsToBudget(facts: string[]): string[] {
 
 function toAvailabilityStatus(status: string): string {
   if (status === "in_stock") return "Available";
-  if (status === "low_stock") return "Limited Availability";
+  if (status === "low_stock") return "Action Required: Mark Out of Stock";
   if (status === "out_of_stock") return "Currently Unavailable";
   if (status === "source_unavailable") return "Inventory Status Unavailable";
   return "Availability Unknown";
@@ -93,6 +93,9 @@ function toGroundedIngredients(
   supplier: RocktomicSupplierProduct | null,
   sourceFacts?: ShopifyProductEditorSourceFacts | null
 ): string[] {
+  if (sourceFacts?.supplementFacts?.status === "ocr_required") {
+    return [];
+  }
   if (sourceFacts?.activeIngredients?.values?.length) {
     return sourceFacts.activeIngredients.values;
   }
@@ -138,13 +141,23 @@ function buildGroundedRecord(
     : null);
 
   const groundedIngredients = toGroundedIngredients(supplier, sourceFacts);
-  const certifications = supplier?.certifications?.length ? supplier.certifications : [];
+  const certifications =
+    sourceFacts?.certifications?.values?.length
+      ? sourceFacts.certifications.values
+      : supplier?.certifications?.length
+        ? supplier.certifications
+        : [];
   const dietaryAttributes = sourceFacts?.dietaryAllergenAttributes?.values?.length
     ? sourceFacts.dietaryAllergenAttributes.values
     : supplier?.dietaryAttributes?.length
       ? supplier.dietaryAttributes
       : [];
-  const manufacturingClaims = supplier?.manufacturingClaims?.length ? supplier.manufacturingClaims : [];
+  const manufacturingClaims =
+    sourceFacts?.manufacturingClaims?.values?.length
+      ? sourceFacts.manufacturingClaims.values
+      : supplier?.manufacturingClaims?.length
+        ? supplier.manufacturingClaims
+        : [];
   const warningsText = supplier?.warnings?.value ? [supplier.warnings.value] : [];
   const coaStatus = sourceFacts?.assets?.coaStatus || supplier?.coa?.status || "unknown";
   const coaLink = sourceFacts?.assets?.coaUrl || supplier?.coa?.url || "";
@@ -178,7 +191,13 @@ function buildGroundedRecord(
       "Daily product-detail-page education",
       "Operator-reviewed marketplace publishing",
     ]),
-    key_features: sanitizePublicList(supplier?.productFeatures?.length ? supplier.productFeatures : []),
+    key_features: sanitizePublicList(
+      sourceFacts?.keyProductFeatures?.values?.length
+        ? sourceFacts.keyProductFeatures.values
+        : supplier?.productFeatures?.length
+          ? supplier.productFeatures
+          : []
+    ),
     highlights: sanitizePublicList([
       ...(supplier?.ingredientHighlights?.length ? supplier.ingredientHighlights : []),
       ...manufacturingClaims,
@@ -212,14 +231,13 @@ function buildGroundedRecord(
       `pricing_record_status: ${wholesaleCost != null || msrp != null ? "synced" : "missing"}`,
       `inventory_record_status: ${sourceFacts?.inventoryRecordFound || supplier ? "synced" : "missing"}`,
       `asset_record_status: ${sourceFacts?.assetsRecordFound || supplier?.coa?.url ? "synced" : "missing"}`,
-      `selected_membership_tier: ${sourceFacts?.selectedMembershipTier || supplier?.pricing?.membershipTier || "none"}`,
+      `selected_membership_tier: ${sourceFacts?.effectiveMembershipTier || sourceFacts?.selectedMembershipTier || supplier?.pricing?.membershipTier || "none"}`,
       `normalized_sku: ${sourceFacts?.normalizedSku || options.supplierMatch.supplierSku || "missing"}`,
-      `source_facts_used: ${options.supplierMatch.supplierFactsSynced ? "true" : "false"}`,
       `supplement_facts_status: ${sourceFacts?.supplementFacts?.status || supplier?.supplementFacts?.status || "missing"}`,
       `generated_from_source_version: ${supplier?.sourceVersion || "shopify_limited"}`,
       `stale_intelligence_before_generation: ${sourceFacts?.staleIntelligence ? "true" : "false"}`,
-      `coa_status: ${supplier?.coa?.status || "missing"}`,
-      `coa_link_status: ${supplier?.coaLinkStatus || "not_present"}`,
+      `coa_status: ${sourceFacts?.assets?.coaStatus || supplier?.coa?.status || "missing"}`,
+      `coa_link_status: ${sourceFacts?.assets?.coaLinkStatus || supplier?.coaLinkStatus || "not_present"}`,
       `coa_link_error: ${supplier?.coaLinkError || "none"}`,
     ],
     trust_signals: sanitizePublicList([
@@ -302,9 +320,11 @@ function buildGroundedRecord(
         },
         {
           question: "Is ingredient information available?",
-          answer: supplier?.supplementFacts?.value
+          answer: sourceFacts?.supplementFacts?.status === "extracted"
             ? "Yes. Ingredient and supplement facts are mapped from source-backed data and should be reviewed before publishing."
-            : "Ingredient details are currently unavailable from configured source data.",
+            : sourceFacts?.supplementFacts?.status === "ocr_required"
+              ? "Supplement facts require OCR extraction from catalog label image before ingredient details can be published."
+              : "Ingredient details are currently unavailable from configured source data.",
           category: "ingredients",
           schema_eligible: true,
           compliance_status: "review_required",

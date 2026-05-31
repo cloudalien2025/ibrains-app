@@ -207,6 +207,7 @@ export async function POST(req: NextRequest) {
         selected_membership_tier: sourceFacts?.selectedMembershipTier || null,
         source_facts_used: supplierFactsSynced,
         supplement_facts_status: sourceFacts?.supplementFacts?.status || "missing",
+        coa_link_status: sourceFacts?.assets?.coaLinkStatus || "not_present",
         generated_from_source_version: supplierProduct?.sourceVersion || "shopify_limited",
         stale_intelligence_before_generation: sourceFacts?.staleIntelligence || false,
       },

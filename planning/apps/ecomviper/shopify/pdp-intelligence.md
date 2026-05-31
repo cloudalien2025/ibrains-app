@@ -1,6 +1,6 @@
 # PDP Intelligence (Sprint 009.4)
 
-Last updated: 2026-05-30 (UTC)
+Last updated: 2026-05-31 (UTC)
 
 ## Source-Grounded Contract
 
@@ -79,6 +79,7 @@ Diagnostics returned from generation include:
 - `selected_membership_tier`
 - `source_facts_used`
 - `supplement_facts_status`
+- `coa_link_status`
 - `generated_from_source_version`
 - `stale_intelligence_before_generation`
 
@@ -87,3 +88,8 @@ Saved generated intelligence is merchant-scoped and may be stale. If `last_gener
 `Source data has changed since this intelligence was generated. Regenerate to use latest source facts.`
 
 Old generated `Unknown` values must not be used as source facts. Generation remains Shopify-limited when global supplier facts are missing, and public/generated copy must not mention supplier names, supplier matching, internal source URLs, or internal platform terminology.
+
+Hotfix 009.9 behavior:
+
+- Generation should consume Product Editor `sourceFacts` field families (key features, dietary attributes, certifications, manufacturing claims) before supplier fallback fields.
+- When `supplement_facts_status=ocr_required`, generation must not invent ingredient details.

@@ -146,6 +146,25 @@ describe("proxy app/auth protection", () => {
     expect(state.clerkProxyCalls).toBe(0);
   });
 
+  it("passes authenticated /api/ecomviper/settings routes through Clerk context", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const response = await handler(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/settings/supplier-membership", {
+        method: "POST",
+        headers: {
+          cookie: `__session=${VALID_SESSION_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ membershipTier: "Scale Plan $497/mo" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(state.clerkProxyCalls).toBe(1);
+  });
+
   it("allows internal-token sync requests without requiring a session cookie", async () => {
     process.env.ECOMVIPER_SYNC_INTERNAL_TOKEN = "sync_internal_test_token";
     const mod = await import("@/proxy");

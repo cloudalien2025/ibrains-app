@@ -1,6 +1,6 @@
 # EcomViper Supplier Ingestion Architecture (Stabilization)
 
-Last updated: 2026-05-30 (UTC)
+Last updated: 2026-05-31 (UTC)
 
 ## Objective
 
@@ -73,6 +73,7 @@ Current expected modes:
 2. Inventory quantity is never fabricated.
 3. Membership pricing is source-derived only.
 4. COA and supplement facts remain source-backed only.
+5. SKU mapping rules must be generic and deterministic across all synced SKUs; no SKU-specific branching.
 
 ## Stabilization 009.6 Normalized Pipeline
 
@@ -119,3 +120,9 @@ Repository boundary:
 - product-facing cache-only reads prefer the persisted normalized snapshot before any process-local in-memory supplier snapshot, so Product Editor and Generate Intelligence do not serve stale supplier facts after a sync
 
 Authenticated merchants may view global supplier diagnostics after auth, but supplier records are not public. Source sync runs as a platform/global sync and persists under `__global__`; it no longer creates merchant-specific supplier rows for normal operation.
+
+Hotfix 009.9 COA + extraction policy:
+
+- Per-SKU COA URL extraction from catalog row hyperlink is the active required path.
+- COA repository feed is optional and not in the critical path for Product Editor/PDP binding.
+- Missing text-layer supplement facts on a matched SKU should resolve to `ocr_required` state, not generic `unknown`.

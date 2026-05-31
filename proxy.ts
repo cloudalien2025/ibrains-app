@@ -142,6 +142,14 @@ function isEcomviperApiRoute(req: NextRequest): boolean {
   return req.nextUrl.pathname.startsWith("/api/ecomviper");
 }
 
+function requiresClerkApiContext(req: NextRequest): boolean {
+  const pathname = req.nextUrl.pathname;
+  return (
+    pathname.startsWith("/api/ecomviper/settings/") ||
+    pathname === "/api/ecomviper/pdp-intelligence"
+  );
+}
+
 function isBrainsApiRoute(req: NextRequest): boolean {
   return req.nextUrl.pathname.startsWith("/api/brains");
 }
@@ -230,6 +238,13 @@ export default e2eMockGraph
       if (isEcomviperApiRoute(req)) {
         if (!hasLikelyJwtSessionCookie(req)) {
           return buildSignInRedirect(req);
+        }
+        if (requiresClerkApiContext(req)) {
+          try {
+            return await clerkProxy(req, event);
+          } catch {
+            return buildSignInRedirect(req);
+          }
         }
         return NextResponse.next();
       }
