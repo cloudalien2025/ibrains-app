@@ -2,6 +2,19 @@
 
 Last updated: 2026-05-31 (UTC)
 
+## Shell/UI Contract (Global iBrains Modernization)
+
+- `/ecomviper`, `/ecomviper/products/[productId-or-handle]`, `/ecomviper/dropshipping/rocktomic`, and `/ecomviper/settings` render inside one shared shell.
+- Shell structure:
+  - global iBrains header
+  - EcomViper sidebar
+  - workspace content area
+- Header invariants:
+  - no blank space above top header
+  - iBrains logo always links to `/brains`
+  - header account controls are always present (Settings, Notifications, user identity, log out)
+- Layout migration is presentation-only for this sprint and does not change supplier/source data execution behavior.
+
 ## Core Rules
 
 - Shopify remains source of truth for listing identity and publish state.

@@ -16,6 +16,13 @@ Admin V1 moves supplier operations to internal routes so merchant UX stays focus
 - `/admin/ecomviper/suppliers/rocktomic/audit`
 - `/admin/ecomviper/suppliers/rocktomic/builds`
 
+## Shared Admin Shell Contract
+
+- `/admin/*` uses global iBrains header + admin sidebar + workspace.
+- Header keeps the same account controls contract used by brain routes.
+- Admin auth guard remains mandatory (`ADMIN_EMAIL_ALLOWLIST` through server-side `requireAdmin`).
+- Admin routes remain internal-only and separate from merchant `/ecomviper` workflows.
+
 ## V1 Features
 
 - supplier dataset health summary

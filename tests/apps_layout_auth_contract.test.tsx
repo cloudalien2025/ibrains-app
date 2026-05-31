@@ -24,6 +24,11 @@ vi.mock("@/components/auth/configured-clerk-provider", () => ({
   },
 }));
 
+vi.mock("@/components/ibrains/ibrains-workspace-shell", () => ({
+  default: ({ children }: { children: ReactNode }) =>
+    createElement("div", { className: "ibrains-shell" }, children),
+}));
+
 describe("workspace layout auth contract", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -33,14 +38,14 @@ describe("workspace layout auth contract", () => {
     process.env.CLERK_PUBLISHABLE_KEY = "pk_test_apps_layout";
   });
 
-  it("renders children without server-side auth() dependency", async () => {
+  it("renders children in shared workspace shell without server-side auth() dependency", async () => {
     const { default: WorkspaceLayout } = await import("@/app/ecomviper/layout");
     const tree = WorkspaceLayout({ children: createElement("span", null, "launcher-ready") });
     const html = renderToString(tree);
 
     expect(html).toContain("ibrains-shell");
     expect(html).toContain("launcher-ready");
-    expect(mocks.providerProps.length).toBe(0);
+    expect(mocks.providerProps.length).toBe(1);
     expect(mocks.auth).not.toHaveBeenCalled();
     expect(mocks.redirect).not.toHaveBeenCalled();
   });

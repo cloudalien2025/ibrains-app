@@ -12,7 +12,7 @@ const navGroups = [
     label: "EcomViper",
     links: [
       { href: "/admin/ecomviper", label: "Overview" },
-      { href: "/admin/ecomviper/suppliers", label: "Suppliers" },
+      { href: "/admin/ecomviper/suppliers", label: "Supplier Intelligence" },
       { href: "/admin/ecomviper/suppliers/rocktomic", label: "Rocktomic" },
       { href: "/admin/ecomviper/suppliers/rocktomic/audit", label: "All-SKU Audit" },
       { href: "/admin/ecomviper/suppliers/rocktomic/builds", label: "Build History" },
@@ -56,8 +56,8 @@ export default function AdminSidebar() {
                     href={placeholder ? "/admin" : link.href}
                     className={`block rounded-lg px-3 py-2 text-sm transition ${
                       active
-                        ? "bg-slate-900 text-white"
-                        : "text-slate-700 hover:bg-slate-100"
+                        ? "bg-[#0B5FFF] text-white"
+                        : "text-slate-700 hover:bg-[#EEF5FF]"
                     }`}
                   >
                     {link.label}

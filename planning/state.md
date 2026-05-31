@@ -50,6 +50,19 @@ Last updated: 2026-05-31 (UTC)
 - Shopify Hotfix Sprint 009.9: In progress (`hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`, deterministic all-SKU sourceFacts field mapping + Product Editor/Generate Intelligence binding + settings tier auth save reliability).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
 
+## Global iBrains Shell + Dashboard Modernization Checkpoint (Local Branch)
+
+- Branch: `global-ibrains-shell-dashboard-modernization`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused shell/layout/auth tests in progress; MR/deploy verification pending.
+- Scope implemented locally:
+  - shared global iBrains header with Clerk account controls and `/brains` logo link
+  - shared brain workspace shell and EcomViper sidebar pattern for `/ecomviper/*`
+  - shared admin workspace shell for `/admin/*` while preserving `requireAdmin` access guard
+  - `/brains` launcher cleanup to remove duplicated hero identity sections
+  - route-family migration of `/ecomviper`, Product Editor, Settings, and Rocktomic diagnostics into common shell
+  - planning/docs updates for shell contract and future `/brain` + `/admin/brain` pattern
+
 ## Hotfix Implementation Checkpoint: Shopify Hotfix 009.9 (Local Branch)
 
 - Branch: `hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`

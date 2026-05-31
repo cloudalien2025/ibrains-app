@@ -87,7 +87,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
 
   if (!product) {
     return (
-      <main className="ibrains-shell min-h-screen p-6" data-testid="ecomviper-product-editor-page">
+      <section data-testid="ecomviper-product-editor-page">
         <article className="mx-auto max-w-4xl rounded-2xl border border-[#D9E4F0] bg-white/95 p-6">
           <h1 className="text-2xl font-semibold text-[#0F172A]">Product unavailable</h1>
           <p className="mt-2 text-sm text-[#475569]">{initialState.notFoundMessage || "Product not found for this workspace."}</p>
@@ -95,7 +95,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
             <Link href="/ecomviper" className="text-sm text-[#1D4ED8] hover:underline">Back to Products</Link>
           </div>
         </article>
-      </main>
+      </section>
     );
   }
 
@@ -293,14 +293,13 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
   ];
 
   return (
-    <main className="ibrains-shell min-h-screen text-[#0F172A]" data-testid="ecomviper-product-editor-page">
-      <div className="mx-auto max-w-[1500px] px-4 py-4 sm:px-6">
-        <header className="mb-3 flex items-center justify-between rounded-2xl border border-[#D9E4F0] bg-white/95 px-4 py-3">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">iBrains Dashboard</p>
+    <div className="space-y-3 text-[#0F172A]" data-testid="ecomviper-product-editor-page">
+      <header className="flex items-center justify-between rounded-2xl border border-[#D9E4F0] bg-white/95 px-4 py-3">
+          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">EcomViper / Products</p>
           <Link href="/ecomviper" className="text-sm text-[#1D4ED8] hover:underline">Back to Products</Link>
-        </header>
+      </header>
 
-        <section className="mb-3 rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
+      <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Products &gt; {product.title}</p>
@@ -354,24 +353,10 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
             </p>
           ) : null}
           {statusMessage ? <p className="mt-2 text-sm text-[#334155]">{statusMessage}</p> : null}
-        </section>
+      </section>
 
-        <div className="grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
-          <aside className="space-y-3">
-            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
-              <div className="mb-3 flex items-center gap-2 border-b border-[#E2E8F0] pb-3">
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#0F172A] text-xs font-semibold text-white">EV</span>
-                <p className="text-sm font-semibold">EcomViper</p>
-              </div>
-              <nav className="grid gap-1 text-sm">
-                <a href="#product-editor-main" className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2">Products</a>
-                <span className="rounded-lg border border-transparent px-3 py-2 text-[#334155]">Image Studio</span>
-                <Link href="/ecomviper/dropshipping/rocktomic" className="rounded-lg border border-transparent px-3 py-2 text-[#334155]">Dropshipping</Link>
-                <span className="rounded-lg border border-transparent px-3 py-2 text-[#334155]">Agentic Visibility</span>
-                <Link href="/ecomviper/settings" className="rounded-lg border border-transparent px-3 py-2 text-[#334155]">Settings</Link>
-              </nav>
-            </section>
-
+      <div className="grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
+        <aside className="space-y-3">
             <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
               <h2 className="text-sm font-semibold">Product Rail</h2>
               <div className="mt-3 grid grid-cols-3 gap-2">
@@ -391,9 +376,9 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 <p><span className="font-medium text-[#0F172A]">Last Updated:</span> {asIso(record.updated_at)}</p>
               </div>
             </section>
-          </aside>
+        </aside>
 
-          <section id="product-editor-main" className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
+        <section id="product-editor-main" className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
             <div className="mb-3 flex flex-wrap gap-2" data-testid="ecomviper-product-editor-tabs">
               {tabs.map((tab) => (
                 <button
@@ -671,9 +656,9 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 </label>
               </div>
             ) : null}
-          </section>
+        </section>
 
-          <aside className="space-y-3">
+        <aside className="space-y-3">
             <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4" data-testid="ecomviper-commerce-intelligence-card">
               <h2 className="text-sm font-semibold">Commerce Intelligence</h2>
               <div className="mt-2 space-y-1 text-xs text-[#475569]">
@@ -729,9 +714,8 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 ))}
               </div>
             </section>
-          </aside>
-        </div>
+        </aside>
       </div>
-    </main>
+    </div>
   );
 }

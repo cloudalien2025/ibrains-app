@@ -60,10 +60,17 @@ Admin pages report missing/incomplete states when data is unavailable.
 
 ## UI Pattern
 
-Admin uses a lightweight Next.js dashboard pattern with:
+Admin uses the shared iBrains shell pattern with:
+
+- global iBrains header at absolute top (zero blank space above header)
+- iBrains logo link in header routed to `/brains`
+- header account controls: Settings, Notifications, signed-in identity, Clerk log out
+- admin-specific left sidebar
+- right workspace panel
+
+Admin content uses a lightweight Next.js dashboard pattern with:
 
 - sidebar navigation
-- top header and account badge
 - metric cards
 - diagnostic tables
 - audit filters/search

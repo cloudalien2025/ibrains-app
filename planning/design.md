@@ -21,10 +21,31 @@ Terminology rule:
 ## Global Structure
 
 1. Use one compact global iBrains header at the top of each dashboard workspace.
-2. Use one left sidebar as the only module navigation surface.
-3. Do not duplicate module navigation in horizontal tabs/links when the sidebar already contains modules.
-4. Keep the first screen table/action oriented; avoid large marketing hero cards on operational dashboards.
-5. `/brains` is the canonical launcher route and must render app cards; it must not redirect to `/ecomviper`.
+2. Header must render flush to viewport top with zero blank space above it.
+3. iBrains logo/wordmark in the global header must always link to `/brains`.
+4. Global header account controls are required on all dashboard/admin shells:
+   - Settings
+   - Notifications
+   - signed-in user identity
+   - real Clerk log out action
+5. Brain and admin pages use a common shell contract:
+   - global iBrains header
+   - left sidebar
+   - right workspace
+6. `/brains` uses the same global header but no mandatory left sidebar.
+7. Use one left sidebar as the only module navigation surface.
+8. Do not duplicate module navigation in horizontal tabs/links when the sidebar already contains modules.
+9. Keep the first screen table/action oriented; avoid large marketing hero cards on operational dashboards.
+10. `/brains` is the canonical launcher route and must render app cards; it must not redirect to `/ecomviper`.
+
+## Visual Direction (Shell Modernization)
+
+- Header: dark/navy high-contrast top bar with compact vertical rhythm.
+- Sidebar: light panel with clear active-state navigation.
+- Workspace: lighter background, compact cards/tables, tighter spacing.
+- Palette: stronger blues/indigos/cyans with explicit status colors.
+- Typography: sharp hierarchy, no repeated oversized hero headings.
+- Responsive: desktop-first with no horizontal overflow regressions and safe mobile rendering.
 
 ## Brain Identity Rules
 
@@ -103,3 +124,9 @@ Hotfix 009.9 terminology updates:
   - internal operations: `/admin/brain`
 - Admin surfaces may expose supplier/system diagnostics that must remain hidden from merchant-facing routes.
 - Admin V1 is read-only diagnostics-first and should not trigger heavy extraction/build actions during route render.
+
+## Future Shell Route Pattern
+
+- Brain routes: `/optizon`, `/optibay`, `/directoryiq`, `/casaflix`, `/siteforge`
+- Admin routes: `/admin/optizon`, `/admin/optibay`, `/admin/directoryiq`, `/admin/casaflix`, `/admin/siteforge`
+- All follow the same global header + sidebar + workspace shell contract.
