@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-05-30 (UTC)
+Last updated: 2026-05-31 (UTC)
 
 ## Program Status
 
@@ -45,13 +45,22 @@ Last updated: 2026-05-30 (UTC)
 - Shopify Hotfix Sprint 010.1: Completed and merged (`hotfix-010-1-ecomviper-saturation-swr`, Rocktomic stale-while-revalidate cache + duplicate-source fetch dedupe + disconnected-workspace ingestion skip, production deployed).
 - Shopify Stabilization Sprint 011: In progress (`stabilization-ecomviper-performance-architecture-audit`, end-to-end performance/architecture/production-safety audit and hardening).
 - Shopify Stabilization Sprint 009.6: In progress (`stabilization-009-6-supplier-data-pipeline-normalized-sku-intelligence`, normalized supplier sync pipeline + SKU intelligence persistence hardening).
-- Shopify Hotfix Sprint 009.8 Data Binding: In progress (`hotfix-009-8-global-supplier-data-scope-product-editor-binding`, global supplier normalized data boundary + merchant membership/Product Editor binding correction).
-- Current recommended sprint: `Manual signed-in desktop/mobile verification for Emergency Auth Runtime Recovery`, then resume `Shopify Sprint 011 planning`.
+- Shopify Hotfix Sprint 009.8 Data Binding: Merged and production deployed (`hotfix-009-8-global-supplier-data-scope-product-editor-binding`, global supplier normalized data boundary + merchant membership/Product Editor binding correction); mandatory signed-in desktop/mobile verification is still blocked pending an authenticated browser session.
+- Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
 
-## Active Hotfix Note: Shopify Hotfix 009.8 Global Supplier Data Scope + Product Editor Binding
+## Hotfix Verification Update: Shopify Hotfix 009.8 Global Supplier Data Scope + Product Editor Binding
 
-- Sprint/lane: `hotfix-009-8-global-supplier-data-scope-product-editor-binding` - in progress.
+- Sprint/lane: `hotfix-009-8-global-supplier-data-scope-product-editor-binding` - merged and production deployed; not fully closed until signed-in browser verification is completed.
 - Start date: `2026-05-30 (UTC)`.
+- Code MR:
+  - MR `!263`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/263`
+  - branch commit: `8c1e89f09b243e003bedd118f65e5fef93eea3eb`
+  - merge commit: `7b1898e511e16e26272bc2bf26178200c4ec6464`
+  - MR pipeline `2564531093`: success
+  - main/deploy pipeline `2564533266`: success
+  - build job `14617340929`: success
+  - deploy job `14617340930`: success
+  - remote source branch deletion: requested by merge and confirmed absent from `origin`.
 - Production database scope finding:
   - normalized supplier tables have `user_id` + `supplier_id` scope columns and no `workspace_id`/`tenant_id` columns.
   - records exist globally under `__global__` for products/pricing/inventory/assets (`145` each).
@@ -68,6 +77,55 @@ Last updated: 2026-05-30 (UTC)
   - product-facing cache-only supplier reads prefer persisted normalized records over process-local snapshots to avoid stale sourceFacts after sync.
   - merchant membership tier remains user-scoped through merchant setting wrappers.
   - Product Editor composes `sourceFacts` separately from saved/generated intelligence and flags stale generation.
+- Fixes shipped:
+  - global supplier data repository added for normalized product, pricing, inventory, assets, membership-tier, and sync-summary reads.
+  - Settings reads global supplier diagnostics and global pricing tier options while saving the selected tier to merchant/user settings.
+  - Product Editor binds Shopify product data to global normalized source facts by normalized SKU and keeps source facts separate from saved/generated PDP intelligence.
+  - pricing messages distinguish no selected tier, missing SKU pricing, missing selected-tier cost, and explicit default-tier use.
+  - inventory and assets/COA cards read normalized global rows and render qualitative statuses or precise pending/OCR/source-sync states.
+  - Generate Intelligence uses the same Product Editor `sourceFacts` object and returns source-fact diagnostics, including stale-intelligence status and source version.
+  - source sync and product-facing reads do not run live supplier source fetching/parsing during route render.
+- Documentation updated:
+  - `planning/state.md`
+  - `planning/design.md`
+  - `planning/apps/ecomviper/shopify/architecture.md`
+  - `planning/apps/ecomviper/shopify/supplier-ingestion-architecture.md`
+  - `planning/apps/ecomviper/shopify/product-editor-architecture.md`
+  - `planning/apps/ecomviper/shopify/pdp-intelligence.md`
+  - `planning/apps/ecomviper/shopify/pricing-architecture.md`
+  - `planning/apps/ecomviper/shopify/inventory-architecture.md`
+  - `planning/apps/ecomviper/shopify/coa-architecture.md`
+  - `planning/apps/ecomviper/shopify/production-safety.md`
+- Validation:
+  - focused Hotfix 009.8 suite: passed (`21` files, `54` tests).
+  - `npm run build`: passed.
+  - `git diff --check`: passed.
+  - full `npm test`: `297` files passed / `9` files failed; failures are pre-existing baseline suites outside this hotfix scope (`casahud_ai_channel_engine`, `ecomviper_walmart_products_persistence`, `frontdoor_env_copy_contract`, `homepage_layout_contract`, `siteforge_command_center_shell`, `studio_casahud_media_planning_engine`, `studio_casahud_youtube_package_engine`, `walmart/compliance`).
+- Production deployment verification:
+  - `/api/meta/release` after deploy:
+    - `git_sha=7b1898e511e16e26272bc2bf26178200c4ec6464`
+    - `build_id=2564533266`
+    - `deployed_at=2026-05-30T23:59:12Z`
+    - `release_metadata_complete=true`
+  - route timings after deploy:
+    - `/api/health`: `200` in `0.090722s`
+    - `/api/meta/release`: `200` in `0.108576s`
+    - `/brains`: `307` in `0.081919s`
+    - `/ecomviper`: `307` in `0.070894s`
+    - `/ecomviper/settings`: `307` in `0.054746s`
+    - `/ecomviper/dropshipping/rocktomic`: `307` in `0.064915s`
+  - `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai`: passed.
+  - service health: `ibrains-app` active, `nginx` active.
+  - socket health: `CLOSE-WAIT` count `0`.
+  - nginx error tail: no current timeout errors reported by smoke output after deploy.
+  - systemd journal after deploy: deployment restart at `2026-05-31T00:00:22Z` deactivated and restarted service successfully.
+- Mandatory signed-in browser verification:
+  - desktop signed-in Settings/Product Editor/Generate Intelligence verification: blocked in this CLI because no authenticated browser session or app auth storage state is available.
+  - mobile signed-in verification: blocked for the same reason.
+  - manual verification still required for membership tier dropdown population/save, Product Editor normalized source diagnostics for `ROC948`, `ROC949`, and another SKU such as `ROC507` or `ROC817`, commerce values, qualitative inventory, Ingredients/Supplement Facts status messaging, Assets/COA status, Generate Intelligence source-facts diagnostics, and no console errors.
+- Local repository closure status at this state update:
+  - code MR source branch remote: deleted.
+  - local cleanup to clean `main`: pending this docs-only closure MR merge.
 
 ## Hotfix Closure Update: Shopify Hotfix 009.7 Catalog Sync + Internal Auth Cleanup (`2026-05-30 UTC`)
 
