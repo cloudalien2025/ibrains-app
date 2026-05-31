@@ -74,6 +74,38 @@ Last updated: 2026-05-31 (UTC)
   - No database import/background worker/sync-button work.
   - No runtime Rocktomic source fetching from app routes.
 
+## Sprint Closure Update: Rocktomic Supplier Data Package Phase 1 (Offline All-SKU Audit)
+
+- Sprint/branch: `rocktomic-offline-all-sku-audit-phase1`
+- MR:
+  - `!276`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/276`
+  - MR pipeline `2565345718`: success
+  - merge commit SHA: `06fd432d9b5c29e867b5e8a3bc999999d780131a`
+- Main/deploy pipeline:
+  - pipeline `2565349948`: success
+  - deploy job `14620708303`: success
+- Branch cleanup:
+  - remote source branch deletion: completed via merge (`--remove-source-branch`)
+  - local source branch deletion: completed (`git branch -d rocktomic-offline-all-sku-audit-phase1`)
+  - local repository reset: `main` fast-forwarded to merge commit
+- Production release verification:
+  - `/api/meta/release`:
+    - `git_sha=06fd432d9b5c29e867b5e8a3bc999999d780131a`
+    - `build_id=2565349948`
+    - `deployed_at=2026-05-31T14:07:15Z`
+  - smoke script: `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai` passed
+  - route timings:
+    - `/api/health`: `200` in `0.075809s`
+    - `/api/meta/release`: `200` in `0.067814s`
+    - `/brains`: `307` in `0.069414s`
+    - `/ecomviper`: `307` in `0.062983s`
+    - `/admin`: `307` in `0.052192s`
+  - socket health: close-wait sockets `0` (pass)
+- Honest verification status:
+  - signed-in desktop/mobile verification is not applicable for this offline package scope and was not required to validate runtime UI behavior.
+- Recommended next sprint:
+  - Phase 2 Rocktomic validation gates + ingestion enforcement, still keeping extraction off render paths.
+
 ## Sprint Checkpoint: EcomViper Product Editor PDP Gallery Redesign (Local Branch)
 
 - Branch: `ecomviper-product-editor-pdp-gallery-redesign`
