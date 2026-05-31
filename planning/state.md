@@ -61,8 +61,39 @@ Last updated: 2026-05-31 (UTC)
   - Product Summary card added beside gallery with SKU/vendor/type/status/COA/commerce/timestamp context.
   - Old Product Rail removed from primary Product Editor layout.
   - Tabs/actions preserved (`Preview PDP`, `Save Changes`, `Generate Intelligence`, all existing tabs).
-  - Merchant-facing summary surfaces avoid internal extraction/debug key language.
-  - Render path remains display-only (no supplier sync/OCR/PDF/OpenAI run triggered by render).
+- Merchant-facing summary surfaces avoid internal extraction/debug key language.
+- Render path remains display-only (no supplier sync/OCR/PDF/OpenAI run triggered by render).
+
+## Sprint Closure Update: EcomViper Product Editor PDP Gallery Redesign
+
+- Sprint/branch: `ecomviper-product-editor-pdp-gallery-redesign`
+- MR:
+  - `!271`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/271`
+  - MR pipeline `2565155760`: success
+  - merge commit SHA: `865831ae25e13e3abf3feae30831c3373ef29242`
+- Main/deploy pipeline:
+  - pipeline `2565157760`: success
+  - deploy job `14619976605`: success
+- Branch cleanup:
+  - remote source branch deletion: confirmed (no head ref on `origin`)
+  - local source branch deletion: completed
+  - local repository reset: `main` fast-forwarded and clean (`git status` clean)
+- Production release verification:
+  - `/api/meta/release`:
+    - `git_sha=865831ae25e13e3abf3feae30831c3373ef29242`
+    - `build_id=2565157760`
+    - `deployed_at=2026-05-31T11:58:13Z`
+  - smoke script: `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai` passed
+  - signed-out route checks:
+    - `/brains` -> `307` to sign-in
+    - `/ecomviper` -> `307` to sign-in
+    - `/ecomviper/settings` -> `307` to sign-in
+    - `/ecomviper/dropshipping/rocktomic` -> `307` to sign-in
+    - `/admin` -> `307` to sign-in
+- Honest verification status:
+  - signed-in desktop/mobile UX verification for Product Editor gallery interactions is still manual-session dependent and was not executed in this CLI run.
+- Recommended next sprint:
+  - complete signed-in desktop + mobile verification checklist for merged Product Editor gallery redesign and capture closure evidence.
 
 ## Global iBrains Shell + Dashboard Modernization Checkpoint (Local Branch)
 
