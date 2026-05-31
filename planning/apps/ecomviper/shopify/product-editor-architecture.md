@@ -1,14 +1,22 @@
-# Product Editor Architecture (Sprint 009.4)
+# Product Editor Architecture (Sprint 010)
 
 Last updated: 2026-05-31 (UTC)
 
 ## Layout
 
-- iBrains Dashboard compact header
-- status-chip row (Shopify, supplier match, inventory, COA)
-- left rail: product identity and gallery
-- center: tabbed workspace (`Overview`, `Ingredients`, `Trust & Compliance`, `Commerce`, `Agentic Visibility`, `Assets`, `SEO & Schema`)
-- right rail: commerce intelligence, shipping, COA cards
+- Shared shell contract:
+  - global iBrains header (flush top)
+  - EcomViper sidebar
+  - Product Editor workspace content
+- Product Editor top section:
+  - compact breadcrumb/action/status header
+  - hero row with:
+    - left: large Product Gallery card (main image + thumbnail selector)
+    - right: Product Summary card (SKU/vendor/type/status/commerce/COA/timestamps)
+- Tabbed workspace below hero:
+  - `Overview`, `Ingredients`, `Trust & Compliance`, `Commerce`, `Agentic Visibility`, `Assets`, `SEO & Schema`
+- Optional right rail is secondary-only (for example shipping/workspace metadata) and must not duplicate hero summary.
+- The old small Product Rail is removed from primary layout.
 
 ## Deterministic Supplier Field Model
 
@@ -54,6 +62,22 @@ Stabilization 009.6 guardrail:
 - Generate: server-side source-grounded intelligence generation
 - Save: persistence with tenant/workspace isolation
 - Tabs reduce vertical scroll and keep high-priority controls above fold
+
+## Product Gallery Rules
+
+- Gallery uses native React UI (not copied eBay HTML/CSS output).
+- Thumbnail selection updates the main displayed image.
+- Object fit should preserve label readability (`object-contain`).
+- If no valid image exists, show clean placeholder: `No product images available`.
+- Null/empty URLs must not crash UI or render broken boxes.
+- Deterministic ordering:
+  - front/primary
+  - supplement facts/back label
+  - side/directions/warnings
+  - 3-pack
+  - 6-pack
+  - lifestyle
+  - source/original order fallback
 
 ## Source Sync Dependency
 
@@ -109,3 +133,8 @@ Hotfix 009.9 binding additions:
 - COA card must separate link availability from parsing progress:
   - `COA Link: View COA` when SKU link exists
   - `COA Document Parsing: pending` as non-blocking status.
+
+## Merchant-Facing Language Rule
+
+- Product Editor top identity/summary surfaces should not display extraction/debug/internal key terms (for example source diagnostics key/value internals).
+- Internal diagnostics can remain in internal/admin workflows, not merchant identity sections.

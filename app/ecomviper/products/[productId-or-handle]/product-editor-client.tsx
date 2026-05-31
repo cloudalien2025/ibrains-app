@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import ProductImageGallery from "@/components/ecomviper/product-image-gallery";
 import {
   createEmptyShopifyPdpIntelligenceRecord,
   sanitizeShopifyPdpIntelligenceRecord,
   type ShopifyPdpFaqEntry,
   type ShopifyPdpIntelligenceRecord,
 } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence";
+import { orderProductImages } from "@/lib/ecomviper/shopify/product-image-ordering";
 import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
 import { safeIsoDate, safeMoney } from "@/lib/ui/safe-formatters";
 
@@ -80,6 +82,25 @@ function meaningfulList(values: string[]): string[] {
 
 function sourceFieldText(value: string | undefined, displayText: string | undefined): string {
   return value?.trim() || displayText?.trim() || "";
+}
+
+function displayValue(value: string | null | undefined, fallback: string): string {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return normalized || fallback;
+}
+
+function looksLikeImageUrl(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return false;
+  if (/(\.png|\.jpe?g|\.webp|\.gif|\.avif|\.svg)(\?.*)?$/.test(normalized)) return true;
+  if (/\/generated-media\//.test(normalized)) return true;
+  return false;
+}
+
+function validImageUrls(values: string[]): string[] {
+  return values
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0 && looksLikeImageUrl(value));
 }
 
 export default function EcomViperProductEditorClient({ initialState }: { initialState: ShopifyProductEditorInitialState }) {
@@ -232,6 +253,51 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     Boolean(effectiveMembershipTier) && typeof sourceFacts?.commerce.wholesaleCost === "number";
   const supplierSyncRequired = initialState.supplierContext.syncRequired;
   const supplierSyncMessage = initialState.supplierContext.syncMessage;
+  const hasInventoryQuantities = product.variants.some(
+    (variant) => typeof variant.inventoryQuantity === "number" && Number.isFinite(variant.inventoryQuantity)
+  );
+  const inventoryCount = product.variants.reduce((total, variant) => {
+    if (typeof variant.inventoryQuantity !== "number" || !Number.isFinite(variant.inventoryQuantity)) return total;
+    return total + variant.inventoryQuantity;
+  }, 0);
+  const displaySku =
+    initialState.supplierContext.matchedSku || product.variants.find((variant) => variant.sku)?.sku || "Not provided by source";
+  const assetGalleryImages = useMemo(
+    () =>
+      orderProductImages([
+        ...product.images.map((image) => ({
+          url: image.url,
+          altText: image.altText,
+          type: image.altText,
+          source: `shopify:${image.source}`,
+        })),
+        ...validImageUrls(record.product_images).map((url) => ({
+          url,
+          altText: `${product.title} product asset`,
+          type: "product",
+          source: "pdp-record",
+        })),
+        ...validImageUrls(record.supplement_facts_assets).map((url) => ({
+          url,
+          altText: `${product.title} supplement facts`,
+          type: "supplement facts",
+          source: "supplement-facts",
+        })),
+        ...validImageUrls(record.label_assets).map((url) => ({
+          url,
+          altText: `${product.title} label`,
+          type: "label",
+          source: "label-assets",
+        })),
+        ...validImageUrls(record.mockup_assets).map((url) => ({
+          url,
+          altText: `${product.title} lifestyle`,
+          type: "lifestyle",
+          source: "mockup-assets",
+        })),
+      ]),
+    [product.images, product.title, record.label_assets, record.mockup_assets, record.product_images, record.supplement_facts_assets]
+  );
 
   async function postAction(action: "generate" | "save", nextRecord?: ShopifyPdpIntelligenceRecord) {
     const payload =
@@ -293,104 +359,132 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
   ];
 
   return (
-    <div className="space-y-3 text-[#0F172A]" data-testid="ecomviper-product-editor-page">
-      <header className="flex items-center justify-between rounded-2xl border border-[#D9E4F0] bg-white/95 px-4 py-3">
-          <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">EcomViper / Products</p>
-          <Link href="/ecomviper" className="text-sm text-[#1D4ED8] hover:underline">Back to Products</Link>
+    <div className="space-y-4 text-[#0F172A]" data-testid="ecomviper-product-editor-page">
+      <header className="rounded-2xl border border-[#D5E2F0] bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#475569]">Products &gt; {product.title}</p>
+            <h1 className="text-xl font-semibold tracking-tight text-[#0B1A36]">{product.title}</h1>
+            <Link href="/ecomviper" className="text-sm text-[#1D4ED8] hover:underline">Back to Products</Link>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled className="rounded-lg border border-[#C7D5E8] bg-white px-3 py-2 text-sm font-medium text-[#334155]">
+              Preview PDP
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="rounded-lg border border-[#0F766E] bg-[#0F766E] px-3 py-2 text-sm font-medium text-white disabled:opacity-70"
+              disabled={saveStatus === "loading"}
+            >
+              {saveStatus === "loading" ? "Saving..." : "Save Changes"}
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              className="rounded-lg border border-[#1D4ED8] bg-[#1D4ED8] px-3 py-2 text-sm font-medium text-white disabled:opacity-70"
+              disabled={generationStatus === "loading"}
+            >
+              {generationStatus === "loading" ? "Generating..." : "Generate Intelligence"}
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <span className={`rounded-full border px-3 py-1 ${chipTone(initialState.source === "live_shopify")}`}>
+            Shopify {initialState.source === "live_shopify" ? "Connected" : "Snapshot"}
+          </span>
+          <span className={`rounded-full border px-3 py-1 ${chipTone(initialState.supplierContext.matched)}`}>
+            {initialState.supplierContext.matched ? "Supplier Matched" : "Supplier Unmatched"}
+          </span>
+          <span className="rounded-full border border-[#D5E2F0] bg-[#F6FAFF] px-3 py-1 text-[#334155]">
+            Inventory: {record.availability_status || "Availability Unknown"}
+          </span>
+          <span className={`rounded-full border px-3 py-1 ${chipTone(Boolean(record.coa_link || record.coa_status !== "unknown"))}`}>
+            COA: {record.coa_status || "unknown"}
+          </span>
+        </div>
+        <p className="mt-2 text-xs text-[#64748B]">
+          Last generated: {asIso(record.last_generated_at)} · Last edited: {asIso(record.last_edited_at)} · Last supplier check:{" "}
+          {asIso(initialState.supplierContext.lastSupplierCheckAt)}
+        </p>
+        {supplierSyncRequired ? (
+          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {supplierSyncMessage || "Supplier data has not been synced for this SKU. Run source sync."}
+          </p>
+        ) : null}
+        {sourceFacts?.staleIntelligence ? (
+          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Source data has changed since this intelligence was generated. Regenerate to use latest source facts.
+          </p>
+        ) : null}
+        {statusMessage ? <p className="mt-2 text-sm text-[#334155]">{statusMessage}</p> : null}
       </header>
 
-      <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Products &gt; {product.title}</p>
-              <h1 className="mt-1 text-xl font-semibold">{product.title}</h1>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" disabled className="rounded-lg border border-[#D9E4F0] px-3 py-2 text-sm text-[#64748B]">Preview PDP</button>
-              <button
-                type="button"
-                onClick={handleSave}
-                className="rounded-lg border border-[#0F766E] bg-[#0F766E] px-3 py-2 text-sm font-medium text-white disabled:opacity-70"
-                disabled={saveStatus === "loading"}
-              >
-                {saveStatus === "loading" ? "Saving..." : "Save Changes"}
-              </button>
-              <button
-                type="button"
-                onClick={handleGenerate}
-                className="rounded-lg border border-[#1D4ED8] bg-[#1D4ED8] px-3 py-2 text-sm font-medium text-white disabled:opacity-70"
-                disabled={generationStatus === "loading"}
-              >
-                {generationStatus === "loading" ? "Generating..." : "Generate Intelligence"}
-              </button>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            <span className={`rounded-full border px-3 py-1 ${chipTone(initialState.source === "live_shopify")}`}>
-              Shopify {initialState.source === "live_shopify" ? "Connected" : "Snapshot"}
-            </span>
-            <span className={`rounded-full border px-3 py-1 ${chipTone(initialState.supplierContext.matched)}`}>
-              {initialState.supplierContext.matched ? "Supplier Matched" : "Supplier Unmatched"}
-            </span>
-            <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-[#334155]">
-              Inventory: {record.availability_status || "Availability Unknown"}
-            </span>
-            <span className={`rounded-full border px-3 py-1 ${chipTone(Boolean(record.coa_link || record.coa_status !== "unknown"))}`}>
-              COA: {record.coa_status || "unknown"}
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-[#64748B]">
-            Last generated: {asIso(record.last_generated_at)} · Last edited: {asIso(record.last_edited_at)} · Last supplier check: {asIso(initialState.supplierContext.lastSupplierCheckAt)}
-          </p>
-          {supplierSyncRequired ? (
-            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              {supplierSyncMessage || "Supplier data has not been synced for this SKU. Run source sync."}
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" data-testid="ecomviper-product-hero">
+        <ProductImageGallery images={assetGalleryImages} productTitle={product.title} />
+        <article className="rounded-2xl border border-[#D5E2F0] bg-white p-4 shadow-sm" data-testid="ecomviper-product-summary-card">
+          <h2 className="text-sm font-semibold text-[#0B1A36]">Product Summary</h2>
+          <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            <p><span className="font-semibold text-[#0B1A36]">SKU:</span> {displaySku}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Vendor:</span> {displayValue(product.vendor, "Not provided by source")}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Product Type:</span> {displayValue(product.productType, "Not provided by source")}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Shopify Status:</span> {displayValue(product.status, "Not provided by source")}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Supplier Match:</span> {initialState.supplierContext.matched ? "Matched" : "Not matched"}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Inventory Units:</span> {hasInventoryQuantities ? inventoryCount : "Not provided by source"}</p>
+            <p>
+              <span className="font-semibold text-[#0B1A36]">COA:</span>{" "}
+              {record.coa_link ? (
+                <a className="text-[#1D4ED8] hover:underline" href={record.coa_link} target="_blank" rel="noreferrer">View COA</a>
+              ) : (
+                "Available after supplier intelligence update"
+              )}
             </p>
-          ) : null}
-          {sourceFacts?.staleIntelligence ? (
-            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Source data has changed since this intelligence was generated. Regenerate to use latest source facts.
+            <p><span className="font-semibold text-[#0B1A36]">Price:</span> {asMoney(record.price, record.currency)}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Compare-at:</span> {asMoney(record.compare_at_price, record.currency)}</p>
+            <p>
+              <span className="font-semibold text-[#0B1A36]">Membership Tier:</span>{" "}
+              {usingDefaultMembershipTier && effectiveMembershipTier
+                ? `${effectiveMembershipTier} (default)`
+                : selectedMembershipTier || "Select membership tier to calculate"}
             </p>
+            <p>
+              <span className="font-semibold text-[#0B1A36]">Wholesale Cost:</span>{" "}
+              {hasSelectedTierWholesale ? asMoney(record.wholesale_cost, record.currency) : "Available after supplier intelligence update"}
+            </p>
+            <p>
+              <span className="font-semibold text-[#0B1A36]">Margin:</span>{" "}
+              {hasSelectedTierWholesale && record.margin_percent != null
+                ? `${record.margin_percent.toFixed(2)}%`
+                : "Select membership tier to calculate"}
+            </p>
+            <p>
+              <span className="font-semibold text-[#0B1A36]">Estimated Profit:</span>{" "}
+              {hasSelectedTierWholesale ? asMoney(record.estimated_profit, record.currency) : "Select membership tier to calculate"}
+            </p>
+            <p><span className="font-semibold text-[#0B1A36]">Pricing Status:</span> {pricingStatusLabel || "Not provided by source"}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Last Source Check:</span> {asIso(initialState.supplierContext.lastSupplierCheckAt)}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Last Generated:</span> {asIso(record.last_generated_at)}</p>
+          </div>
+          {!effectiveMembershipTier ? (
+            <p className="mt-3 rounded-lg border border-[#DBEAFE] bg-[#EFF6FF] px-3 py-2 text-xs text-[#1E3A8A]">{pricingMessage}</p>
           ) : null}
-          {statusMessage ? <p className="mt-2 text-sm text-[#334155]">{statusMessage}</p> : null}
+        </article>
       </section>
 
-      <div className="grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
-        <aside className="space-y-3">
-            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
-              <h2 className="text-sm font-semibold">Product Rail</h2>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {(product.images.length ? product.images : [{ id: "none", url: "", altText: "", source: "product" as const }]).slice(0, 6).map((image) => (
-                  <div key={image.id} className="h-16 rounded-md border border-[#D9E4F0] bg-[#F8FBFF]">
-                    {image.url ? <img src={image.url} alt={image.altText || product.title} className="h-full w-full rounded-md object-cover" /> : null}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 space-y-1 text-xs text-[#475569]">
-                <p><span className="font-medium text-[#0F172A]">Vendor:</span> {product.vendor || "-"}</p>
-                <p><span className="font-medium text-[#0F172A]">SKU:</span> {initialState.supplierContext.matchedSku || product.variants[0]?.sku || "-"}</p>
-                <p><span className="font-medium text-[#0F172A]">Product Type:</span> {product.productType || "-"}</p>
-                <p><span className="font-medium text-[#0F172A]">Form:</span> {record.serving_size || "Unknown"}</p>
-                <p><span className="font-medium text-[#0F172A]">Primary Benefit:</span> {record.best_for[0] || "Unknown"}</p>
-                <p><span className="font-medium text-[#0F172A]">AI Visibility:</span> {Math.max(0, 100 - record.compliance_review.risky_phrases_found.length * 20)}</p>
-                <p><span className="font-medium text-[#0F172A]">Last Updated:</span> {asIso(record.updated_at)}</p>
-              </div>
-            </section>
-        </aside>
-
-        <section id="product-editor-main" className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4">
-            <div className="mb-3 flex flex-wrap gap-2" data-testid="ecomviper-product-editor-tabs">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`rounded-lg border px-3 py-2 text-sm ${activeTab === tab.id ? "border-[#BFDBFE] bg-[#EFF6FF] text-[#0F172A]" : "border-[#D9E4F0] text-[#475569]"}`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <section id="product-editor-main" className="rounded-2xl border border-[#D5E2F0] bg-white p-4 shadow-sm">
+          <div className="mb-3 flex flex-wrap gap-2" data-testid="ecomviper-product-editor-tabs">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`rounded-lg border px-3 py-2 text-sm ${activeTab === tab.id ? "border-[#BFDBFE] bg-[#EFF6FF] text-[#0F172A]" : "border-[#D9E4F0] text-[#475569]"}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
             {activeTab === "overview" ? (
               <div className="grid gap-3 md:grid-cols-2">
@@ -442,11 +536,8 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                   <textarea value={listToTextarea(record.ingredient_highlights)} onChange={(e) => setRecord((s) => ({ ...s, ingredient_highlights: textareaToList(e.target.value) }))} rows={3} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
                 {sourceFacts && sourceFacts.activeIngredients.status !== "extracted" ? (
-                  <p className="text-sm text-amber-800 md:col-span-2">Ingredient Highlights generation is limited because source ingredients are missing or require extraction.</p>
+                  <p className="text-sm text-amber-800 md:col-span-2">Ingredient highlights are limited until source ingredients are available.</p>
                 ) : null}
-                <label className="grid gap-1 text-sm md:col-span-2">Source Diagnostics
-                  <textarea value={listToTextarea(record.source_diagnostics)} onChange={(e) => setRecord((s) => ({ ...s, source_diagnostics: textareaToList(e.target.value) }))} rows={3} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
-                </label>
               </div>
             ) : null}
 
@@ -609,9 +700,24 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="md:col-span-2 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-sm text-[#334155]">
                   <p>COA: {sourceFacts?.assets.coaUrl ? <a href={sourceFacts.assets.coaUrl} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">View COA</a> : sourceFacts?.assets.message || "COA Link: source sync required"}</p>
-                  <p>COA Document Parsing: pending</p>
+                  <p>COA Status: {record.coa_status || "unknown"}</p>
                   <p>Label Template: {sourceFacts?.assets.labelTemplateUrl ? <a href={sourceFacts.assets.labelTemplateUrl} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">Open label template</a> : "Not available"}</p>
                   <p>Mockup: {sourceFacts?.assets.mockupUrl ? <a href={sourceFacts.assets.mockupUrl} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">Open mockup</a> : "Not available"}</p>
+                </div>
+                <div className="md:col-span-2 rounded-lg border border-[#D9E4F0] bg-white p-3 text-sm text-[#334155]">
+                  <h3 className="text-sm font-semibold text-[#0F172A]">Gallery Asset Sources</h3>
+                  <div className="mt-2 space-y-1 text-xs">
+                    {assetGalleryImages.length ? (
+                      assetGalleryImages.slice(0, 12).map((asset) => (
+                        <p key={asset.id}>
+                          <span className="font-medium capitalize">{asset.type}:</span>{" "}
+                          <a href={asset.url} target="_blank" rel="noreferrer" className="text-[#1D4ED8] hover:underline">{asset.url}</a>
+                        </p>
+                      ))
+                    ) : (
+                      <p>No image assets available.</p>
+                    )}
+                  </div>
                 </div>
                 <label className="grid gap-1 text-sm">Product Images
                   <textarea value={listToTextarea(record.product_images)} onChange={(e) => setRecord((s) => ({ ...s, product_images: textareaToList(e.target.value) }))} rows={4} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
@@ -659,61 +765,27 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
         </section>
 
         <aside className="space-y-3">
-            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4" data-testid="ecomviper-commerce-intelligence-card">
-              <h2 className="text-sm font-semibold">Commerce Intelligence</h2>
-              <div className="mt-2 space-y-1 text-xs text-[#475569]">
-                <p>Price: {asMoney(record.price, record.currency)}</p>
-                <p>Compare At: {asMoney(record.compare_at_price, record.currency)}</p>
-                <p>Wholesale Cost: {hasSelectedTierWholesale ? asMoney(record.wholesale_cost, record.currency) : pricingMessage}</p>
-                <p>MSRP: {asMoney(record.msrp, record.currency)}</p>
-                <p>Margin: {hasSelectedTierWholesale && record.margin_percent != null ? `${record.margin_percent}%` : pricingMessage}</p>
-                <p>Estimated Profit: {hasSelectedTierWholesale ? asMoney(record.estimated_profit, record.currency) : pricingMessage}</p>
-                <p>Selected Membership Tier: {usingDefaultMembershipTier && effectiveMembershipTier ? `${effectiveMembershipTier} (default)` : selectedMembershipTier || "None selected"}</p>
-                <p>Pricing Status: {pricingStatusLabel}</p>
-                <p>Inventory: {record.inventory_status || "unknown"}</p>
-                <p>Availability: {record.availability_status || "Availability Unknown"}</p>
-                <p>Last Inventory Sync: {asIso(initialState.supplierContext.lastSupplierCheckAt)}</p>
-                {!hasSelectedTierWholesale ? (
-                  <p>{pricingMessage}</p>
-                ) : null}
-                {supplierSyncRequired ? (
-                  <p>Supplier data has not been synced for this SKU. Run source sync.</p>
-                ) : null}
-              </div>
-            </section>
+          <section className="rounded-2xl border border-[#D5E2F0] bg-white p-4 shadow-sm" data-testid="ecomviper-shipping-card">
+            <h2 className="text-sm font-semibold">Shipping</h2>
+            <div className="mt-2 space-y-1 text-xs text-[#475569]">
+              <p>Ships From: {record.ships_from || "Unknown"}</p>
+              <p>Processing Time: {record.processing_time || "Unknown"}</p>
+              <p>Shipping Time: {record.shipping_time || "Unknown"}</p>
+              <p>Return Policy: {record.return_policy || "Unknown"}</p>
+              <p>Fulfillment Status: {record.fulfillment_status || "unknown"}</p>
+            </div>
+          </section>
 
-            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4" data-testid="ecomviper-shipping-card">
-              <h2 className="text-sm font-semibold">Shipping</h2>
-              <div className="mt-2 space-y-1 text-xs text-[#475569]">
-                <p>Ships From: {record.ships_from || "Unknown"}</p>
-                <p>Processing Time: {record.processing_time || "Unknown"}</p>
-                <p>Shipping Time: {record.shipping_time || "Unknown"}</p>
-                <p>Return Policy: {record.return_policy || "Unknown"}</p>
-                <p>Fulfillment Status: {record.fulfillment_status || "unknown"}</p>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4" data-testid="ecomviper-coa-card">
-              <h2 className="text-sm font-semibold">COA</h2>
-              <div className="mt-2 space-y-1 text-xs text-[#475569]">
-                <p>COA Status: {record.coa_status || "unknown"}</p>
-                <p>COA Link: {record.coa_link ? <a className="text-[#1D4ED8] hover:underline" href={record.coa_link} target="_blank" rel="noreferrer">View COA</a> : sourceFacts?.assets.message || (supplierProduct?.coaLinkStatus === "extraction_failed" ? "COA Link: extraction failed" : "COA Link: source sync required")}</p>
-                <p>COA Document Parsing: pending</p>
-                <p>Expiration Date: {record.coa_expiration_date || "Unknown"}</p>
-                <p>Testing Categories: {record.coa_testing_categories.join(", ") || "Unknown"}</p>
-                <p>Verification Status: {record.coa_verification_status || "unknown"}</p>
-                {supplierProduct?.coaLinkError ? <p>Diagnostic: {supplierProduct.coaLinkError}</p> : null}
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4" data-testid="ecomviper-source-diagnostics-card">
-              <h2 className="text-sm font-semibold">Source Diagnostics</h2>
-              <div className="mt-2 space-y-1 text-xs text-[#475569]">
-                {(sourceFacts?.diagnostics || record.source_diagnostics).slice(0, 18).map((entry, index) => (
-                  <p key={`${index}-${entry}`}>{entry}</p>
-                ))}
-              </div>
-            </section>
+          <section className="rounded-2xl border border-[#D5E2F0] bg-white p-4 shadow-sm">
+            <h2 className="text-sm font-semibold">Workspace Metadata</h2>
+            <div className="mt-2 space-y-1 text-xs text-[#475569]">
+              <p>Reference: {initialState.productReference || product.handle || product.productId}</p>
+              <p>Handle: {product.handle || "Not provided by source"}</p>
+              <p>Source: {initialState.sourceLabel}</p>
+              <p>Hydration: {initialState.hydrationMode}</p>
+              <p>Last Shopify Sync: {asIso(initialState.lastSyncedAt)}</p>
+            </div>
+          </section>
         </aside>
       </div>
     </div>

@@ -271,8 +271,7 @@ describe("ecomviper product editor supplier field mapping", () => {
     expect(container.querySelector('input[value="1 gummy"]')).not.toBeNull();
     expect(container.querySelector('input[value="60"]')).not.toBeNull();
     expect(container.textContent).toContain("Glucose syrup, sugar");
-    expect(container.textContent).toContain("global_assets_record_found: true");
-    expect(container.textContent).toContain("COA Link: View COA");
+    expect(container.textContent).toContain("COA: View COA");
   });
 
   it("renders explicit OCR-required source state instead of stale generated Unknown values", async () => {
@@ -337,8 +336,20 @@ describe("ecomviper product editor supplier field mapping", () => {
       root.render(<EcomViperProductEditorClient initialState={state} />);
     });
 
-    expect(container.textContent).toContain("Selected Membership Tier: Non Member Pricing (default)");
+    expect(container.textContent).toContain("Membership Tier: Non Member Pricing (default)");
     expect(container.textContent).toContain("Action Required: Mark Out of Stock");
-    expect(container.textContent).toContain("COA Document Parsing: pending");
+    expect(container.textContent).toContain("COA: View COA");
+  });
+
+  it("renders top gallery and summary without exposing extraction debug diagnostics", async () => {
+    await act(async () => {
+      root.render(<EcomViperProductEditorClient initialState={createInitialState()} />);
+    });
+
+    expect(container.querySelector('[data-testid=\"product-image-gallery\"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid=\"ecomviper-product-summary-card\"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("global_assets_record_found");
+    expect(container.textContent).not.toContain("catalog_pdf_text_layer_mode");
+    expect(container.textContent).not.toContain("skip_large_payload_guard");
   });
 });
