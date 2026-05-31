@@ -76,6 +76,41 @@ Last updated: 2026-05-31 (UTC)
   - `tests/ecomviper_product_editor_sync_required_message.test.tsx`
   - `tests/ecomviper_inventory_status_fallback.test.ts`
 
+## Hotfix Closure Update: Shopify Hotfix 009.9 Deterministic All-SKU Supplier Mapping + Product Editor Binding
+
+- Sprint/lane: `hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`
+- MR:
+  - `!265`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/265`
+  - source branch commit SHA: `c0ce66454d623966612dc1ead027822cabe9154e`
+  - merge commit SHA: `30a1e1bcf5d1ec3362007dbf064755cd579b5c0d`
+  - MR pipeline `2564619889`: success
+  - main/deploy pipeline `2564623133`: success
+  - deploy job `deploy_production`: success
+- Branch cleanup:
+  - remote source branch deletion: confirmed (branch ref absent on `origin`)
+  - local source branch deletion: completed
+  - local repository reset: `main` fast-forwarded and clean
+- Production release verification:
+  - `/api/meta/release`:
+    - `git_sha=30a1e1bcf5d1ec3362007dbf064755cd579b5c0d`
+    - `build_id=2564623133`
+    - `deployed_at=2026-05-31T01:42:35Z`
+    - `release_metadata_complete=true`
+  - route timings:
+    - `/api/health`: `200` in `0.159031s`
+    - `/api/meta/release`: `200` in `0.075042s`
+    - `/brains`: `307` in `0.049512s`
+    - `/ecomviper`: `307` in `0.051380s`
+    - `/ecomviper/settings`: `307` in `0.067177s`
+    - `/ecomviper/dropshipping/rocktomic`: `307` in `0.054353s`
+  - smoke script: `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai` passed
+  - socket health: `CLOSE-WAIT` not growing (`0` in smoke check)
+  - nginx timeout scan: no new `504`/`upstream timed out` entries in recent tail
+- Remaining blocker:
+  - mandatory signed-in desktop/mobile browser verification for SKU-level UI flows is still manual-session dependent and was not completed in this CLI run.
+- Recommended next sprint:
+  - perform signed-in desktop/mobile verification closure pass for Hotfix 009.9, then resume `Shopify Stabilization Sprint 011`.
+
 ## Hotfix Verification Update: Shopify Hotfix 009.8 Global Supplier Data Scope + Product Editor Binding
 
 - Sprint/lane: `hotfix-009-8-global-supplier-data-scope-product-editor-binding` - merged and production deployed; not fully closed until signed-in browser verification is completed.
