@@ -1,4 +1,4 @@
-# Product Editor Architecture (Sprint 010)
+# Product Editor Architecture (Sprint 010.1)
 
 Last updated: 2026-05-31 (UTC)
 
@@ -9,14 +9,17 @@ Last updated: 2026-05-31 (UTC)
   - EcomViper sidebar
   - Product Editor workspace content
 - Product Editor top section:
-  - compact breadcrumb/action/status header
   - hero row with:
-    - left: large Product Gallery card (main image + thumbnail selector)
-    - right: Product Summary card (SKU/vendor/type/status/commerce/COA/timestamps)
+    - left: large Product Gallery card (main image + thumbnail selector + add-image controls)
+    - right: Product Summary card (title/SKU/vendor/type/status/commerce/COA/shipping/timestamps)
 - Tabbed workspace below hero:
   - `Overview`, `Ingredients`, `Trust & Compliance`, `Commerce`, `Agentic Visibility`, `Assets`, `SEO & Schema`
-- Optional right rail is secondary-only (for example shipping/workspace metadata) and must not duplicate hero summary.
+- Edit action row is above tabs in full-width workspace area:
+  - `Generate Intelligence`
+  - `Save Changes`
+  - `Publish`
 - The old small Product Rail is removed from primary layout.
+- Standalone Shipping card and Workspace Metadata card are removed from merchant Product Editor.
 
 ## Deterministic Supplier Field Model
 
@@ -61,12 +64,17 @@ Stabilization 009.6 guardrail:
 
 - Generate: server-side source-grounded intelligence generation
 - Save: persistence with tenant/workspace isolation
+- Publish: reserved for public `ecomviper.com` publish pipeline; disabled placeholder when backend path is not enabled
 - Tabs reduce vertical scroll and keep high-priority controls above fold
 
 ## Product Gallery Rules
 
 - Gallery uses native React UI (not copied eBay HTML/CSS output).
 - Thumbnail selection updates the main displayed image.
+- Add-image control exposes:
+  - upload from computer (`jpeg/png/webp`, size-bounded)
+  - add from `https` URL
+  - disabled future entry for Image Studio
 - Object fit should preserve label readability (`object-contain`).
 - If no valid image exists, show clean placeholder: `No product images available`.
 - Null/empty URLs must not crash UI or render broken boxes.
@@ -138,3 +146,4 @@ Hotfix 009.9 binding additions:
 
 - Product Editor top identity/summary surfaces should not display extraction/debug/internal key terms (for example source diagnostics key/value internals).
 - Internal diagnostics can remain in internal/admin workflows, not merchant identity sections.
+- `Workspace Metadata` and extraction internals are explicitly admin-only and excluded from merchant Product Editor.

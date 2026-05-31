@@ -66,6 +66,24 @@ Channel behavior and requirements are defined in channel planning docs and imple
 - Merchant-facing UI must avoid extraction/internal debug language in top identity sections.
 - Render path remains presentation-only and must not trigger supplier extraction/sync/OCR/OpenAI work.
 
+## Sprint 010.1 Product Editor Final UX Direction
+
+- First workspace view is the product hero row (gallery + summary), not a stacked title/actions card.
+- Product Summary is the authoritative top context and includes:
+  - product title
+  - commerce/trust facts
+  - shipping facts
+- Full-width edit area sits below hero with action order:
+  - `Generate Intelligence`
+  - `Save Changes`
+  - `Publish`
+- `Publish` is reserved for public `ecomviper.com` publishing workflow and must not be conflated with save.
+- Add-image workflow is part of Product Gallery and includes:
+  - local computer upload preview
+  - `https` URL add
+  - non-functional Image Studio future entry
+- Merchant UI removes Workspace Metadata and similar internal diagnostics language.
+
 ## Future Public Surface Direction (Preserved)
 
 - EcomViper.com remains the future public optimized PDP surface.

@@ -35,6 +35,27 @@ Last updated: 2026-05-31 (UTC)
   - no OpenAI generation
   - no heavy source parsing in UI render path
 
+## Product Editor Final Layout Contract (Sprint 010.1)
+
+- Hero-first layout is mandatory on `/ecomviper/products/[productId-or-handle]`:
+  - Product Gallery (left)
+  - Product Summary (right)
+- Product Summary includes title and shipping facts; standalone right-rail shipping card is removed.
+- Workspace Metadata and extraction/debug language are admin-only concerns and must not render in merchant Product Editor.
+- Edit area is full-width below hero and contains the primary action row:
+  - `Generate Intelligence`
+  - `Save Changes`
+  - `Publish`
+- `Preview PDP` is removed from this primary edit action row.
+- Publish semantics:
+  - target is public `ecomviper.com` content publish
+  - placeholder/disabled state is required until backend publish path is fully wired
+  - UI must not fake publish success
+- Gallery add-image UX:
+  - upload from computer (`jpeg/png/webp`, bounded size)
+  - add from `https` URL
+  - future Image Studio hook exposed as disabled entry
+
 ## Core Rules
 
 - Shopify remains source of truth for listing identity and publish state.

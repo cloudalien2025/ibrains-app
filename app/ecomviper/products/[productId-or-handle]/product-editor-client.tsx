@@ -242,6 +242,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
   const [saveStatus, setSaveStatus] = useState<AsyncStatus>("idle");
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<EditorTab>("overview");
+  const [publishStatus] = useState<AsyncStatus>("idle");
 
   const productReference = initialState.productReference || product.handle || product.productId;
   const selectedMembershipTier = sourceFacts?.selectedMembershipTier ?? supplierProduct?.pricing?.membershipTier ?? null;
@@ -299,6 +300,17 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     [product.images, product.title, record.label_assets, record.mockup_assets, record.product_images, record.supplement_facts_assets]
   );
 
+  function handleAddImageUrl(url: string) {
+    setRecord((current) => {
+      const nextUrl = url.trim();
+      if (!nextUrl || current.product_images.includes(nextUrl)) return current;
+      return {
+        ...current,
+        product_images: [nextUrl, ...current.product_images],
+      };
+    });
+  }
+
   async function postAction(action: "generate" | "save", nextRecord?: ShopifyPdpIntelligenceRecord) {
     const payload =
       action === "save"
@@ -325,7 +337,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
       setGenerationStatus("success");
       setStatusMessage(
         body.generationUnavailable
-          ? "generation unavailable: missing server configuration"
+          ? "Generation is unavailable right now. Configure AI access to enable this action."
           : "Source-grounded intelligence generated. Review before saving."
       );
     } catch (error) {
@@ -360,76 +372,35 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
 
   return (
     <div className="space-y-4 text-[#0F172A]" data-testid="ecomviper-product-editor-page">
-      <header className="rounded-2xl border border-[#D5E2F0] bg-white px-4 py-3 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.12em] text-[#475569]">Products &gt; {product.title}</p>
-            <h1 className="text-xl font-semibold tracking-tight text-[#0B1A36]">{product.title}</h1>
-            <Link href="/ecomviper" className="text-sm text-[#1D4ED8] hover:underline">Back to Products</Link>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" disabled className="rounded-lg border border-[#C7D5E8] bg-white px-3 py-2 text-sm font-medium text-[#334155]">
-              Preview PDP
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="rounded-lg border border-[#0F766E] bg-[#0F766E] px-3 py-2 text-sm font-medium text-white disabled:opacity-70"
-              disabled={saveStatus === "loading"}
-            >
-              {saveStatus === "loading" ? "Saving..." : "Save Changes"}
-            </button>
-            <button
-              type="button"
-              onClick={handleGenerate}
-              className="rounded-lg border border-[#1D4ED8] bg-[#1D4ED8] px-3 py-2 text-sm font-medium text-white disabled:opacity-70"
-              disabled={generationStatus === "loading"}
-            >
-              {generationStatus === "loading" ? "Generating..." : "Generate Intelligence"}
-            </button>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <span className={`rounded-full border px-3 py-1 ${chipTone(initialState.source === "live_shopify")}`}>
-            Shopify {initialState.source === "live_shopify" ? "Connected" : "Snapshot"}
-          </span>
-          <span className={`rounded-full border px-3 py-1 ${chipTone(initialState.supplierContext.matched)}`}>
-            {initialState.supplierContext.matched ? "Supplier Matched" : "Supplier Unmatched"}
-          </span>
-          <span className="rounded-full border border-[#D5E2F0] bg-[#F6FAFF] px-3 py-1 text-[#334155]">
-            Inventory: {record.availability_status || "Availability Unknown"}
-          </span>
-          <span className={`rounded-full border px-3 py-1 ${chipTone(Boolean(record.coa_link || record.coa_status !== "unknown"))}`}>
-            COA: {record.coa_status || "unknown"}
-          </span>
-        </div>
-        <p className="mt-2 text-xs text-[#64748B]">
-          Last generated: {asIso(record.last_generated_at)} · Last edited: {asIso(record.last_edited_at)} · Last supplier check:{" "}
-          {asIso(initialState.supplierContext.lastSupplierCheckAt)}
-        </p>
-        {supplierSyncRequired ? (
-          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            {supplierSyncMessage || "Supplier data has not been synced for this SKU. Run source sync."}
-          </p>
-        ) : null}
-        {sourceFacts?.staleIntelligence ? (
-          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Source data has changed since this intelligence was generated. Regenerate to use latest source facts.
-          </p>
-        ) : null}
-        {statusMessage ? <p className="mt-2 text-sm text-[#334155]">{statusMessage}</p> : null}
-      </header>
-
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" data-testid="ecomviper-product-hero">
-        <ProductImageGallery images={assetGalleryImages} productTitle={product.title} />
+        <ProductImageGallery
+          images={assetGalleryImages}
+          productTitle={product.title}
+          onAddImageUrl={handleAddImageUrl}
+        />
         <article className="rounded-2xl border border-[#D5E2F0] bg-white p-4 shadow-sm" data-testid="ecomviper-product-summary-card">
-          <h2 className="text-sm font-semibold text-[#0B1A36]">Product Summary</h2>
+          <p className="text-xs uppercase tracking-[0.12em] text-[#475569]">Products &gt; {product.title}</p>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight text-[#0B1A36]">{product.title}</h1>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            <span className={`rounded-full border px-3 py-1 ${chipTone(initialState.source === "live_shopify")}`}>
+              Shopify {initialState.source === "live_shopify" ? "Connected" : "Snapshot"}
+            </span>
+            <span className={`rounded-full border px-3 py-1 ${chipTone(initialState.supplierContext.matched)}`}>
+              {initialState.supplierContext.matched ? "Supplier Matched" : "Supplier Match Pending"}
+            </span>
+            <span className="rounded-full border border-[#D5E2F0] bg-[#F6FAFF] px-3 py-1 text-[#334155]">
+              Inventory: {record.availability_status || "Not available yet"}
+            </span>
+            <span className={`rounded-full border px-3 py-1 ${chipTone(Boolean(record.coa_link || record.coa_status !== "unknown"))}`}>
+              COA: {record.coa_status || "Not available yet"}
+            </span>
+          </div>
           <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
             <p><span className="font-semibold text-[#0B1A36]">SKU:</span> {displaySku}</p>
             <p><span className="font-semibold text-[#0B1A36]">Vendor:</span> {displayValue(product.vendor, "Not provided by source")}</p>
             <p><span className="font-semibold text-[#0B1A36]">Product Type:</span> {displayValue(product.productType, "Not provided by source")}</p>
             <p><span className="font-semibold text-[#0B1A36]">Shopify Status:</span> {displayValue(product.status, "Not provided by source")}</p>
-            <p><span className="font-semibold text-[#0B1A36]">Supplier Match:</span> {initialState.supplierContext.matched ? "Matched" : "Not matched"}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Supplier Match:</span> {initialState.supplierContext.matched ? "Matched with supplier catalog" : "Not matched yet"}</p>
             <p><span className="font-semibold text-[#0B1A36]">Inventory Units:</span> {hasInventoryQuantities ? inventoryCount : "Not provided by source"}</p>
             <p>
               <span className="font-semibold text-[#0B1A36]">COA:</span>{" "}
@@ -464,16 +435,64 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
             <p><span className="font-semibold text-[#0B1A36]">Pricing Status:</span> {pricingStatusLabel || "Not provided by source"}</p>
             <p><span className="font-semibold text-[#0B1A36]">Last Source Check:</span> {asIso(initialState.supplierContext.lastSupplierCheckAt)}</p>
             <p><span className="font-semibold text-[#0B1A36]">Last Generated:</span> {asIso(record.last_generated_at)}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Ships From:</span> {displayValue(record.ships_from, "Not available yet")}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Processing Time:</span> {displayValue(record.processing_time, "Not available yet")}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Shipping Time:</span> {displayValue(record.shipping_time, "Not available yet")}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Return Policy:</span> {displayValue(record.return_policy, "Not available yet")}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Fulfillment:</span> {displayValue(record.fulfillment_status, "Not available yet")}</p>
           </div>
           {!effectiveMembershipTier ? (
             <p className="mt-3 rounded-lg border border-[#DBEAFE] bg-[#EFF6FF] px-3 py-2 text-xs text-[#1E3A8A]">{pricingMessage}</p>
           ) : null}
+          <div className="mt-3">
+            <Link href="/ecomviper" className="text-sm text-[#1D4ED8] hover:underline">Back to Products</Link>
+          </div>
         </article>
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <section id="product-editor-main" className="rounded-2xl border border-[#D5E2F0] bg-white p-4 shadow-sm">
-          <div className="mb-3 flex flex-wrap gap-2" data-testid="ecomviper-product-editor-tabs">
+      <section id="product-editor-main" className="rounded-2xl border border-[#D5E2F0] bg-white p-4 shadow-sm" data-testid="ecomviper-product-edit-area">
+        <div className="mb-3 flex flex-wrap items-center gap-2" data-testid="ecomviper-product-editor-actions">
+          <button
+            type="button"
+            onClick={handleGenerate}
+            className="rounded-lg border border-[#1D4ED8] bg-[#1D4ED8] px-3 py-2 text-sm font-medium text-white disabled:opacity-70"
+            disabled={generationStatus === "loading"}
+          >
+            {generationStatus === "loading" ? "Generating..." : "Generate Intelligence"}
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            className="rounded-lg border border-[#0F766E] bg-[#0F766E] px-3 py-2 text-sm font-medium text-white disabled:opacity-70"
+            disabled={saveStatus === "loading"}
+          >
+            {saveStatus === "loading" ? "Saving..." : "Save Changes"}
+          </button>
+          <button
+            type="button"
+            disabled
+            className="rounded-lg border border-[#94A3B8] bg-[#F8FAFC] px-3 py-2 text-sm font-semibold text-[#334155] disabled:opacity-100"
+            data-testid="ecomviper-publish-button"
+          >
+            {publishStatus === "loading" ? "Publishing..." : "Publish"}
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-[#475569]" data-testid="ecomviper-publish-helper">
+          Publishes approved PDP content to ecomviper.com when the publishing backend is enabled.
+        </p>
+        {supplierSyncRequired ? (
+          <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {supplierSyncMessage || "Supplier data has not been synced for this SKU. Run source sync."}
+          </p>
+        ) : null}
+        {sourceFacts?.staleIntelligence ? (
+          <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Source data has changed since this intelligence was generated. Regenerate to use latest source facts.
+          </p>
+        ) : null}
+        {statusMessage ? <p className="mb-2 text-sm text-[#334155]">{statusMessage}</p> : null}
+
+        <div className="mb-3 flex flex-wrap gap-2" data-testid="ecomviper-product-editor-tabs">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -484,7 +503,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 {tab.label}
               </button>
             ))}
-          </div>
+        </div>
 
             {activeTab === "overview" ? (
               <div className="grid gap-3 md:grid-cols-2">
@@ -536,7 +555,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                   <textarea value={listToTextarea(record.ingredient_highlights)} onChange={(e) => setRecord((s) => ({ ...s, ingredient_highlights: textareaToList(e.target.value) }))} rows={3} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
                 {sourceFacts && sourceFacts.activeIngredients.status !== "extracted" ? (
-                  <p className="text-sm text-amber-800 md:col-span-2">Ingredient highlights are limited until source ingredients are available.</p>
+                  <p className="text-sm text-amber-800 md:col-span-2">Ingredient highlights will be more complete after supplier intelligence update.</p>
                 ) : null}
               </div>
             ) : null}
@@ -762,32 +781,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                 </label>
               </div>
             ) : null}
-        </section>
-
-        <aside className="space-y-3">
-          <section className="rounded-2xl border border-[#D5E2F0] bg-white p-4 shadow-sm" data-testid="ecomviper-shipping-card">
-            <h2 className="text-sm font-semibold">Shipping</h2>
-            <div className="mt-2 space-y-1 text-xs text-[#475569]">
-              <p>Ships From: {record.ships_from || "Unknown"}</p>
-              <p>Processing Time: {record.processing_time || "Unknown"}</p>
-              <p>Shipping Time: {record.shipping_time || "Unknown"}</p>
-              <p>Return Policy: {record.return_policy || "Unknown"}</p>
-              <p>Fulfillment Status: {record.fulfillment_status || "unknown"}</p>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-[#D5E2F0] bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-semibold">Workspace Metadata</h2>
-            <div className="mt-2 space-y-1 text-xs text-[#475569]">
-              <p>Reference: {initialState.productReference || product.handle || product.productId}</p>
-              <p>Handle: {product.handle || "Not provided by source"}</p>
-              <p>Source: {initialState.sourceLabel}</p>
-              <p>Hydration: {initialState.hydrationMode}</p>
-              <p>Last Shopify Sync: {asIso(initialState.lastSyncedAt)}</p>
-            </div>
-          </section>
-        </aside>
-      </div>
+      </section>
     </div>
   );
 }

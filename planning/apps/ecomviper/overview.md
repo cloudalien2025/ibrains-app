@@ -74,6 +74,20 @@ These planning roots are active in the current repository structure.
 - Gallery supports Shopify images plus hosted/generated asset URLs when available.
 - Merchant identity zones avoid extraction-debug/internal key wording.
 
+## Product Editor Final Layout Standard (Sprint 010.1)
+
+- Product Editor workspace starts with a hero row:
+  - left: Product Gallery
+  - right: Product Summary (includes title + shipping)
+- No oversized standalone header card above hero.
+- Primary edit action row sits inside full-width edit area below hero and uses:
+  - `Generate Intelligence`
+  - `Save Changes`
+  - `Publish`
+- `Publish` refers to public `ecomviper.com` publish semantics and may be placeholder-disabled when backend is not enabled.
+- Merchant Product Editor UI excludes internal developer diagnostics (for example Workspace Metadata/source debug keys).
+- Gallery add-image workflow supports computer upload, URL add, and future Image Studio hook.
+
 ## Planning Navigation
 
 For family-level direction, start with:

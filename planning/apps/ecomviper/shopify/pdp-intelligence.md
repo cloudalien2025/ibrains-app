@@ -100,3 +100,15 @@ Hotfix 009.9 behavior:
 - EcomViper Product Editor implements this as native React workspace UI, not copied eBay HTML.
 - Gallery and summary are display-layer consumers of existing `sourceFacts`/record state.
 - Gallery redesign must not change supplier ingestion, extraction, OCR, or generation execution paths.
+
+## Product Editor Final Action Semantics (Sprint 010.1)
+
+- Product Editor action row appears in the full-width edit area below hero with:
+  - `Generate Intelligence`
+  - `Save Changes`
+  - `Publish`
+- `Preview PDP` is not a primary edit action in this final layout.
+- Publish semantics:
+  - publish approved listing/PDP content to public `ecomviper.com`
+  - must not be treated as save-only state
+  - must not claim success when backend publish execution is unavailable
