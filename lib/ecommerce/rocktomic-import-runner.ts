@@ -2,7 +2,21 @@ import type { Pool } from "pg";
 import { mapRocktomicPackageToEcommerceRows, type EcomImportRowSet, type JsonValue, type RocktomicPackageArtifacts } from "@/lib/ecommerce/rocktomic-package-import";
 
 function asJsonb(value: unknown): string {
-  return JSON.stringify(value ?? null);
+  return JSON.stringify(sanitizeJsonValue(value ?? null));
+}
+
+function sanitizeJsonValue(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.replace(/\u0000/g, "");
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeJsonValue(entry));
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, sanitizeJsonValue(entry)]);
+    return Object.fromEntries(entries);
+  }
+  return value;
 }
 
 async function upsertSupplier(pool: Pick<Pool, "query">, rowSet: EcomImportRowSet): Promise<void> {

@@ -108,3 +108,69 @@ Blocked SKUs are persisted for audit/review and future workflow control, but the
 - Phase 5: bind Product Editor read-only supplier facts from shared ecommerce DB.
 - Phase 6: bind Generate Intelligence to shared supplier intelligence.
 - Future OptiPixel phase: consume `ecommerce_supplier_assets` + remote asset metadata for image intelligence workflows.
+
+## Phase 4.1 Operational Closure (2026-05-31 UTC)
+
+Live execution status:
+
+- deployment health confirmed before DB work:
+  - `/api/meta/release`: `git_sha=022a10e09c294b0a288d78375d77f26d90866246`, `build_id=2565676178`
+  - `/api/health`: `200`
+  - `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai`: pass
+
+Target DB safety checks:
+
+- `ECOMMERCE_DATABASE_URL` confirmed present in operator env and masked target resolved to:
+  - `ibrains-ecommerce-prod-postgres-do-user-...g.db.ondigitalocean.com`
+- explicit checks confirmed:
+  - contains `ibrains-ecommerce`: `true`
+  - contains `ecomviper-prod-postgres`: `false`
+  - contains `ibrains-postgres`: `false`
+- `npm run ecommerce:check-db` required an SSL compatibility query param in this runtime:
+  - `&uselibpqcompat=true`
+  - result: connection success
+
+Backup/restore safety note:
+
+- direct DigitalOcean backup tooling (`doctl`) was not available in this runner.
+- pre-migration DB inventory showed `public` table count `0` (new/empty schema state), so migration/import proceeded as low-risk initialization.
+
+Migration/import/verify results (live):
+
+1. `npm run ecommerce:migrate`:
+   - first run: `applied=1` (`20260601_ecommerce_supplier_intelligence.sql`)
+   - subsequent run: `applied=0`, `skipped=1` (idempotent)
+2. `npm run ecomviper:import-rocktomic-supplier-package`:
+   - import id: `eimp_a246e1869b30f19a3abf6424`
+   - package status: `fail`
+   - skus: `164`
+   - usable: `60`
+   - usable_with_warnings: `5`
+   - blocked: `99`
+   - extraction_error: `0`
+   - rows: `product_facts=164 pricing=164 inventory=164 assets=164 validation=164 skipped=0 errored=0`
+3. `npm run ecommerce:verify-rocktomic-import`:
+   - expected counts matched actual counts
+   - blocked/usable/usable_with_warnings statuses distinguished correctly
+   - coverage query summary: `ai_label_text_evidence=147`, `ocr_evidence=0`, `ready_for_optipixel=147`
+
+Idempotency check:
+
+- import re-run completed with stable row counts.
+- duplicate checks by `COUNT(*)` vs `COUNT(DISTINCT sku)` for each supplier table matched (`164` each).
+- `ecommerce_supplier_package_imports` remained `1` row for `rocktomic` under the unique package key.
+
+Live defect discovered/fixed during Phase 4.1:
+
+- first live import attempt failed with `unsupported Unicode escape sequence` from payload content.
+- narrow fix applied:
+  - sanitize null-byte characters in mapped strings (`lib/ecommerce/rocktomic-package-import.ts`)
+  - sanitize JSONB payloads recursively before insert/upsert (`lib/ecommerce/rocktomic-import-runner.ts`)
+  - regression test added: `tests/ecommerce_phase4_null_byte_sanitization.test.ts`
+
+Offline package rebuild timeout follow-up:
+
+- rerun with extended timeout:
+  - `timeout 600 npm run ecomviper:build-rocktomic-supplier-data`
+  - still timed out at `600.01s` after source enumeration stage
+- closure proceeded using existing latest artifacts generated at `2026-05-31T18:42:26Z` and matching expected Phase 3.6 counts/policy.

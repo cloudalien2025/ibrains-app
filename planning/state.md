@@ -372,6 +372,59 @@ Last updated: 2026-05-31 (UTC)
 - Recommended next phase:
   - Phase 5 — bind Product Editor read-only supplier facts to shared ecommerce DB with blocked-SKU safety gates.
 
+## Sprint Checkpoint: Phase 4.1 Live Ecommerce DB Migration/Import/Verify Closure (Local Branch)
+
+- Branch: `sprint-021-phase4-1-live-ecommerce-import-closure`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: live execution + closure metadata update in progress; MR/deploy verification pending.
+- Scope executed:
+  - verified deployment health before DB work:
+    - `/api/meta/release`: `git_sha=022a10e09c294b0a288d78375d77f26d90866246`, `build_id=2565676178`
+    - `/api/health`: `200`
+    - production smoke: pass
+  - validated target DB boundary and connection:
+    - target host: `ibrains-ecommerce-prod-postgres-do-user-...g.db.ondigitalocean.com`
+    - `ecomviper-prod-postgres`/`ibrains-postgres` not present in `ECOMMERCE_DATABASE_URL`
+    - `npm run ecommerce:check-db`: success with `&uselibpqcompat=true` operator compatibility suffix
+  - pre-migration safety check:
+    - `public` table count was `0` before migration (new/empty state)
+  - migration executed live:
+    - `npm run ecommerce:migrate` first run: `applied=1` (`20260601_ecommerce_supplier_intelligence.sql`)
+    - rerun: `applied=0`, `skipped=1` (idempotent)
+  - import executed live:
+    - `npm run ecomviper:import-rocktomic-supplier-package`
+    - import id: `eimp_a246e1869b30f19a3abf6424`
+    - package status: `fail`
+    - skus: `164` (`usable=60`, `usable_with_warnings=5`, `blocked=99`, `extraction_error=0`)
+    - rows: product facts/pricing/inventory/assets/validation all `164`
+  - verify executed live:
+    - `npm run ecommerce:verify-rocktomic-import`: pass
+    - expected vs actual counts matched
+    - table counts matched (`164` each for products/facts/pricing/inventory/assets/validation)
+    - coverage summary queryable (`ai_label_text_evidence=147`, `ready_for_optipixel=147`)
+  - idempotency execution:
+    - import run a second time
+    - verify rerun pass
+    - distinct-SKU duplicate checks across supplier tables: no duplicates
+    - `ecommerce_supplier_package_imports` rows for `rocktomic`: `1`
+- Live defect discovered/fixed in this lane:
+  - initial import failed with `unsupported Unicode escape sequence`
+  - fix:
+    - sanitize null-byte characters in mapped strings and JSONB payloads before upsert
+    - regression test added: `tests/ecommerce_phase4_null_byte_sanitization.test.ts`
+- Package rebuild timeout follow-up:
+  - `timeout 600 npm run ecomviper:build-rocktomic-supplier-data` still timed out at `600.01s` after source enumeration
+  - closure used valid existing package artifacts (`generatedAt=2026-05-31T18:38:32.479Z`, `policy=rocktomic_phase3_6_v1`, `164` SKUs)
+- Boundary confirmation:
+  - `DATABASE_URL` remains core iBrains boundary
+  - ecommerce migration/import/verify executed via `ECOMMERCE_DATABASE_URL` only
+  - no Product Editor / Generate Intelligence / runtime route behavior switch
+  - no admin import UI/button
+  - no runtime extraction/source fetching side effects
+  - no permanent `.ai/.tif` binary storage
+- Recommended next phase:
+  - Phase 5 — Product Editor read-only supplier facts binding from shared ecommerce DB with blocked-SKU safety gates.
+
 ## Sprint Checkpoint: Rocktomic Supplier Data Package Phase 1 (Offline All-SKU Audit)
 
 - Branch: `rocktomic-offline-all-sku-audit-phase1`
