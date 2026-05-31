@@ -2103,3 +2103,21 @@ Warning:
   - historical app log tail still contains prior `Failed to proxy https://localhost:3001/... EPROTO` entries from earlier runs; no new nginx error-log growth observed in this closure run.
 - Recommended next sprint:
   - run manual signed-in browser verification for allowlisted admin and non-admin denial paths, then continue stabilization backlog.
+
+## Admin Foundation Closure Docs-Only Update
+
+- Follow-up MR for closure metadata:
+  - `!268`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/268`
+  - merge commit SHA: `257fdba26b25c0cd4affc60d1d2a2beeb56f5c97`
+  - MR pipeline `2564729470`: success
+  - main/deploy pipeline `2564731421`: success
+  - deploy job `14618133332`: success
+- Final production release after docs-only deploy:
+  - `/api/meta/release`:
+    - `git_sha=257fdba26b25c0cd4affc60d1d2a2beeb56f5c97`
+    - `build_id=2564731421`
+    - `deployed_at=2026-05-31T03:52:41Z`
+    - `release_metadata_complete=true`
+- Final local repository closure state:
+  - current branch: `main`
+  - local status: clean
