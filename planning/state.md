@@ -2223,3 +2223,35 @@ Warning:
   - open MR and verify green pipeline
   - merge + branch cleanup
   - production deploy verification and smoke/log checks
+
+## Sprint Closure Update: EcomViper Product Editor Final Layout + Gallery Add Images
+
+- Sprint/branch: `ecomviper-product-editor-final-layout-gallery-add-images`
+- MR: `!274` (`https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/274`)
+- Source commit SHA: `915948ff3275f8537640a69fe622e63d83d29a88`
+- Merge commit SHA: `47977abbee81d084b5833afcd3211ffd04f7864f`
+- Pipeline/checks:
+  - MR pipeline `2565279880` passed
+  - branch pipeline `2565279687` passed
+  - main deploy pipeline `2565287223` passed
+- Branch deletion status:
+  - remote source branch deleted on merge: yes
+  - local source branch deleted: yes
+- Final local repository state:
+  - branch: `main`
+  - status: clean
+- Production release verification (`/api/meta/release`):
+  - `git_sha=47977abbee81d084b5833afcd3211ffd04f7864f`
+  - `build_id=2565287223`
+  - `deployed_at=2026-05-31T13:14:38Z`
+  - `release_metadata_complete=true`
+- Production smoke summary:
+  - `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai` passed
+  - `/api/health` and `/api/meta/release` returned `200`
+  - protected routes returned expected `307` redirects while signed out
+  - close-wait socket count: `0`
+  - nginx/app/journal tails inspected (no new blocking deployment errors)
+- Signed-in verification status:
+  - signed-in desktop/mobile visual verification for Product Editor hero/gallery interactions remains blocked in this CLI run (no authenticated browser session).
+- Recommended next sprint:
+  - complete authenticated desktop/mobile verification evidence capture for Product Editor hero/gallery/add-image interactions and publish-placeholder UX, then continue publish backend wiring.
