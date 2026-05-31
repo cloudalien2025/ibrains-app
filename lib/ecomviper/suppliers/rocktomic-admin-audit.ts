@@ -33,6 +33,7 @@ export interface RocktomicArtifactStatus {
     | "assets.json"
     | "audit.csv"
     | "validation-report.json"
+    | "validation-policy-calibration-report.json"
     | "catalog-link-evidence.json"
     | "template-asset-evidence.json"
     | "ocr-evidence.json"
@@ -73,7 +74,13 @@ export interface RocktomicSkuValidationPreviewRow {
     usableForOptiWal: boolean;
     usableForOptizon: boolean;
     readyForChannelImageGeneration: boolean;
+    ingredientMatchingReadiness: string;
+    productEditorFactsReadiness: string;
+    complianceEvidenceReadiness: string;
+    optiPixelAssetReadiness: string;
   };
+  readinessDefects: Record<string, string[]>;
+  readinessWarnings: Record<string, string[]>;
   missingFields: string[];
   sourceNotes: string[];
 }
@@ -102,6 +109,24 @@ export interface RocktomicAdminAuditViewModel {
   aiLabelTextExtractionErrors: number;
   usableForOptiPixelSkuCount: number;
   readyForChannelImageGenerationSkuCount: number;
+  ingredientMatchingReadyCount: number;
+  ingredientMatchingReadyWithWarningsCount: number;
+  ingredientMatchingBlockedCount: number;
+  productEditorFactsReadyCount: number;
+  productEditorFactsReadyWithWarningsCount: number;
+  productEditorFactsBlockedCount: number;
+  complianceEvidenceReadyCount: number;
+  complianceEvidenceReadyWithWarningsCount: number;
+  complianceEvidenceBlockedCount: number;
+  optiPixelAssetReadyCount: number;
+  optiPixelAssetReadyWithWarningsCount: number;
+  optiPixelAssetBlockedCount: number;
+  missingCoaWarningCount: number;
+  missingCoaNoLongerGlobalBlockCount: number;
+  globalBlockedBeforeCalibration: number;
+  globalBlockedAfterCalibration: number;
+  topBlockingDefectTypes: Array<{ defectField: string; count: number }>;
+  topWarningDefectTypes: Array<{ defectField: string; count: number }>;
   fieldCoverageSummary: RocktomicCoverageRow[];
   blockingFieldCoverageSummary: RocktomicCoverageRow[];
   warningFieldCoverageSummary: RocktomicCoverageRow[];
@@ -145,6 +170,8 @@ interface ValidationSkuRecord {
   missingFields?: unknown;
   sourceNotes?: unknown;
   readiness?: unknown;
+  readinessDefects?: unknown;
+  readinessWarnings?: unknown;
 }
 
 interface SourceRegistryRecord {
@@ -163,6 +190,7 @@ const EXPECTED_ARTIFACTS: Array<Pick<RocktomicArtifactStatus, "artifact" | "rela
   { artifact: "assets.json", relativePath: "latest/assets.json" },
   { artifact: "audit.csv", relativePath: "latest/audit.csv" },
   { artifact: "validation-report.json", relativePath: "latest/validation-report.json" },
+  { artifact: "validation-policy-calibration-report.json", relativePath: "latest/validation-policy-calibration-report.json" },
   { artifact: "catalog-link-evidence.json", relativePath: "latest/catalog-link-evidence.json" },
   { artifact: "template-asset-evidence.json", relativePath: "latest/template-asset-evidence.json" },
   { artifact: "ocr-evidence.json", relativePath: "latest/ocr-evidence.json" },
@@ -339,6 +367,20 @@ function parseSkuValidationResults(input: unknown): {
     .map((row, index) => {
       const entry = asObject((input as unknown[])[index]) as ValidationSkuRecord;
       const readiness = asObject(entry.readiness);
+      const toDefectMap = (value: unknown): Record<string, string[]> => {
+        const record = asObject(value);
+        const output: Record<string, string[]> = {};
+        for (const [key, defects] of Object.entries(record)) {
+          const defectRows = Array.isArray(defects)
+            ? defects
+                .map((defect) => defectToText(defect))
+                .filter((defect): defect is string => Boolean(defect))
+            : [];
+          output[key] = defectRows;
+        }
+        return output;
+      };
+
       return {
         sku: row.sku,
         productName: row.productName,
@@ -355,7 +397,13 @@ function parseSkuValidationResults(input: unknown): {
           usableForOptiWal: asBool(readiness.usableForOptiWal),
           usableForOptizon: asBool(readiness.usableForOptizon),
           readyForChannelImageGeneration: asBool(readiness.readyForChannelImageGeneration),
+          ingredientMatchingReadiness: asString(readiness.ingredientMatchingReadiness) || "blocked",
+          productEditorFactsReadiness: asString(readiness.productEditorFactsReadiness) || "blocked",
+          complianceEvidenceReadiness: asString(readiness.complianceEvidenceReadiness) || "blocked",
+          optiPixelAssetReadiness: asString(readiness.optiPixelAssetReadiness) || "blocked",
         },
+        readinessDefects: toDefectMap(entry.readinessDefects),
+        readinessWarnings: toDefectMap(entry.readinessWarnings),
         missingFields: row.missingFields,
         sourceNotes: row.sourceNotes,
       };
@@ -533,6 +581,44 @@ export async function getRocktomicAdminAuditViewModel(options: ReadOptions = {})
     aiLabelTextExtractionErrors: asNumber(validation.aiLabelTextExtractionErrors),
     usableForOptiPixelSkuCount: asNumber(validation.usableForOptiPixelSkuCount),
     readyForChannelImageGenerationSkuCount: asNumber(validation.readyForChannelImageGenerationSkuCount),
+    ingredientMatchingReadyCount: asNumber(validation.ingredientMatchingReadyCount),
+    ingredientMatchingReadyWithWarningsCount: asNumber(validation.ingredientMatchingReadyWithWarningsCount),
+    ingredientMatchingBlockedCount: asNumber(validation.ingredientMatchingBlockedCount),
+    productEditorFactsReadyCount: asNumber(validation.productEditorFactsReadyCount),
+    productEditorFactsReadyWithWarningsCount: asNumber(validation.productEditorFactsReadyWithWarningsCount),
+    productEditorFactsBlockedCount: asNumber(validation.productEditorFactsBlockedCount),
+    complianceEvidenceReadyCount: asNumber(validation.complianceEvidenceReadyCount),
+    complianceEvidenceReadyWithWarningsCount: asNumber(validation.complianceEvidenceReadyWithWarningsCount),
+    complianceEvidenceBlockedCount: asNumber(validation.complianceEvidenceBlockedCount),
+    optiPixelAssetReadyCount: asNumber(validation.optiPixelAssetReadyCount),
+    optiPixelAssetReadyWithWarningsCount: asNumber(validation.optiPixelAssetReadyWithWarningsCount),
+    optiPixelAssetBlockedCount: asNumber(validation.optiPixelAssetBlockedCount),
+    missingCoaWarningCount: asNumber(validation.missingCoaWarningCount),
+    missingCoaNoLongerGlobalBlockCount: asNumber(validation.missingCoaNoLongerGlobalBlockCount),
+    globalBlockedBeforeCalibration: asNumber(validation.globalBlockedBeforeCalibration),
+    globalBlockedAfterCalibration: asNumber(validation.globalBlockedAfterCalibration),
+    topBlockingDefectTypes: Array.isArray(validation.topBlockingDefectTypes)
+      ? (validation.topBlockingDefectTypes as unknown[])
+          .map((entry) => {
+            const row = asObject(entry);
+            return {
+              defectField: asString(row.defectField) || "unknown_field",
+              count: asNumber(row.count),
+            };
+          })
+          .filter((entry) => entry.count > 0)
+      : [],
+    topWarningDefectTypes: Array.isArray(validation.topWarningDefectTypes)
+      ? (validation.topWarningDefectTypes as unknown[])
+          .map((entry) => {
+            const row = asObject(entry);
+            return {
+              defectField: asString(row.defectField) || "unknown_field",
+              count: asNumber(row.count),
+            };
+          })
+          .filter((entry) => entry.count > 0)
+      : [],
     fieldCoverageSummary: buildCoverageRows(validation.fieldCoverageSummary),
     blockingFieldCoverageSummary: buildCoverageRows(validation.blockingFieldCoverageSummary),
     warningFieldCoverageSummary: buildCoverageRows(validation.warningFieldCoverageSummary),

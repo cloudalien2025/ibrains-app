@@ -190,3 +190,20 @@ Import boundary is unchanged:
 - `ECOMMERCE_DATABASE_URL` only for migrate/import/verify
 - no runtime route import/extraction
 - no Product Editor/Generate Intelligence binding in this phase
+
+## Phase 4.3 Compatibility Update
+
+Phase 4.3 updates package readiness semantics and importer payload content without changing table families.
+
+Import now preserves calibrated readiness JSON that includes use-case-specific statuses:
+
+- `ingredientMatchingReadiness`
+- `productEditorFactsReadiness`
+- `complianceEvidenceReadiness`
+- `optiPixelAssetReadiness`
+- channel and downstream readiness dimensions
+
+Operational note:
+
+- missing COA is persisted as warning/compliance-evidence defect and does not block ingredient-matching readiness by itself.
+- blocked SKUs remain persisted for review and are still non-usable for downstream runtime binding until Phase 5+ gates.

@@ -126,3 +126,13 @@ Phase 5 remains:
 
 - Product Editor read-only binding to shared ecommerce supplier facts
 - only consume data already imported/validated in shared ecommerce DB
+
+## Phase 4.3 Artifact Note
+
+Phase 4.3 adds calibration-focused outputs that continue to use the same reliable builder flow:
+
+- `validation-report.json` now includes readiness breakdown and calibration counters.
+- new artifact: `validation-policy-calibration-report.json`.
+- `audit.csv` now includes readiness-dimension columns for operator triage.
+
+Reliability guarantees from Phase 4.2 remain unchanged (timing report, atomic promotion, incremental cache reuse).

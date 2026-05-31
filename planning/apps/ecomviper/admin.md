@@ -146,3 +146,19 @@ Merchant `/ecomviper` routes remain customer workflows and should not expose:
 - No admin write/edit/import UI is introduced in Phase 4.
 - No admin render dependency on `ECOMMERCE_DATABASE_URL` is introduced by default.
 - DB-backed admin read surfaces are a future enhancement after Phase 4 verification is stable.
+
+## Phase 4.3 Audit Calibration Visibility
+
+- Admin audit remains read-only and package-backed.
+- Added operator summaries for calibrated readiness dimensions:
+  - Ingredient matching
+  - Product Editor facts
+  - Compliance evidence
+  - OptiPixel asset readiness
+- Added calibration counters:
+  - missing COA warning count
+  - SKUs no longer globally blocked by missing COA
+  - before/after global blocked counts
+  - top remaining blocking defect types
+- No admin write/import/sync controls were added.
+- No runtime extraction/fetch/import side effects were added.

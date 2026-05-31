@@ -149,7 +149,17 @@ export interface AuditRow {
   warningDefectCount: number;
   blockingDefects: string[];
   warningDefects: string[];
+  complianceEvidenceDefects: string[];
+  assetReadinessDefects: string[];
+  ingredientMatchingDefects: string[];
+  productEditorFactsDefects: string[];
   notApplicableFields: string[];
+  ingredientMatchingReadiness: string;
+  productEditorFactsReadiness: string;
+  complianceEvidenceReadiness: string;
+  optiPixelAssetReadiness: string;
+  missingCoaWarning: boolean;
+  noLongerBlockedByCoa: boolean;
   usableForProductEditor: boolean;
   usableForGenerateIntelligence: boolean;
   usableForImageStudio: boolean;
@@ -502,7 +512,21 @@ export function buildAuditRows(input: {
       warningDefectCount: skuValidation?.warningDefects.length ?? 0,
       blockingDefects: skuValidation?.blockingDefects.map((defect) => `${defect.field}:${defect.code}`) ?? [],
       warningDefects: skuValidation?.warningDefects.map((defect) => `${defect.field}:${defect.code}`) ?? [],
+      complianceEvidenceDefects: skuValidation?.complianceEvidenceDefects.map((defect) => `${defect.field}:${defect.code}`) ?? [],
+      assetReadinessDefects: skuValidation?.assetReadinessDefects.map((defect) => `${defect.field}:${defect.code}`) ?? [],
+      ingredientMatchingDefects: skuValidation?.ingredientMatchingDefects.map((defect) => `${defect.field}:${defect.code}`) ?? [],
+      productEditorFactsDefects: skuValidation?.productEditorFactsDefects.map((defect) => `${defect.field}:${defect.code}`) ?? [],
       notApplicableFields: skuValidation?.notApplicableFields ?? [],
+      ingredientMatchingReadiness: skuValidation?.readiness.ingredientMatchingReadiness ?? "blocked",
+      productEditorFactsReadiness: skuValidation?.readiness.productEditorFactsReadiness ?? "blocked",
+      complianceEvidenceReadiness: skuValidation?.readiness.complianceEvidenceReadiness ?? "blocked",
+      optiPixelAssetReadiness: skuValidation?.readiness.optiPixelAssetReadiness ?? "blocked",
+      missingCoaWarning: Boolean(skuValidation?.warningDefects.some((defect) => defect.field === "assets.coaUrl")),
+      noLongerBlockedByCoa: Boolean(
+        skuValidation?.warningDefects.some((defect) => defect.field === "assets.coaUrl") &&
+          skuValidation.status !== "blocked" &&
+          skuValidation.status !== "extraction_error"
+      ),
       usableForProductEditor: Boolean(skuValidation?.readiness.usableForProductEditor),
       usableForGenerateIntelligence: Boolean(skuValidation?.readiness.usableForGenerateIntelligence),
       usableForImageStudio: Boolean(skuValidation?.readiness.usableForImageStudio),
@@ -555,6 +579,16 @@ export function toAuditCsv(rows: AuditRow[]): string {
     "warningDefectCount",
     "blockingDefects",
     "warningDefects",
+    "ingredientMatchingReadiness",
+    "productEditorFactsReadiness",
+    "complianceEvidenceReadiness",
+    "optiPixelAssetReadiness",
+    "missingCoaWarning",
+    "noLongerBlockedByCoa",
+    "ingredientMatchingDefects",
+    "productEditorFactsDefects",
+    "complianceEvidenceDefects",
+    "assetReadinessDefects",
     "notApplicableFields",
     "usableForProductEditor",
     "usableForGenerateIntelligence",
@@ -597,6 +631,16 @@ export function toAuditCsv(rows: AuditRow[]): string {
         String(row.warningDefectCount),
         row.blockingDefects.join("|"),
         row.warningDefects.join("|"),
+        row.ingredientMatchingReadiness,
+        row.productEditorFactsReadiness,
+        row.complianceEvidenceReadiness,
+        row.optiPixelAssetReadiness,
+        String(row.missingCoaWarning),
+        String(row.noLongerBlockedByCoa),
+        row.ingredientMatchingDefects.join("|"),
+        row.productEditorFactsDefects.join("|"),
+        row.complianceEvidenceDefects.join("|"),
+        row.assetReadinessDefects.join("|"),
         row.notApplicableFields.join("|"),
         String(row.usableForProductEditor),
         String(row.usableForGenerateIntelligence),

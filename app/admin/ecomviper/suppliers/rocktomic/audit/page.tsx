@@ -75,6 +75,22 @@ export default async function RocktomicAuditPage() {
         </div>
       </section>
 
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-600">Readiness Calibration Summary</h3>
+        <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+          <div><p className="font-medium">Ingredient Matching</p><p>ready: {audit.ingredientMatchingReadyCount} | warning: {audit.ingredientMatchingReadyWithWarningsCount} | blocked: {audit.ingredientMatchingBlockedCount}</p></div>
+          <div><p className="font-medium">Product Editor Facts</p><p>ready: {audit.productEditorFactsReadyCount} | warning: {audit.productEditorFactsReadyWithWarningsCount} | blocked: {audit.productEditorFactsBlockedCount}</p></div>
+          <div><p className="font-medium">Compliance Evidence</p><p>ready: {audit.complianceEvidenceReadyCount} | warning: {audit.complianceEvidenceReadyWithWarningsCount} | blocked: {audit.complianceEvidenceBlockedCount}</p></div>
+          <div><p className="font-medium">OptiPixel Assets</p><p>ready: {audit.optiPixelAssetReadyCount} | warning: {audit.optiPixelAssetReadyWithWarningsCount} | blocked: {audit.optiPixelAssetBlockedCount}</p></div>
+        </div>
+        <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+          <p>Missing COA warnings: {audit.missingCoaWarningCount}</p>
+          <p>No longer globally blocked by COA: {audit.missingCoaNoLongerGlobalBlockCount}</p>
+          <p>Global blocked before calibration: {audit.globalBlockedBeforeCalibration}</p>
+          <p>Global blocked after calibration: {audit.globalBlockedAfterCalibration}</p>
+        </div>
+      </section>
+
       {audit.issues.length > 0 ? (
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
           <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-amber-800">Package Issues</h3>
@@ -222,6 +238,18 @@ export default async function RocktomicAuditPage() {
                 <p className="mt-1 text-slate-500">No source errors reported.</p>
               )}
             </div>
+            <div>
+              <p className="font-medium">Top Remaining Blocking Defects</p>
+              {audit.topBlockingDefectTypes.length > 0 ? (
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  {audit.topBlockingDefectTypes.slice(0, 8).map((entry) => (
+                    <li key={`${entry.defectField}-${entry.count}`}>{entry.defectField}: {entry.count}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-slate-500">No blocking defects reported.</p>
+              )}
+            </div>
           </div>
         </article>
 
@@ -269,7 +297,7 @@ export default async function RocktomicAuditPage() {
                 <th className="py-2 pr-3">Validation Status</th>
                 <th className="py-2 pr-3">Blocking Defects</th>
                 <th className="py-2 pr-3">Warning Defects</th>
-                <th className="py-2 pr-3">Readiness Flags</th>
+                <th className="py-2 pr-3">Readiness</th>
                 <th className="py-2 pr-3">Missing Fields</th>
                 <th className="py-2 pr-3">Source Notes</th>
               </tr>
@@ -284,6 +312,8 @@ export default async function RocktomicAuditPage() {
                   <td className="py-2 pr-3">{row.blockingDefectCount}</td>
                   <td className="py-2 pr-3">{row.warningDefectCount}</td>
                   <td className="py-2 pr-3">
+                    IM:{row.readiness.ingredientMatchingReadiness} | PEF:{row.readiness.productEditorFactsReadiness} | CE:{row.readiness.complianceEvidenceReadiness} | OPA:{row.readiness.optiPixelAssetReadiness}
+                    <br />
                     PE:{boolMark(row.readiness.usableForProductEditor)} | GI:{boolMark(row.readiness.usableForGenerateIntelligence)} | IS:{boolMark(row.readiness.usableForImageStudio)} | OP:{boolMark(row.readiness.usableForOptiPixel)} | OB:{boolMark(row.readiness.usableForOptiBay)} | OW:{boolMark(row.readiness.usableForOptiWal)} | OZ:{boolMark(row.readiness.usableForOptizon)} | CIG:{boolMark(row.readiness.readyForChannelImageGeneration)}
                   </td>
                   <td className="py-2 pr-3">{defectPreview(row.missingFields)}</td>

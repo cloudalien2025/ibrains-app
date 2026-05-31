@@ -125,6 +125,11 @@ describe("rocktomic offline audit helpers", () => {
     expect(csv).toContain("hasLabelTemplateAi");
     expect(csv).toContain("usableForOptiPixel");
     expect(csv).toContain("blockingDefects");
+    expect(csv).toContain("ingredientMatchingReadiness");
+    expect(csv).toContain("productEditorFactsReadiness");
+    expect(csv).toContain("complianceEvidenceReadiness");
+    expect(csv).toContain("missingCoaWarning");
+    expect(csv).toContain("noLongerBlockedByCoa");
     expect(csv).toContain("ROC949");
 
     const report = buildValidationReport({
@@ -140,9 +145,11 @@ describe("rocktomic offline audit helpers", () => {
     expect(report.validationPolicyVersion).toBeTruthy();
     expect(report.supplierId).toBe("rocktomic");
     expect(report.skuValidationResults).toHaveLength(1);
-    expect(report.fieldCoverageSummary).toHaveProperty("assets.labelTemplateAiUrl");
-    expect(report.fieldCoverageSummary).toHaveProperty("assets.mockupTemplateTifUrl");
+    expect(report.fieldCoverageSummary).toHaveProperty("assets.coaUrl");
+    expect(report.fieldCoverageSummary).toHaveProperty("assets.mockupUrl");
     expect(report.fieldCoverageSummary).toHaveProperty("supplementFacts.aiOrOcrEvidence");
+    expect(report).toHaveProperty("readinessBreakdown");
+    expect(report).toHaveProperty("validationPolicyCalibrationReport");
     expect(report.sourceErrors).toHaveLength(1);
   });
 
