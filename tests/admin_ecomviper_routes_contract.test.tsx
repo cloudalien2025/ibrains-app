@@ -76,6 +76,24 @@ describe("admin ecomviper routes contract", () => {
       aiLabelTextExtractionErrors: 0,
       usableForOptiPixelSkuCount: 8,
       readyForChannelImageGenerationSkuCount: 11,
+      ingredientMatchingReadyCount: 48,
+      ingredientMatchingReadyWithWarningsCount: 17,
+      ingredientMatchingBlockedCount: 91,
+      productEditorFactsReadyCount: 45,
+      productEditorFactsReadyWithWarningsCount: 20,
+      productEditorFactsBlockedCount: 91,
+      complianceEvidenceReadyCount: 30,
+      complianceEvidenceReadyWithWarningsCount: 35,
+      complianceEvidenceBlockedCount: 91,
+      optiPixelAssetReadyCount: 55,
+      optiPixelAssetReadyWithWarningsCount: 8,
+      optiPixelAssetBlockedCount: 93,
+      missingCoaWarningCount: 22,
+      missingCoaNoLongerGlobalBlockCount: 2,
+      globalBlockedBeforeCalibration: 101,
+      globalBlockedAfterCalibration: 99,
+      topBlockingDefectTypes: [{ defectField: "supplementFacts.servingSize", count: 75 }],
+      topWarningDefectTypes: [{ defectField: "assets.coaUrl", count: 22 }],
       fieldCoverageSummary: [],
       blockingFieldCoverageSummary: [],
       warningFieldCoverageSummary: [],
@@ -198,6 +216,8 @@ describe("admin ecomviper routes contract", () => {
     expect(html).toContain("Rocktomic Supplier Audit");
     expect(html).toContain("Package status");
     expect(html).toContain("Total SKUs Discovered");
+    expect(html).toContain("Readiness Calibration Summary");
+    expect(html).toContain("Missing COA warnings");
     expect(html).toContain("Validation Status");
     expect(html).toContain('data-testid="admin-rocktomic-audit-table"');
     expect(html).toContain("Artifact Status");

@@ -1,0 +1,240 @@
+{
+  "generatedAt": "2026-05-31T21:33:49.429Z",
+  "topGlobalBlockingDefectTypes": [
+    {
+      "defectField": "supplementFacts.servingSize",
+      "count": 75,
+      "sampleSkus": [
+        "ROC010",
+        "ROC011",
+        "ROC012",
+        "ROC013",
+        "ROC014",
+        "ROC015",
+        "ROC016",
+        "ROC017",
+        "ROC018",
+        "ROC107M",
+        "ROC110M",
+        "ROC1120"
+      ]
+    },
+    {
+      "defectField": "supplementFacts.servingsPerContainer",
+      "count": 75,
+      "sampleSkus": [
+        "ROC010",
+        "ROC011",
+        "ROC012",
+        "ROC013",
+        "ROC014",
+        "ROC015",
+        "ROC016",
+        "ROC017",
+        "ROC018",
+        "ROC107M",
+        "ROC110M",
+        "ROC1120"
+      ]
+    },
+    {
+      "defectField": "pricing.wholesaleCostOrMembership",
+      "count": 22,
+      "sampleSkus": [
+        "ROC001",
+        "ROC002",
+        "ROC004",
+        "ROC006",
+        "ROC008",
+        "ROC009",
+        "ROC100",
+        "ROC102",
+        "ROC112",
+        "ROC620",
+        "ROC621",
+        "ROC622"
+      ]
+    },
+    {
+      "defectField": "productName",
+      "count": 19,
+      "sampleSkus": [
+        "ROC001",
+        "ROC002",
+        "ROC004",
+        "ROC006",
+        "ROC008",
+        "ROC009",
+        "ROC100",
+        "ROC112",
+        "ROC620",
+        "ROC621",
+        "ROC622",
+        "ROC623"
+      ]
+    },
+    {
+      "defectField": "assets.labelTemplateOrEquivalent",
+      "count": 16,
+      "sampleSkus": [
+        "ROC001",
+        "ROC002",
+        "ROC004",
+        "ROC006",
+        "ROC008",
+        "ROC009",
+        "ROC100",
+        "ROC112",
+        "ROC620",
+        "ROC621",
+        "ROC622",
+        "ROC623"
+      ]
+    },
+    {
+      "defectField": "assets.usableProductAsset",
+      "count": 16,
+      "sampleSkus": [
+        "ROC001",
+        "ROC002",
+        "ROC004",
+        "ROC006",
+        "ROC008",
+        "ROC009",
+        "ROC100",
+        "ROC112",
+        "ROC620",
+        "ROC621",
+        "ROC622",
+        "ROC623"
+      ]
+    },
+    {
+      "defectField": "supplementFacts.activeIngredients",
+      "count": 16,
+      "sampleSkus": [
+        "ROC011",
+        "ROC502",
+        "ROC603",
+        "ROC604",
+        "ROC619",
+        "ROC731",
+        "ROC732",
+        "ROC738",
+        "ROC803",
+        "ROC816",
+        "ROC817",
+        "ROC915"
+      ]
+    },
+    {
+      "defectField": "inventory.availability",
+      "count": 10,
+      "sampleSkus": [
+        "ROC001",
+        "ROC002",
+        "ROC004",
+        "ROC006",
+        "ROC008",
+        "ROC009",
+        "ROC102",
+        "ROC112",
+        "ROC917",
+        "ROC921"
+      ]
+    },
+    {
+      "defectField": "supplementFacts.aiOrOcrEvidence",
+      "count": 5,
+      "sampleSkus": [
+        "ROC502",
+        "ROC619",
+        "ROC984",
+        "ROC985",
+        "ROC987"
+      ]
+    }
+  ],
+  "blockedOnlyByCoaCount": 2,
+  "blockedOnlyByCoaSkus": [
+    "ROC610",
+    "ROC919"
+  ],
+  "blockedBySupplementFactsOrIngredientsCount": 75,
+  "blockedBySupplementFactsOrIngredientsSkus": [
+    "ROC010",
+    "ROC011",
+    "ROC012",
+    "ROC013",
+    "ROC014",
+    "ROC015",
+    "ROC016",
+    "ROC017",
+    "ROC018",
+    "ROC107M",
+    "ROC110M",
+    "ROC1120"
+  ],
+  "blockedByPricingDefectsCount": 22,
+  "blockedByPricingDefectsSkus": [
+    "ROC001",
+    "ROC002",
+    "ROC004",
+    "ROC006",
+    "ROC008",
+    "ROC009",
+    "ROC100",
+    "ROC102",
+    "ROC112",
+    "ROC620",
+    "ROC621",
+    "ROC622"
+  ],
+  "blockedByInventoryDefectsCount": 10,
+  "blockedByInventoryDefectsSkus": [
+    "ROC001",
+    "ROC002",
+    "ROC004",
+    "ROC006",
+    "ROC008",
+    "ROC009",
+    "ROC102",
+    "ROC112",
+    "ROC917",
+    "ROC921"
+  ],
+  "blockedByAssetDefectsCount": 16,
+  "blockedByAssetDefectsSkus": [
+    "ROC001",
+    "ROC002",
+    "ROC004",
+    "ROC006",
+    "ROC008",
+    "ROC009",
+    "ROC100",
+    "ROC112",
+    "ROC620",
+    "ROC621",
+    "ROC622",
+    "ROC623"
+  ],
+  "blockedByIdentityOrTypeDefectsCount": 19,
+  "blockedByIdentityOrTypeDefectsSkus": [
+    "ROC001",
+    "ROC002",
+    "ROC004",
+    "ROC006",
+    "ROC008",
+    "ROC009",
+    "ROC100",
+    "ROC112",
+    "ROC620",
+    "ROC621",
+    "ROC622",
+    "ROC623"
+  ],
+  "globalBlockedBeforeCalibration": 99,
+  "globalBlockedAfterCalibration": 97,
+  "missingCoaWarningCount": 40,
+  "missingCoaNoLongerGlobalBlockCount": 2
+}

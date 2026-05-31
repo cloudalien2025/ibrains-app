@@ -212,3 +212,22 @@ For channel-specific implementation truth, use each channel's:
 - `overview.md`
 - `product-intent.md`
 - sprint docs where present
+
+## Rocktomic Validation Policy Calibration (Phase 4.3)
+
+- Phase 4.3 recalibrates validation semantics for Phase 5 ingredient matching readiness.
+- Missing COA (`assets.coaUrl`) is now a compliance-evidence warning, not a global ingredient-matching blocker.
+- Validation output now includes use-case-specific readiness dimensions:
+  - `ingredientMatchingReadiness`
+  - `productEditorFactsReadiness`
+  - `complianceEvidenceReadiness`
+  - `optiPixelAssetReadiness`
+  - `channelImageGenerationReadiness`
+  - `generateIntelligenceReadiness`
+  - `optiBayReadiness`, `optiWalReadiness`, `optiZonReadiness`
+- Phase 4.3 updates offline artifacts (`validation-report.json`, `audit.csv`) and read-only admin summaries only.
+- Product Editor and Generate Intelligence runtime behavior remain unchanged in this phase.
+
+Phase 4.3 contract source:
+
+- `planning/apps/ecomviper/shopify/rocktomic-validation-policy-calibration.md`

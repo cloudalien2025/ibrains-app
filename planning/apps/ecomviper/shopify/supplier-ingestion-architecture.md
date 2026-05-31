@@ -310,3 +310,18 @@ Control flags:
 - `ROCKTOMIC_BUILD_DRY_RUN=1`
 
 Runtime boundaries remain unchanged: no route-render extraction/fetch, no sync workers, no Product Editor/Generate Intelligence runtime switch in Phase 4.2.
+
+## Rocktomic Validation Calibration (Phase 4.3)
+
+Phase 4.3 refines how package validation maps to downstream readiness:
+
+1. Missing COA is a compliance-evidence warning/defect, not an ingredient-matching global blocker.
+2. Ingredient matching readiness is driven by identity + usable supplement/ingredient facts.
+3. Product Editor facts readiness is separated from compliance evidence readiness.
+4. OptiPixel asset readiness remains independent from ingredient matching readiness.
+
+Phase 4.3 remains offline/admin/import-lane only:
+
+- no runtime route extraction/sync changes
+- no Product Editor/Generate Intelligence runtime switch
+- no admin-triggered build/import actions

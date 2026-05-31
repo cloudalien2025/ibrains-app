@@ -66,6 +66,7 @@ async function writeFixturePackage(options: FixtureOptions = {}): Promise<string
   await fs.writeFile(path.join(latestDir, "template-asset-evidence.json"), JSON.stringify({ evidence: [] }));
   await fs.writeFile(path.join(latestDir, "ocr-evidence.json"), JSON.stringify([]));
   await fs.writeFile(path.join(latestDir, "ai-label-text-evidence.json"), JSON.stringify({ records: [] }));
+  await fs.writeFile(path.join(latestDir, "validation-policy-calibration-report.json"), JSON.stringify({ generatedAt: "2026-05-31T00:00:00.000Z" }));
 
   if (options.includeAuditCsv !== false) {
     await fs.writeFile(path.join(latestDir, "audit.csv"), ["sku,validationStatus", "ROC001,usable", "ROC002,blocked"].join("\n"));
@@ -95,6 +96,24 @@ async function writeFixturePackage(options: FixtureOptions = {}): Promise<string
       aiLabelTextExtractionErrors: 1,
       usableForOptiPixelSkuCount: 0,
       readyForChannelImageGenerationSkuCount: 0,
+      ingredientMatchingReadyCount: 1,
+      ingredientMatchingReadyWithWarningsCount: 0,
+      ingredientMatchingBlockedCount: 1,
+      productEditorFactsReadyCount: 1,
+      productEditorFactsReadyWithWarningsCount: 0,
+      productEditorFactsBlockedCount: 1,
+      complianceEvidenceReadyCount: 0,
+      complianceEvidenceReadyWithWarningsCount: 1,
+      complianceEvidenceBlockedCount: 1,
+      optiPixelAssetReadyCount: 0,
+      optiPixelAssetReadyWithWarningsCount: 1,
+      optiPixelAssetBlockedCount: 1,
+      missingCoaWarningCount: 1,
+      missingCoaNoLongerGlobalBlockCount: 1,
+      globalBlockedBeforeCalibration: 2,
+      globalBlockedAfterCalibration: 1,
+      topBlockingDefectTypes: [{ defectField: "supplementFacts.activeIngredients", count: 1 }],
+      topWarningDefectTypes: [{ defectField: "assets.coaUrl", count: 1 }],
       fieldCoverageSummary: {
         sku: { requiredSkuCount: 2, presentSkuCount: 2, missingSkuCount: 0 },
       },
@@ -183,6 +202,10 @@ describe("rocktomic admin audit reader", () => {
     expect(vm.blockedSkuCount).toBe(1);
     expect(vm.aiLabelTextExtractionAttempted).toBe(2);
     expect(vm.aiLabelTextExtractionSucceeded).toBe(1);
+    expect(vm.ingredientMatchingReadyCount).toBe(1);
+    expect(vm.productEditorFactsBlockedCount).toBe(1);
+    expect(vm.missingCoaWarningCount).toBe(1);
+    expect(vm.missingCoaNoLongerGlobalBlockCount).toBe(1);
     expect(vm.aiTextFactsCoverage?.presentSkuCount).toBe(1);
     expect(vm.auditCsvPresent).toBe(true);
     expect(vm.auditCsvRowCount).toBe(2);

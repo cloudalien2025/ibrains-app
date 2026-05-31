@@ -140,3 +140,12 @@ Phase 4.2 keeps Phase 3.6 extraction semantics, but improves operational freshne
   - `extractionSkippedReason`
 
 Large `.ai` binaries remain temp-only and are not persisted.
+
+## Phase 4.3 Readiness Consumption Note
+
+Phase 4.3 does not change AI extraction mechanics from Phase 3.6.
+It changes validation/readiness interpretation of extracted facts:
+
+- usable AI-derived ingredient facts can make a SKU ingredient-matching ready even when COA is missing.
+- compliance evidence readiness remains separate and can stay warning/blocked based on COA/provenance defects.
+- AI extraction review-needed states remain warning-level when required ingredient facts are present.

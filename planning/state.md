@@ -2813,3 +2813,45 @@ Architecture boundary confirmation:
 Recommended next phase:
 
 - Phase 5 — Product Editor read-only shared ecommerce DB supplier-facts binding.
+
+## Sprint Checkpoint: Phase 4.3 Rocktomic Validation Policy Calibration (Local Branch)
+
+- Branch: `sprint-023-rocktomic-validation-calibration`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + package rebuild + live import/verify complete; MR/pipeline/merge pending.
+- Scope completed:
+  - recalibrated validation policy with readiness dimensions and defect families:
+    - `lib/ecomviper/suppliers/rocktomic-validation-policy.ts`
+  - updated offline outputs:
+    - `validation-report.json`
+    - `audit.csv`
+    - added `validation-policy-calibration-report.json`
+  - updated read-only admin audit summaries:
+    - `lib/ecomviper/suppliers/rocktomic-admin-audit.ts`
+    - `app/admin/ecomviper/suppliers/rocktomic/audit/page.tsx`
+  - updated DB verify script for readiness checks:
+    - `scripts/ecommerce/verify_rocktomic_supplier_import.ts`
+- Phase 4.3 rebuilt package summary:
+  - policy version: `rocktomic_phase4_3_v1`
+  - SKUs validated: `164`
+  - global: `usable=8`, `usable_with_warnings=59`, `blocked=97`, `extraction_error=0`
+  - ingredient matching readiness: `ready=63`, `ready_with_warnings=66`, `blocked=35`
+  - product editor facts readiness: `ready=63`, `ready_with_warnings=7`, `blocked=94`
+  - compliance evidence readiness: `ready=121`, `ready_with_warnings=24`, `blocked=19`
+  - missing COA warning count: `40`
+  - missing COA no-longer-global-block count: `2`
+  - global blocked before/after: `99 -> 97`
+- Live shared ecommerce DB import verification (using `ECOMMERCE_DATABASE_URL`):
+  - target: `ibrains-ecommerce-prod-postgres`
+  - note: local runtime required `&uselibpqcompat=true` appended at execution time for TLS compatibility
+  - import command succeeded and was re-run idempotently
+  - verify command succeeded after each import
+  - stable DB counts after re-import:
+    - products/facts/pricing/inventory/assets/validation rows all `164`
+    - statuses: `usable=8`, `usable_with_warnings=59`, `blocked=97`, `extraction_error=0`
+- Boundaries preserved:
+  - no Product Editor runtime binding
+  - no Generate Intelligence runtime binding
+  - no admin write/sync/import UI
+  - no runtime route extraction/fetch side effects
+  - no `DATABASE_URL` fallback in ecommerce import/verify scripts

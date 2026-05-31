@@ -110,3 +110,16 @@ The route remains:
   - no admin render dependency on `ECOMMERCE_DATABASE_URL`
   - no import trigger in admin UI
 - DB-backed admin visibility can be added in a future explicit phase with auth and safety review.
+
+## Phase 4.3 Compatibility Note
+
+Phase 4.3 extends this read-only surface with calibrated readiness summaries:
+
+- ingredient matching readiness
+- Product Editor facts readiness
+- compliance evidence readiness
+- OptiPixel asset readiness
+- missing COA warning counts and no-longer-global-blocked-by-COA counts
+- before/after global blocked totals
+
+No write controls were added and no extraction/import actions are triggered from this route.

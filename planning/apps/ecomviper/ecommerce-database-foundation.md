@@ -203,3 +203,17 @@ Phase 4.2 is offline builder reliability hardening only.
 - no Product Editor/Generate Intelligence binding in this phase
 
 Phase 4.2 improves supplier package freshness reliability so Phase 5 can bind read-only supplier facts with predictable package rebuild SLAs.
+
+## Phase 4.3 Clarification
+
+Phase 4.3 recalibrates validation semantics and readiness dimensions for supplier package outputs and DB payloads.
+
+Boundaries remain unchanged:
+
+- `DATABASE_URL`: core iBrains platform data only
+- `ECOMMERCE_DATABASE_URL`: ecommerce supplier import/read lane
+- no use of `ecomviper-prod-postgres`
+- no runtime Product Editor/Generate Intelligence route binding changes
+
+Phase 4.3 importer behavior keeps using JSONB readiness payload compatibility and idempotent upserts.
+No new runtime DB dependency is introduced for admin/page render paths.

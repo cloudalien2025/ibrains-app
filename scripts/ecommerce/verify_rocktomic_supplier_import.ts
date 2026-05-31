@@ -12,6 +12,14 @@ interface ValidationReport {
   usableWithWarningsSkuCount?: number;
   blockedSkuCount?: number;
   extractionErrorSkuCount?: number;
+  ingredientMatchingReadyCount?: number;
+  ingredientMatchingReadyWithWarningsCount?: number;
+  ingredientMatchingBlockedCount?: number;
+  productEditorFactsReadyCount?: number;
+  productEditorFactsReadyWithWarningsCount?: number;
+  productEditorFactsBlockedCount?: number;
+  missingCoaWarningCount?: number;
+  missingCoaNoLongerGlobalBlockCount?: number;
 }
 
 async function loadValidationReport(rootDir: string): Promise<ValidationReport> {
@@ -85,6 +93,34 @@ async function main(): Promise<void> {
       [supplierSlug]
     );
 
+    const readinessRows = await pool.query<{ readiness: string; count: string }>(
+      `SELECT readiness->>'ingredientMatchingReadiness' AS readiness, COUNT(*)::text AS count
+         FROM ecommerce_supplier_validation_results
+        WHERE supplier_slug = $1
+        GROUP BY readiness->>'ingredientMatchingReadiness'`,
+      [supplierSlug]
+    );
+    const ingredientReadiness = new Map(readinessRows.rows.map((row) => [row.readiness || "unknown", Number.parseInt(row.count, 10)]));
+
+    const productEditorRows = await pool.query<{ readiness: string; count: string }>(
+      `SELECT readiness->>'productEditorFactsReadiness' AS readiness, COUNT(*)::text AS count
+         FROM ecommerce_supplier_validation_results
+        WHERE supplier_slug = $1
+        GROUP BY readiness->>'productEditorFactsReadiness'`,
+      [supplierSlug]
+    );
+    const productEditorReadiness = new Map(productEditorRows.rows.map((row) => [row.readiness || "unknown", Number.parseInt(row.count, 10)]));
+
+    const coaVsIngredient = await pool.query<{ missing_coa_warning: string; ingredient_blocked: string; ingredient_ready: string }>(
+      `SELECT
+         COUNT(*) FILTER (WHERE warning_defects::text ILIKE '%assets.coaUrl%')::text AS missing_coa_warning,
+         COUNT(*) FILTER (WHERE readiness->>'ingredientMatchingReadiness' = 'blocked' AND warning_defects::text ILIKE '%assets.coaUrl%')::text AS ingredient_blocked,
+         COUNT(*) FILTER (WHERE readiness->>'ingredientMatchingReadiness' IN ('ready','ready_with_warnings','needs_review') AND warning_defects::text ILIKE '%assets.coaUrl%')::text AS ingredient_ready
+       FROM ecommerce_supplier_validation_results
+       WHERE supplier_slug = $1`,
+      [supplierSlug]
+    );
+
     const extraCoverage = await pool.query<{ ai_count: string; ocr_count: string; ready_for_optipixel: string }>(
       `SELECT
          COUNT(*) FILTER (WHERE ai_label_text_evidence <> '{}'::jsonb)::text AS ai_count,
@@ -110,6 +146,39 @@ async function main(): Promise<void> {
       mismatches.push("blocked SKUs were expected but none were found in DB");
     }
 
+    const expectedIngredientReady =
+      asNumber(report.ingredientMatchingReadyCount) + asNumber(report.ingredientMatchingReadyWithWarningsCount);
+    const actualIngredientReady =
+      (ingredientReadiness.get("ready") || 0) +
+      (ingredientReadiness.get("ready_with_warnings") || 0) +
+      (ingredientReadiness.get("needs_review") || 0);
+    if (expectedIngredientReady !== actualIngredientReady) {
+      mismatches.push(`ingredientMatching readiness mismatch expected=${expectedIngredientReady} actual=${actualIngredientReady}`);
+    }
+    if (asNumber(report.ingredientMatchingBlockedCount) !== (ingredientReadiness.get("blocked") || 0)) {
+      mismatches.push(
+        `ingredientMatching blocked mismatch expected=${asNumber(report.ingredientMatchingBlockedCount)} actual=${ingredientReadiness.get("blocked") || 0}`
+      );
+    }
+
+    const expectedProductEditorReady =
+      asNumber(report.productEditorFactsReadyCount) + asNumber(report.productEditorFactsReadyWithWarningsCount);
+    const actualProductEditorReady =
+      (productEditorReadiness.get("ready") || 0) +
+      (productEditorReadiness.get("ready_with_warnings") || 0) +
+      (productEditorReadiness.get("needs_review") || 0);
+    if (expectedProductEditorReady !== actualProductEditorReady) {
+      mismatches.push(`productEditorFacts readiness mismatch expected=${expectedProductEditorReady} actual=${actualProductEditorReady}`);
+    }
+    if (asNumber(report.productEditorFactsBlockedCount) !== (productEditorReadiness.get("blocked") || 0)) {
+      mismatches.push(
+        `productEditorFacts blocked mismatch expected=${asNumber(report.productEditorFactsBlockedCount)} actual=${productEditorReadiness.get("blocked") || 0}`
+      );
+    }
+    if (asNumber(report.missingCoaNoLongerGlobalBlockCount) > 0 && Number.parseInt(coaVsIngredient.rows[0]?.ingredient_ready || "0", 10) === 0) {
+      mismatches.push("missing COA appears to block ingredient matching unexpectedly (no ready rows with missing_coa warning)");
+    }
+
     console.log(`[ecommerce:verify-rocktomic-import] target=${maskedTarget}`);
     console.log(`[ecommerce:verify-rocktomic-import] supplier=${supplierSlug}`);
     console.log(
@@ -125,6 +194,16 @@ async function main(): Promise<void> {
     const coverageRow = extraCoverage.rows[0];
     console.log(
       `[ecommerce:verify-rocktomic-import] coverage ai_label_text_evidence=${coverageRow?.ai_count || "0"} ocr_evidence=${coverageRow?.ocr_count || "0"} ready_for_optipixel=${coverageRow?.ready_for_optipixel || "0"}`
+    );
+    console.log(
+      `[ecommerce:verify-rocktomic-import] readiness ingredient_matching ready=${actualIngredientReady} blocked=${ingredientReadiness.get("blocked") || 0}`
+    );
+    console.log(
+      `[ecommerce:verify-rocktomic-import] readiness product_editor_facts ready=${actualProductEditorReady} blocked=${productEditorReadiness.get("blocked") || 0}`
+    );
+    const coaRow = coaVsIngredient.rows[0];
+    console.log(
+      `[ecommerce:verify-rocktomic-import] missing_coa warning_check missing_coa_warning=${coaRow?.missing_coa_warning || "0"} ingredient_blocked_with_coa_warning=${coaRow?.ingredient_blocked || "0"} ingredient_ready_with_coa_warning=${coaRow?.ingredient_ready || "0"}`
     );
 
     if (mismatches.length > 0) {

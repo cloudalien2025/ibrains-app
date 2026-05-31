@@ -38,6 +38,17 @@ describe("rocktomic package import mapping", () => {
     expect(blockedValidationRow).toBeTruthy();
     expect(Array.isArray(blockedValidationRow?.blocking_defects)).toBe(true);
 
+    const anyReadiness = mapped.validationResults.find((row) => typeof row.readiness === "object" && row.readiness !== null);
+    expect(anyReadiness).toBeTruthy();
+    const serializedReadiness = JSON.stringify(anyReadiness?.readiness);
+    expect(serializedReadiness).toContain("usableForProductEditor");
+    const reportReadiness = JSON.stringify((artifacts.validationReport.skuValidationResults as Array<Record<string, unknown>>)[0]?.readiness || {});
+    if (reportReadiness.includes("ingredientMatchingReadiness")) {
+      expect(serializedReadiness).toContain("ingredientMatchingReadiness");
+      expect(serializedReadiness).toContain("productEditorFactsReadiness");
+      expect(serializedReadiness).toContain("complianceEvidenceReadiness");
+    }
+
     expect(mapped.packageImport.packageStatus).toBe(String(artifacts.validationReport.packageStatus));
     expect(mapped.summary.totalSkus).toBe(expectedSkuCount);
   });
