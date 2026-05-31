@@ -71,18 +71,23 @@ Last updated: 2026-05-31 (UTC)
   - `!271`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/271`
   - MR pipeline `2565155760`: success
   - merge commit SHA: `865831ae25e13e3abf3feae30831c3373ef29242`
+- Closure docs MR:
+  - `!272`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/272`
+  - MR pipeline `2565162073`: success
+  - merge commit SHA: `91d7255eddd3203cc40d44d00b5cde0dc587fc2d`
 - Main/deploy pipeline:
-  - pipeline `2565157760`: success
-  - deploy job `14619976605`: success
+  - pipeline `2565157760`: success (feature merge deploy)
+  - pipeline `2565163334`: success (closure docs merge deploy)
+  - deploy jobs: `14619976605` and `14620004362` succeeded
 - Branch cleanup:
   - remote source branch deletion: confirmed (no head ref on `origin`)
   - local source branch deletion: completed
   - local repository reset: `main` fast-forwarded and clean (`git status` clean)
 - Production release verification:
   - `/api/meta/release`:
-    - `git_sha=865831ae25e13e3abf3feae30831c3373ef29242`
-    - `build_id=2565157760`
-    - `deployed_at=2026-05-31T11:58:13Z`
+    - `git_sha=91d7255eddd3203cc40d44d00b5cde0dc587fc2d`
+    - `build_id=2565163334`
+    - `deployed_at=2026-05-31T12:09:18Z`
   - smoke script: `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai` passed
   - signed-out route checks:
     - `/brains` -> `307` to sign-in
