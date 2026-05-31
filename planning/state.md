@@ -2855,3 +2855,36 @@ Recommended next phase:
   - no admin write/sync/import UI
   - no runtime route extraction/fetch side effects
   - no `DATABASE_URL` fallback in ecommerce import/verify scripts
+
+## Sprint Checkpoint: Phase 5 Product Editor Read-Only Supplier Facts Binding (Local Branch)
+
+- Branch: `sprint-024-product-editor-supplier-facts-binding`
+- Date: `2026-05-31 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks in progress; MR/deploy verification pending.
+- Scope implemented locally:
+  - Added server-only shared ecommerce DB read model:
+    - `lib/ecommerce/supplier-facts-read.ts`
+    - `lib/ecommerce/supplier-product-match.ts`
+    - shared view-model types: `lib/ecommerce/supplier-facts-types.ts`
+  - Integrated read-only supplier facts loading into Product Editor state:
+    - `lib/ecomviper/shopify/shopify-product-editor-state.ts`
+  - Added read-only `Supplier Source Facts` panel in Shopify Product Editor route:
+    - `app/ecomviper/shopify/products/[productId-or-handle]/shopify-product-editor-client.tsx`
+  - Added focused tests for:
+    - deterministic supplier matching
+    - shared ecommerce DB read model + env safety (`ECOMMERCE_DATABASE_URL` only)
+    - Product Editor supplier facts panel rendering states
+    - runtime route boundary guardrails
+- Phase 5 readiness semantics implemented:
+  - Product Editor matching gate uses `ingredientMatchingReadiness` (not global status alone)
+  - Product Editor facts display quality uses `productEditorFactsReadiness`
+  - missing COA surfaced as compliance warning, not ingredient blocker
+  - missing pricing surfaced as pricing warning, not ingredient blocker
+- Boundary confirmation:
+  - no Generate Intelligence binding changes
+  - no supplier write/import/sync/extract behavior from Product Editor
+  - no route render OCR/AI-label extraction
+  - no fallback to `DATABASE_URL` for supplier facts reads
+  - no use of `ecomviper-prod-postgres`
+- Recommended next phase:
+  - Phase 6 — Generate Intelligence supplier facts binding from shared ecommerce DB.

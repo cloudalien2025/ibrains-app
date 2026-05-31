@@ -207,3 +207,21 @@ Operational note:
 
 - missing COA is persisted as warning/compliance-evidence defect and does not block ingredient-matching readiness by itself.
 - blocked SKUs remain persisted for review and are still non-usable for downstream runtime binding until Phase 5+ gates.
+
+## Phase 5 Runtime Read Binding Note
+
+Phase 5 is the first merchant-facing read path that consumes these imported rows in Shopify Product Editor.
+
+Usage constraints:
+
+- read-only shared DB queries only
+- no import/sync/migration triggers from Product Editor route
+- Product Editor uses readiness dimensions from imported JSON payloads:
+  - `ingredientMatchingReadiness`
+  - `productEditorFactsReadiness`
+  - `complianceEvidenceReadiness`
+
+Operational semantics:
+
+- missing COA remains compliance warning and does not block ingredient matching in Product Editor
+- missing pricing remains pricing readiness warning and does not block ingredient matching in Product Editor

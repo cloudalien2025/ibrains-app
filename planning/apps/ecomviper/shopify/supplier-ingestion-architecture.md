@@ -258,6 +258,24 @@ New artifact:
 
 - `latest/ai-label-text-evidence.json`
 
+## Product Editor Shared DB Read Binding (Phase 5)
+
+Phase 5 adds read-only supplier facts visibility in Shopify Product Editor from shared ecommerce DB rows.
+
+Runtime constraints remain strict:
+
+- Product Editor render must not fetch supplier source URLs.
+- Product Editor render must not run extraction/OCR/AI label extraction.
+- Product Editor render must not run supplier import/migration logic.
+- Product Editor supplier facts should degrade to unavailable-state UI on DB/env/query failure.
+
+Readiness semantics in Product Editor:
+
+- ingredient matching uses `ingredientMatchingReadiness`
+- source-facts quality uses `productEditorFactsReadiness`
+- missing COA remains compliance warning, not ingredient blocker
+- missing pricing remains pricing warning, not ingredient blocker
+
 Phase 3.6 guarantees:
 
 - no render-path extraction/OCR

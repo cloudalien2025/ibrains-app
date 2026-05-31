@@ -217,3 +217,23 @@ Boundaries remain unchanged:
 
 Phase 4.3 importer behavior keeps using JSONB readiness payload compatibility and idempotent upserts.
 No new runtime DB dependency is introduced for admin/page render paths.
+
+## Phase 5 Clarification
+
+Phase 5 introduces the first Product Editor runtime read binding to shared ecommerce DB supplier facts.
+
+Boundary guarantees:
+
+- Product Editor supplier facts reads use `ECOMMERCE_DATABASE_URL` only.
+- No fallback to `DATABASE_URL` for supplier facts.
+- Binding is read-only (`SELECT` queries only):
+  - no migrations
+  - no imports
+  - no writes from Product Editor
+- Product Editor route remains defensive when ecommerce DB is unavailable (supplier panel shows unavailable state).
+
+Phase 5 still excludes:
+
+- Generate Intelligence binding
+- OptiPixel UI/runtime binding
+- supplier extraction/sync/import actions in render paths

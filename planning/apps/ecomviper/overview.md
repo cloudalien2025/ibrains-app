@@ -231,3 +231,18 @@ For channel-specific implementation truth, use each channel's:
 Phase 4.3 contract source:
 
 - `planning/apps/ecomviper/shopify/rocktomic-validation-policy-calibration.md`
+
+## Product Editor Supplier Facts Binding (Phase 5)
+
+- Shopify Product Editor now reads supplier facts from shared ecommerce DB (`ecommerce_supplier_*`) in read-only mode.
+- Product Editor matching/readiness gates use calibrated dimensions:
+  - `ingredientMatchingReadiness`
+  - `productEditorFactsReadiness`
+- Missing COA is displayed as compliance warning only and does not block ingredient matching.
+- Missing pricing is displayed as pricing readiness warning and does not block ingredient matching.
+- No supplier writes/import/sync/extraction/OCR/AI-label processing are triggered from Product Editor render.
+- Generate Intelligence behavior remains unchanged in this phase.
+
+Phase 5 contract source:
+
+- `planning/apps/ecomviper/shopify/product-editor-supplier-facts-binding.md`

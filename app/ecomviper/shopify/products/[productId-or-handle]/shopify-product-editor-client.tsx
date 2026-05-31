@@ -17,6 +17,10 @@ import {
   type ShopifyStep3PublishDryRunResult,
 } from "@/lib/ecomviper/shopify/shopify-product-editor-publish-workflow";
 import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
+import type {
+  SupplierFactsPanelViewModel,
+  SupplierFactsReadinessStatus,
+} from "@/lib/ecommerce/supplier-facts-types";
 import { safeIsoDate } from "@/lib/ui/safe-formatters";
 
 type EditorTabKey = "current" | "optimize" | "review";
@@ -69,6 +73,129 @@ function StatusBadge({ label }: { label: string }) {
     <span className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs font-medium text-[#334155]">
       {label}
     </span>
+  );
+}
+
+function readinessBadgeTone(status: SupplierFactsReadinessStatus): string {
+  if (status === "ready") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (status === "ready_with_warnings" || status === "needs_review") {
+    return "border-amber-200 bg-amber-50 text-amber-900";
+  }
+  if (status === "blocked") return "border-rose-200 bg-rose-50 text-rose-800";
+  if (status === "not_applicable") return "border-slate-200 bg-slate-50 text-slate-700";
+  return "border-[#D9E4F0] bg-[#F8FBFF] text-[#334155]";
+}
+
+function formatReadinessLabel(status: SupplierFactsReadinessStatus): string {
+  return status.replace(/_/g, " ");
+}
+
+function SupplierFactsPanel({ panel }: { panel: SupplierFactsPanelViewModel | null | undefined }) {
+  if (!panel) return null;
+
+  const noMatch = panel.status === "no_match";
+  const unavailable = panel.status === "unavailable";
+  const candidate = panel.status === "candidate";
+  const matched = panel.status === "matched";
+
+  return (
+    <article
+      data-testid="ecomviper-shopify-supplier-facts-panel"
+      className="rounded-2xl border border-[#D9E4F0] bg-white p-5"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold text-[#0F172A]">Supplier Source Facts</h2>
+        <StatusBadge
+          label={`Match: ${matched ? "Validated" : candidate ? "Candidate" : noMatch ? "No match" : "Unavailable"}`}
+        />
+      </div>
+      <p className="mt-1 text-sm text-[#475569]">{panel.message}</p>
+
+      {(noMatch || unavailable) && panel.checkedIdentifiers.skus.length > 0 ? (
+        <p className="mt-2 text-xs text-[#64748B]">
+          Checked SKUs: {panel.checkedIdentifiers.skus.join(", ")} · title: {panel.checkedIdentifiers.title || "N/A"}
+        </p>
+      ) : null}
+
+      {(matched || candidate) ? (
+        <div className="mt-4 space-y-4">
+          <div className="grid gap-3 lg:grid-cols-2">
+            <DocketSection title="Supplier Match">
+              <p><strong>Supplier:</strong> {panel.supplierName || panel.supplierSlug}</p>
+              <p><strong>Supplier SKU:</strong> {panel.supplierSku || "Not available"}</p>
+              <p><strong>Supplier product:</strong> {panel.supplierProductName || "Not available"}</p>
+              <p><strong>Validation status:</strong> {panel.validationStatus || "Not available"}</p>
+              <p><strong>Match confidence:</strong> {panel.matchConfidence.replace(/_/g, " ")}</p>
+              <p><strong>Match reasons:</strong> {panel.matchReasons.join("; ") || "Not available"}</p>
+            </DocketSection>
+
+            <DocketSection title="Readiness">
+              <div className="flex flex-wrap gap-2">
+                <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${readinessBadgeTone(panel.readiness.ingredientMatching)}`}>
+                  Ingredient Matching: {formatReadinessLabel(panel.readiness.ingredientMatching)}
+                </span>
+                <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${readinessBadgeTone(panel.readiness.productEditorFacts)}`}>
+                  Product Editor Facts: {formatReadinessLabel(panel.readiness.productEditorFacts)}
+                </span>
+                <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${readinessBadgeTone(panel.readiness.complianceEvidence)}`}>
+                  Compliance Evidence: {formatReadinessLabel(panel.readiness.complianceEvidence)}
+                </span>
+                <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${readinessBadgeTone(panel.readiness.pricing)}`}>
+                  Pricing: {formatReadinessLabel(panel.readiness.pricing)}
+                </span>
+                <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${readinessBadgeTone(panel.readiness.inventory)}`}>
+                  Inventory: {formatReadinessLabel(panel.readiness.inventory)}
+                </span>
+                <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${readinessBadgeTone(panel.readiness.optiPixelAssets)}`}>
+                  OptiPixel Assets: {formatReadinessLabel(panel.readiness.optiPixelAssets)}
+                </span>
+              </div>
+              {panel.evidence.missingCoaWarning ? (
+                <p className="text-xs text-amber-800">
+                  COA missing is a compliance warning only. Ingredient matching is evaluated separately.
+                </p>
+              ) : null}
+            </DocketSection>
+
+            <DocketSection title="Supplement Facts">
+              <p><strong>Serving size:</strong> {panel.servingSize || "Not available"}</p>
+              <p><strong>Servings per container:</strong> {panel.servingsPerContainer || "Not available"}</p>
+              <p><strong>Active ingredients:</strong> {panel.activeIngredients.join(", ") || "Not available"}</p>
+              <p><strong>Other ingredients:</strong> {panel.otherIngredients.join(", ") || "Not available"}</p>
+              <p><strong>Directions:</strong> {panel.directions || "Not available"}</p>
+              <p><strong>Warnings:</strong> {panel.warnings || "Not available"}</p>
+            </DocketSection>
+
+            <DocketSection title="Pricing, Inventory, Assets">
+              <p>
+                <strong>Pricing:</strong>{" "}
+                {panel.pricingSummary.available
+                  ? `${panel.pricingSummary.statusLabel} · Wholesale ${panel.pricingSummary.wholesaleCost ?? "N/A"} · MSRP ${panel.pricingSummary.msrp ?? "N/A"}`
+                  : "Pricing unavailable"}
+              </p>
+              <p><strong>Inventory:</strong> {panel.inventorySummary.status || "Inventory unavailable"}</p>
+              <p><strong>COA:</strong> {panel.assetSummary.coaPresent ? "Present" : "Missing"}</p>
+              <p><strong>Label Template (.ai):</strong> {panel.assetSummary.labelTemplateAiPresent ? "Present" : "Missing"}</p>
+              <p><strong>3D Mockup Template (.tif):</strong> {panel.assetSummary.mockupTemplateTifPresent ? "Present" : "Missing"}</p>
+              <p><strong>Ready for OptiPixel:</strong> {panel.assetSummary.readyForOptiPixel ? "Yes" : "No"}</p>
+              <p><strong>Evidence method:</strong> {panel.evidence.sourceMethod || "Not available"}</p>
+              <p><strong>Needs review:</strong> {panel.evidence.needsReview ? "Yes" : "No"}</p>
+            </DocketSection>
+          </div>
+
+          {panel.evidence.topDefects.length > 0 ? (
+            <article className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.12em]">Top Defects</h3>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {panel.evidence.topDefects.slice(0, 6).map((defect) => (
+                  <li key={defect}>{defect}</li>
+                ))}
+              </ul>
+            </article>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
   );
 }
 
@@ -211,6 +338,8 @@ export default function ShopifyProductEditorClient({
           {feedback}
         </article>
       ) : null}
+
+      <SupplierFactsPanel panel={initialState.supplierFactsPanel} />
 
       <nav className="flex flex-wrap gap-2" data-testid="ecomviper-shopify-editor-tabs">
         {editorTabs.map((tab) => {

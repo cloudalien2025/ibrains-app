@@ -120,3 +120,17 @@ No schema churn is required for this calibration.
 - `ECOMMERCE_DATABASE_URL` remains ecommerce import/read lane.
 - no use of `ecomviper-prod-postgres`.
 - no runtime Product Editor/Generate Intelligence behavior changes.
+
+## Phase 5 Consumption Contract
+
+Phase 5 Product Editor binding consumes readiness dimensions from this calibration:
+
+- matching gate: `ingredientMatchingReadiness`
+- read-only supplier facts quality: `productEditorFactsReadiness`
+- compliance warning lane: `complianceEvidenceReadiness`
+
+Required semantics preserved for Product Editor:
+
+- missing COA is not an ingredient-matching blocker
+- missing pricing is not an ingredient-matching blocker
+- global status alone is not the Product Editor matching gate
