@@ -1178,6 +1178,16 @@
     "missingFields": []
   },
   {
+    "sku": "ROC917",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
     "sku": "ROC918",
     "rawInventoryValue": "IN STOCK - This means that you may sell this item",
     "inventoryStatus": "in_stock",

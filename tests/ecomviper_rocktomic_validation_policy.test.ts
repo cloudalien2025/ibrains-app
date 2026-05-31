@@ -166,6 +166,13 @@ describe("rocktomic phase2 validation policy", () => {
             sourceMethod: "ocr",
             sourcePage: 12,
             sourceAsset: "fixture",
+            sourceUrl: null,
+            sourceFileName: null,
+            templatePageLastUpdated: null,
+            httpEtag: null,
+            httpLastModified: null,
+            httpContentLength: null,
+            httpContentType: null,
             confidence: "high",
             needsReview: false,
             parseWarnings: [],
@@ -218,6 +225,96 @@ describe("rocktomic phase2 validation policy", () => {
     expect(skuResult.blockingDefects).toHaveLength(0);
     expect(skuResult.warningDefects).toHaveLength(0);
     expect(result.packageStatus).toBe("pass");
+    expect(result.ocrFactsCoverage.presentSkuCount).toBe(1);
+    expect(result.aiTextFactsCoverage.presentSkuCount).toBe(0);
+  });
+
+  it("prefers ai_pdf_text evidence and marks review-needed AI facts as warnings, not blocking", () => {
+    const sku = "ROC902";
+    const result = packageForSku({
+      sku,
+      sourceFacts: {
+        sku,
+        productName: "Focus Blend 200g",
+        category: "supplements",
+        supplementFactsText: "Supplement Facts Serving Size 1 Scoop Servings Per Container 20",
+        supplementFacts: {
+          servingSize: "1 Scoop",
+          servingsPerContainer: "20",
+          activeIngredients: ["L Theanine 100 mg"],
+          amountPerServing: ["L Theanine 100 mg"],
+          dailyValuePercentages: [],
+          otherIngredients: [],
+          suggestedUse: null,
+          warnings: null,
+          storage: null,
+        },
+        sourceEvidence: {
+          supplementFacts: {
+            sourceMethod: "ai_pdf_text",
+            sourcePage: null,
+            sourceAsset: "ROC902.ai",
+            sourceUrl: "https://example.com/ROC902.ai",
+            sourceFileName: "ROC902.ai",
+            templatePageLastUpdated: "Mon, 12 Aug 2024 18:00:53 GMT",
+            httpEtag: '"etag"',
+            httpLastModified: "Mon, 12 Aug 2024 18:00:53 GMT",
+            httpContentLength: 1024,
+            httpContentType: "application/pdf",
+            confidence: "medium",
+            needsReview: true,
+            parseWarnings: ["missing_other_ingredients"],
+          },
+        },
+        sourceReferences: ["label_mockup_templates"],
+        missingFields: [],
+      },
+      pricing: {
+        sku,
+        productName: "Focus Blend 200g",
+        wholesaleCost: 10,
+        msrp: 25,
+        estimatedProfit: 15,
+        membershipTierCosts: { retail: 10 },
+        sourceReferences: ["plds_catalog"],
+        missingFields: [],
+      },
+      inventory: {
+        sku,
+        rawInventoryValue: "In Stock",
+        inventoryStatus: "in_stock",
+        sourceReferences: ["inventory_report"],
+        missingFields: [],
+      },
+      assets: {
+        sku,
+        coaUrl: "https://example.com/coa.pdf",
+        catalogTemplateUrl: null,
+        labelTemplateAiUrl: "https://example.com/ROC902.ai",
+        mockupTemplateTifUrl: "https://example.com/ROC902.tif",
+        labelTemplateUrl: "https://example.com/label.pdf",
+        mockupUrl: "https://example.com/mockup.png",
+        extractionStatus: "success",
+        assets: [],
+        assetReadiness: {
+          hasCoa: true,
+          hasLabelTemplateAi: true,
+          hasMockupTemplateTif: true,
+          readyForProductEditor: true,
+          readyForOptiPixelAssets: true,
+          readyForChannelImageGeneration: true,
+        },
+        sourceReferences: ["catalog_pdf", "label_mockup_templates"],
+        missingFields: [],
+      },
+    });
+
+    const skuResult = result.skuValidationResults[0];
+    expect(skuResult.status).toBe("usable_with_warnings");
+    expect(skuResult.blockingDefects).toHaveLength(0);
+    expect(skuResult.warningDefects.some((defect) => defect.field === "supplementFacts.aiNeedsReview")).toBe(true);
+    expect(result.aiTextFactsCoverage.presentSkuCount).toBe(1);
+    expect(result.supplementFactsCoverageTotal.presentSkuCount).toBe(1);
   });
 
   it("does not apply supplement-specific blocking fields to apparel SKUs", () => {

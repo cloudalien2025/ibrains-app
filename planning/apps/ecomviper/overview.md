@@ -162,6 +162,22 @@ Phase 3.5 contract source:
 
 - `planning/apps/ecomviper/shopify/rocktomic-asset-ocr-remediation.md`
 
+## Rocktomic AI Label Text Extraction (Phase 3.6)
+
+- `.ai` label templates are now the primary supplement-facts extraction path for the offline package when PDF-compatible.
+- OCR remains fallback-only for non-PDF/no-extractable AI cases.
+- Large `.ai`/`.tif` binaries are not stored permanently; only metadata/evidence/facts are retained.
+- New offline artifact:
+  - `data/ecomviper/suppliers/rocktomic/latest/ai-label-text-evidence.json`
+- Runtime boundaries remain unchanged:
+  - no DB import/migration
+  - no Product Editor/Generate Intelligence runtime switch
+  - no extraction in user-facing routes or admin render
+
+Phase 3.6 contract source:
+
+- `planning/apps/ecomviper/shopify/rocktomic-ai-label-text-extraction.md`
+
 ## Planning Navigation
 
 For family-level direction, start with:

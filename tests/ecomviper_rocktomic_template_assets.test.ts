@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { extractRocktomicTemplateAssets } from "@/lib/ecomviper/suppliers/rocktomic-template-assets";
+import {
+  extractRocktomicTemplateAssets,
+  extractRocktomicTemplateAssetsFromTemplatesPage,
+} from "@/lib/ecomviper/suppliers/rocktomic-template-assets";
 
 const htmlFixture = `
 <html>
@@ -45,5 +48,47 @@ describe("rocktomic template asset extraction", () => {
     expect(labelEvidence?.fileType).toBe("Label Template");
     expect(labelEvidence?.lastUpdated).toContain("GMT");
     expect(labelEvidence?.source).toBe("templates_page");
+  });
+
+  it("extracts per-SKU .ai/.tif from templates page azure container/blob listing", async () => {
+    const listContainersXml = `<?xml version="1.0" encoding="utf-8"?><EnumerationResults><Containers><Container><Name>roc011</Name></Container><Container><Name>roc012</Name></Container></Containers><NextMarker /></EnumerationResults>`;
+    const roc011BlobsXml = `<?xml version="1.0" encoding="utf-8"?><EnumerationResults><Blobs><Blob><Name>ROC011.ai</Name><Properties><Last-Modified>Mon, 12 Aug 2024 18:00:53 GMT</Last-Modified></Properties></Blob><Blob><Name>ROC011.tif</Name><Properties><Last-Modified>Mon, 12 Aug 2024 18:00:58 GMT</Last-Modified></Properties></Blob></Blobs><NextMarker /></EnumerationResults>`;
+    const roc012BlobsXml = `<?xml version="1.0" encoding="utf-8"?><EnumerationResults><Blobs><Blob><Name>ROC012.ai</Name><Properties><Last-Modified>Mon, 12 Aug 2024 18:05:00 GMT</Last-Modified></Properties></Blob></Blobs><NextMarker /></EnumerationResults>`;
+
+    const html = `
+      <html><body>
+        <script>
+          var blobUri = "https://rocktomicplatform.blob.core.windows.net";
+          var sas = "?sv=test&sig=test";
+        </script>
+      </body></html>
+    `;
+
+    const fetchImpl: typeof fetch = async (url) => {
+      const asText = String(url);
+      if (asText.includes("comp=list") && asText.includes("prefix=roc")) {
+        return new Response(listContainersXml, { status: 200 });
+      }
+      if (asText.includes("/roc011?")) {
+        return new Response(roc011BlobsXml, { status: 200 });
+      }
+      if (asText.includes("/roc012?")) {
+        return new Response(roc012BlobsXml, { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    const result = await extractRocktomicTemplateAssetsFromTemplatesPage({
+      html,
+      sourcePageUrl: "https://rocktomicplatform.blob.core.windows.net/client-resources/templates.html",
+      fetchImpl,
+    });
+
+    expect(result.counts.containersListed).toBe(2);
+    expect(result.counts.blobAssetsScanned).toBe(3);
+    expect(result.counts.labelTemplatesFound).toBe(2);
+    expect(result.counts.mockupTemplatesFound).toBe(1);
+    expect(result.assetsBySku.find((entry) => entry.sku === "ROC011")?.assetReadiness.readyForOptiPixelAssets).toBe(true);
+    expect(result.assetsBySku.find((entry) => entry.sku === "ROC012")?.defects).toContain("missing_mockup_template_tif");
   });
 });

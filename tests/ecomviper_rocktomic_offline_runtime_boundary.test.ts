@@ -31,6 +31,7 @@ describe("rocktomic offline validation runtime boundary", () => {
       expect(source.includes("rocktomic-pdf-assets")).toBe(false);
       expect(source.includes("rocktomic-template-assets")).toBe(false);
       expect(source.includes("rocktomic-supplement-facts-ocr")).toBe(false);
+      expect(source.includes("rocktomic-ai-label-text")).toBe(false);
       expect(source.includes("build_rocktomic_supplier_data")).toBe(false);
     }
   });

@@ -65,6 +65,7 @@ async function writeFixturePackage(options: FixtureOptions = {}): Promise<string
   await fs.writeFile(path.join(latestDir, "catalog-link-evidence.json"), JSON.stringify({ evidence: [] }));
   await fs.writeFile(path.join(latestDir, "template-asset-evidence.json"), JSON.stringify({ evidence: [] }));
   await fs.writeFile(path.join(latestDir, "ocr-evidence.json"), JSON.stringify([]));
+  await fs.writeFile(path.join(latestDir, "ai-label-text-evidence.json"), JSON.stringify({ records: [] }));
 
   if (options.includeAuditCsv !== false) {
     await fs.writeFile(path.join(latestDir, "audit.csv"), ["sku,validationStatus", "ROC001,usable", "ROC002,blocked"].join("\n"));
@@ -83,6 +84,15 @@ async function writeFixturePackage(options: FixtureOptions = {}): Promise<string
       blockedSkuCount: 1,
       extractionErrorSkuCount: 0,
       ocrNeedsReviewSkuCount: 1,
+      aiTextFactsCoverage: { requiredSkuCount: 2, presentSkuCount: 1, missingSkuCount: 1 },
+      ocrFactsCoverage: { requiredSkuCount: 2, presentSkuCount: 0, missingSkuCount: 2 },
+      supplementFactsCoverageTotal: { requiredSkuCount: 2, presentSkuCount: 1, missingSkuCount: 1 },
+      aiLabelTextExtractionAttempted: 2,
+      aiLabelTextExtractionSucceeded: 1,
+      aiLabelTextNeedsReview: 1,
+      aiLabelTextNonPdfCompatible: 0,
+      aiLabelTextNoExtractableText: 0,
+      aiLabelTextExtractionErrors: 1,
       usableForOptiPixelSkuCount: 0,
       readyForChannelImageGenerationSkuCount: 0,
       fieldCoverageSummary: {
@@ -171,6 +181,9 @@ describe("rocktomic admin audit reader", () => {
     expect(vm.totalSkusValidated).toBe(2);
     expect(vm.usableSkuCount).toBe(1);
     expect(vm.blockedSkuCount).toBe(1);
+    expect(vm.aiLabelTextExtractionAttempted).toBe(2);
+    expect(vm.aiLabelTextExtractionSucceeded).toBe(1);
+    expect(vm.aiTextFactsCoverage?.presentSkuCount).toBe(1);
     expect(vm.auditCsvPresent).toBe(true);
     expect(vm.auditCsvRowCount).toBe(2);
     expect(vm.sourceRegistrySummary).toHaveLength(2);

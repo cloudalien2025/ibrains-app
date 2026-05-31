@@ -35,7 +35,8 @@ export interface RocktomicArtifactStatus {
     | "validation-report.json"
     | "catalog-link-evidence.json"
     | "template-asset-evidence.json"
-    | "ocr-evidence.json";
+    | "ocr-evidence.json"
+    | "ai-label-text-evidence.json";
   relativePath: string;
   exists: boolean;
   sizeBytes: number | null;
@@ -90,6 +91,15 @@ export interface RocktomicAdminAuditViewModel {
   blockedSkuCount: number;
   extractionErrorSkuCount: number;
   ocrNeedsReviewSkuCount: number;
+  aiTextFactsCoverage: RocktomicCoverageRow | null;
+  ocrFactsCoverage: RocktomicCoverageRow | null;
+  supplementFactsCoverageTotal: RocktomicCoverageRow | null;
+  aiLabelTextExtractionAttempted: number;
+  aiLabelTextExtractionSucceeded: number;
+  aiLabelTextNeedsReview: number;
+  aiLabelTextNonPdfCompatible: number;
+  aiLabelTextNoExtractableText: number;
+  aiLabelTextExtractionErrors: number;
   usableForOptiPixelSkuCount: number;
   readyForChannelImageGenerationSkuCount: number;
   fieldCoverageSummary: RocktomicCoverageRow[];
@@ -156,6 +166,7 @@ const EXPECTED_ARTIFACTS: Array<Pick<RocktomicArtifactStatus, "artifact" | "rela
   { artifact: "catalog-link-evidence.json", relativePath: "latest/catalog-link-evidence.json" },
   { artifact: "template-asset-evidence.json", relativePath: "latest/template-asset-evidence.json" },
   { artifact: "ocr-evidence.json", relativePath: "latest/ocr-evidence.json" },
+  { artifact: "ai-label-text-evidence.json", relativePath: "latest/ai-label-text-evidence.json" },
 ];
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -221,6 +232,22 @@ function buildCoverageRows(input: unknown): RocktomicCoverageRow[] {
       };
     })
     .sort((a, b) => a.field.localeCompare(b.field));
+}
+
+function buildSingleCoverage(input: unknown): RocktomicCoverageRow | null {
+  const row = asObject(input);
+  if (Object.keys(row).length === 0) return null;
+  const requiredSkuCount = asNumber(row.requiredSkuCount);
+  const presentSkuCount = asNumber(row.presentSkuCount);
+  const missingSkuCount = asNumber(row.missingSkuCount);
+  const coveragePercent = requiredSkuCount > 0 ? Number(((presentSkuCount / requiredSkuCount) * 100).toFixed(1)) : 100;
+  return {
+    field: "coverage",
+    requiredSkuCount,
+    presentSkuCount,
+    missingSkuCount,
+    coveragePercent,
+  };
 }
 
 function defectToText(value: unknown): string | null {
@@ -495,6 +522,15 @@ export async function getRocktomicAdminAuditViewModel(options: ReadOptions = {})
     blockedSkuCount: asNumber(validation.blockedSkuCount),
     extractionErrorSkuCount: asNumber(validation.extractionErrorSkuCount),
     ocrNeedsReviewSkuCount: asNumber(validation.ocrNeedsReviewSkuCount),
+    aiTextFactsCoverage: buildSingleCoverage(validation.aiTextFactsCoverage),
+    ocrFactsCoverage: buildSingleCoverage(validation.ocrFactsCoverage),
+    supplementFactsCoverageTotal: buildSingleCoverage(validation.supplementFactsCoverageTotal),
+    aiLabelTextExtractionAttempted: asNumber(validation.aiLabelTextExtractionAttempted),
+    aiLabelTextExtractionSucceeded: asNumber(validation.aiLabelTextExtractionSucceeded),
+    aiLabelTextNeedsReview: asNumber(validation.aiLabelTextNeedsReview),
+    aiLabelTextNonPdfCompatible: asNumber(validation.aiLabelTextNonPdfCompatible),
+    aiLabelTextNoExtractableText: asNumber(validation.aiLabelTextNoExtractableText),
+    aiLabelTextExtractionErrors: asNumber(validation.aiLabelTextExtractionErrors),
     usableForOptiPixelSkuCount: asNumber(validation.usableForOptiPixelSkuCount),
     readyForChannelImageGenerationSkuCount: asNumber(validation.readyForChannelImageGenerationSkuCount),
     fieldCoverageSummary: buildCoverageRows(validation.fieldCoverageSummary),

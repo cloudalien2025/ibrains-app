@@ -148,3 +148,11 @@ Likely ecommerce-platform concerns (eventual move toward `ECOMMERCE_DATABASE_URL
 - Phase 3.5 does not import supplier data into `ibrains-ecommerce-prod-postgres`.
 - Phase 3.5 does not change runtime DB bindings for Product Editor/Admin/Generate Intelligence/channel brains.
 - `DATABASE_URL` core-boundary and `ECOMMERCE_DATABASE_URL` ecommerce-boundary remain unchanged.
+
+## Phase 3.6 Clarification
+
+- Phase 3.6 adds offline AI label-text extraction metadata/evidence only.
+- Phase 3.6 does not import supplier data into `ibrains-ecommerce-prod-postgres`.
+- Phase 3.6 does not switch runtime ecommerce reads/writes to `ECOMMERCE_DATABASE_URL`.
+- `DATABASE_URL` and `ECOMMERCE_DATABASE_URL` boundaries are unchanged.
+- No Product Editor/Generate Intelligence/channel-runtime DB behavior changes occur in this phase.

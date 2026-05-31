@@ -17,17 +17,35 @@ import {
   type SourceFactRecord,
 } from "../../lib/ecomviper/suppliers/rocktomic-offline-audit";
 import { extractRocktomicCatalogLinkEvidence } from "../../lib/ecomviper/suppliers/rocktomic-pdf-assets";
-import { extractRocktomicTemplateAssets } from "../../lib/ecomviper/suppliers/rocktomic-template-assets";
+import {
+  extractRocktomicTemplateAssetsFromTemplatesPage,
+  type RocktomicTemplateAssetExtractionResult,
+} from "../../lib/ecomviper/suppliers/rocktomic-template-assets";
 import { buildRocktomicSupplementFactsOcrEvidence } from "../../lib/ecomviper/suppliers/rocktomic-supplement-facts-ocr";
+import {
+  extractRocktomicAiLabelTextForSku,
+  maskAssetUrlForLogs,
+  type RocktomicAiLabelTextEvidenceRecord,
+} from "../../lib/ecomviper/suppliers/rocktomic-ai-label-text";
 
 const ROOT_DIR = process.cwd();
 const PACKAGE_DIR = path.join(ROOT_DIR, "data/ecomviper/suppliers/rocktomic");
 const LATEST_DIR = path.join(PACKAGE_DIR, "latest");
 const SOURCES_PATH = path.join(PACKAGE_DIR, "sources.json");
 const FETCH_TIMEOUT_MS = 30_000;
+const AI_POLICY_VERSION = "rocktomic_phase3_6_v1";
 
 function log(line: string): void {
   process.stdout.write(`${line}\n`);
+}
+
+async function readJsonIfPresent<T>(absolutePath: string): Promise<T | null> {
+  try {
+    const text = await fs.readFile(absolutePath, "utf8");
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
 }
 
 async function fetchWithTimeout(url: string, asBinary = false): Promise<string | ArrayBuffer> {
@@ -101,8 +119,24 @@ async function loadOcrFixtureFromEnv(): Promise<Array<{ sku: string; rawText: st
   return [];
 }
 
+async function mapWithConcurrency<T, R>(values: T[], concurrency: number, mapper: (value: T) => Promise<R>): Promise<R[]> {
+  const safeConcurrency = Math.max(1, concurrency);
+  const results: R[] = new Array(values.length);
+  let index = 0;
+  const workers = new Array(Math.min(safeConcurrency, values.length)).fill(null).map(async () => {
+    while (true) {
+      const current = index;
+      index += 1;
+      if (current >= values.length) break;
+      results[current] = await mapper(values[current]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 async function main(): Promise<void> {
-  log("Rocktomic offline build phase3.5: starting");
+  log("Rocktomic offline build phase3.6: starting");
   await fs.mkdir(LATEST_DIR, { recursive: true });
 
   const registry = await loadSourceRegistry(SOURCES_PATH);
@@ -126,7 +160,7 @@ async function main(): Promise<void> {
       unmappedLinks: 0,
     },
   };
-  let templateExtraction: ReturnType<typeof extractRocktomicTemplateAssets> = {
+  let templateExtraction: RocktomicTemplateAssetExtractionResult = {
     assetsBySku: [],
     evidence: [],
     counts: {
@@ -134,9 +168,10 @@ async function main(): Promise<void> {
       labelTemplatesFound: 0,
       mockupTemplatesFound: 0,
       readyForOptiPixelAssets: 0,
+      containersListed: 0,
+      blobAssetsScanned: 0,
     },
   };
-  let templatesSourceUrl = "";
 
   for (const source of registry.sources) {
     log(`source: ${source.id}`);
@@ -165,8 +200,7 @@ async function main(): Promise<void> {
       }
       if (source.id === "label_mockup_templates") {
         const html = (await fetchWithTimeout(source.url, false)) as string;
-        templatesSourceUrl = source.url;
-        templateExtraction = extractRocktomicTemplateAssets({ html, sourcePageUrl: source.url });
+        templateExtraction = await extractRocktomicTemplateAssetsFromTemplatesPage({ html, sourcePageUrl: source.url });
         continue;
       }
       await fetchWithTimeout(source.url, false);
@@ -182,17 +216,108 @@ async function main(): Promise<void> {
   const catalogLinksBySku = Object.fromEntries(catalogLinkExtraction.skuMappings.map((entry) => [entry.sku, entry]));
   const templateBySku = Object.fromEntries(templateExtraction.assetsBySku.map((entry) => [entry.sku, entry]));
 
-  const ocrFixtureEntries = await loadOcrFixtureFromEnv();
+  const previousAiEvidenceDoc = await readJsonIfPresent<{ records?: RocktomicAiLabelTextEvidenceRecord[] }>(
+    path.join(LATEST_DIR, "ai-label-text-evidence.json")
+  );
+  const previousAiEvidenceBySku = new Map(
+    (previousAiEvidenceDoc?.records || [])
+      .filter((entry) => entry && typeof entry === "object" && typeof entry.sku === "string")
+      .map((entry) => [normalizeRocktomicSku(entry.sku), entry] as const)
+  );
+
+  const aiInputRows = templateExtraction.assetsBySku
+    .map((entry) => {
+      const aiAsset = entry.templateAssets.labelTemplateAi;
+      return {
+        sku: entry.sku,
+        url: aiAsset?.url || null,
+        fileName: aiAsset?.fileName || `${entry.sku}.ai`,
+        templatePageLastUpdated: aiAsset?.lastUpdated || null,
+      };
+    })
+    .filter((entry) => Boolean(entry.url));
+
+  const aiEvidenceRows = await mapWithConcurrency(aiInputRows, 4, async (entry) => {
+    const sku = normalizeRocktomicSku(entry.sku);
+    const previous = previousAiEvidenceBySku.get(sku);
+    try {
+      return await extractRocktomicAiLabelTextForSku({
+        sku,
+        assetUrl: entry.url!,
+        fileName: entry.fileName,
+        templatePageLastUpdated: entry.templatePageLastUpdated,
+        previousEvidence: previous,
+      });
+    } catch (error) {
+      return {
+        sku,
+        url: entry.url!,
+        fileName: entry.fileName,
+        format: "ai" as const,
+        assetRole: "label_template" as const,
+        templatePageLastUpdated: entry.templatePageLastUpdated,
+        httpEtag: null,
+        httpLastModified: null,
+        httpContentLength: null,
+        httpContentType: null,
+        lastCheckedAt: new Date().toISOString(),
+        source: "templates_page" as const,
+        compatibility: null,
+        extractionStatus: "extraction_error" as const,
+        extractedAt: null,
+        extractionMethod: "none" as const,
+        tempDownloadedBytes: null,
+        rawText: null,
+        normalizedLabelText: null,
+        parsedFacts: null,
+        confidence: null,
+        needsReview: true,
+        parseWarnings: [],
+        errorDetail: error instanceof Error ? error.message : "ai_extraction_error",
+      };
+    }
+  });
+  const aiEvidenceBySku = new Map(aiEvidenceRows.map((entry) => [entry.sku, entry]));
+
   const fallbackOcrEntries = Object.entries(supplementFactsBySku)
     .filter(([, rawText]) => Boolean(rawText && rawText.trim()))
     .map(([sku, rawText]) => ({
-      sku,
+      sku: normalizeRocktomicSku(sku),
       rawText,
       sourcePage: catalogLinksBySku[normalizeRocktomicSku(sku)]?.catalogPage ?? null,
       sourceAsset: "catalog_pdf_text_layer_fallback",
     }));
+  const fallbackOcrBySku = new Map(fallbackOcrEntries.map((entry) => [entry.sku, entry]));
 
-  const ocrEntries = ocrFixtureEntries.length > 0 ? ocrFixtureEntries : fallbackOcrEntries;
+  const ocrFixtureEntries = await loadOcrFixtureFromEnv();
+  const ocrFixtureBySku = new Map(
+    ocrFixtureEntries.map((entry) => [
+      normalizeRocktomicSku(entry.sku),
+      {
+        sku: normalizeRocktomicSku(entry.sku),
+        rawText: entry.rawText,
+        sourcePage: entry.sourcePage ?? null,
+        sourceAsset: entry.sourceAsset ?? "ocr_fixture",
+      },
+    ])
+  );
+
+  const ocrFallbackSkus = Array.from(aiEvidenceBySku.values())
+    .filter((entry) => entry.extractionStatus !== "success" && entry.extractionStatus !== "reused_cached")
+    .map((entry) => entry.sku);
+
+  const ocrEntries: Array<{ sku: string; rawText: string; sourcePage: number | null; sourceAsset: string | null }> = [];
+  for (const sku of ocrFallbackSkus) {
+    const entry = ocrFixtureBySku.get(sku) || fallbackOcrBySku.get(sku);
+    if (!entry) continue;
+    ocrEntries.push({
+      sku: entry.sku,
+      rawText: entry.rawText,
+      sourcePage: entry.sourcePage ?? null,
+      sourceAsset: entry.sourceAsset ?? null,
+    });
+  }
+
   const ocrEvidence = buildRocktomicSupplementFactsOcrEvidence({ entries: ocrEntries });
   const ocrBySku = Object.fromEntries(ocrEvidence.map((entry) => [entry.sku, entry]));
 
@@ -203,6 +328,7 @@ async function main(): Promise<void> {
       ...inventoryRows.map((entry) => entry.sku),
       ...catalogLinkExtraction.skusDiscovered,
       ...templateExtraction.assetsBySku.map((entry) => entry.sku),
+      ...aiEvidenceRows.map((entry) => entry.sku),
       ...ocrEvidence.map((entry) => entry.sku),
     ])
   )
@@ -212,21 +338,33 @@ async function main(): Promise<void> {
 
   const sourceFacts: SourceFactRecord[] = allSkus.map((sku) => {
     const pricing = pricingBySku[sku];
+    const aiEvidence = aiEvidenceBySku.get(sku);
     const ocr = ocrBySku[sku];
-    const supplementFactsText = ocr?.rawText || supplementFactsBySku[sku] || null;
-    const supplementFacts = ocr
+    const preferredFacts = aiEvidence?.parsedFacts || ocr?.parsed || null;
+    const preferredEvidenceMethod = aiEvidence?.parsedFacts ? "ai_pdf_text" : ocr ? "ocr" : null;
+
+    const supplementFactsText = aiEvidence?.normalizedLabelText || aiEvidence?.rawText || ocr?.rawText || supplementFactsBySku[sku] || null;
+    const preferredDirections =
+      preferredEvidenceMethod === "ai_pdf_text"
+        ? (preferredFacts as { directions?: string | null } | null)?.directions || null
+        : (preferredFacts as { suggestedUse?: string | null } | null)?.suggestedUse || null;
+
+    const supplementFacts = preferredFacts
       ? {
-          servingSize: ocr.parsed.servingSize,
-          servingsPerContainer: ocr.parsed.servingsPerContainer,
-          activeIngredients: ocr.parsed.activeIngredients,
-          amountPerServing: ocr.parsed.amountPerServing,
-          dailyValuePercentages: ocr.parsed.dailyValuePercentages,
-          otherIngredients: ocr.parsed.otherIngredients,
-          suggestedUse: ocr.parsed.suggestedUse,
-          warnings: ocr.parsed.warnings,
-          storage: ocr.parsed.storage,
+          servingSize: preferredFacts.servingSize,
+          servingsPerContainer: preferredFacts.servingsPerContainer,
+          activeIngredients: preferredFacts.activeIngredients,
+          amountPerServing: preferredFacts.amountPerServing,
+          dailyValuePercentages: preferredFacts.dailyValuePercentages,
+          otherIngredients: preferredFacts.otherIngredients,
+          suggestedUse: preferredDirections,
+          warnings: preferredFacts.warnings,
+          storage: preferredFacts.storage,
         }
       : null;
+
+    const aiWarnings = aiEvidence?.parseWarnings || [];
+    const ocrWarnings = ocr?.parseWarnings || [];
 
     const record: SourceFactRecord = {
       sku,
@@ -234,21 +372,50 @@ async function main(): Promise<void> {
       category: null,
       supplementFactsText,
       supplementFacts,
-      sourceEvidence: ocr
-        ? {
-            supplementFacts: {
-              sourceMethod: "ocr",
-              sourcePage: ocr.sourcePage,
-              sourceAsset: ocr.sourceAsset,
-              confidence: ocr.confidence,
-              needsReview: ocr.needsReview,
-              parseWarnings: ocr.parseWarnings,
-            },
-          }
-        : undefined,
+      directions: preferredDirections,
+      warnings: preferredFacts?.warnings || null,
+      sourceEvidence:
+        preferredEvidenceMethod === "ai_pdf_text" && aiEvidence
+          ? {
+              supplementFacts: {
+                sourceMethod: "ai_pdf_text",
+                sourcePage: null,
+                sourceAsset: aiEvidence.fileName,
+                sourceUrl: aiEvidence.url,
+                sourceFileName: aiEvidence.fileName,
+                templatePageLastUpdated: aiEvidence.templatePageLastUpdated,
+                httpEtag: aiEvidence.httpEtag,
+                httpLastModified: aiEvidence.httpLastModified,
+                httpContentLength: aiEvidence.httpContentLength,
+                httpContentType: aiEvidence.httpContentType,
+                confidence: aiEvidence.confidence || "low",
+                needsReview: aiEvidence.needsReview,
+                parseWarnings: aiEvidence.parseWarnings,
+              },
+            }
+          : ocr
+            ? {
+                supplementFacts: {
+                  sourceMethod: "ocr",
+                  sourcePage: ocr.sourcePage,
+                  sourceAsset: ocr.sourceAsset,
+                  sourceUrl: null,
+                  sourceFileName: null,
+                  templatePageLastUpdated: null,
+                  httpEtag: null,
+                  httpLastModified: null,
+                  httpContentLength: null,
+                  httpContentType: null,
+                  confidence: ocr.confidence,
+                  needsReview: ocr.needsReview,
+                  parseWarnings: ocr.parseWarnings,
+                },
+              }
+            : undefined,
       sourceReferences: [
         supplementFactsText ? "catalog_pdf" : null,
         pricing ? "plds_catalog" : null,
+        aiEvidence ? "label_mockup_templates" : null,
         ocr ? "ocr_evidence" : null,
       ].filter((value): value is string => Boolean(value)),
       missingFields: [],
@@ -257,14 +424,14 @@ async function main(): Promise<void> {
     record.missingFields = [
       record.productName ? null : "productName",
       record.category ? null : "category",
-      record.supplementFacts?.servingSize || /serving\s*size/i.test(record.supplementFactsText || "") ? null : "supplementFacts.servingSize",
-      record.supplementFacts?.servingsPerContainer || /servings?\s*per\s*container/i.test(record.supplementFactsText || "")
-        ? null
-        : "supplementFacts.servingsPerContainer",
-      (record.supplementFacts?.activeIngredients.length || 0) > 0 || /active\s+ingredients?/i.test(record.supplementFactsText || "")
+      record.supplementFacts?.servingSize ? null : "supplementFacts.servingSize",
+      record.supplementFacts?.servingsPerContainer ? null : "supplementFacts.servingsPerContainer",
+      (record.supplementFacts?.activeIngredients.length || 0) > 0 || (record.supplementFacts?.amountPerServing.length || 0) > 0
         ? null
         : "supplementFacts.activeIngredients",
-      ocr ? null : "supplementFacts.ocrEvidence",
+      record.sourceEvidence?.supplementFacts ? null : "supplementFacts.aiOrOcrEvidence",
+      ...aiWarnings.map((warning) => `ai_parse_warning:${warning}`),
+      ...ocrWarnings.map((warning) => `ocr_parse_warning:${warning}`),
     ].filter((value): value is string => Boolean(value));
 
     return record;
@@ -300,6 +467,7 @@ async function main(): Promise<void> {
   const assets: AssetsRecord[] = allSkus.map((sku) => {
     const catalogLinks = catalogLinksBySku[sku];
     const templateAssets = templateBySku[sku];
+    const aiEvidence = aiEvidenceBySku.get(sku);
 
     const coaUrl = catalogLinks?.links.coaUrl || null;
     const catalogTemplateUrl = catalogLinks?.links.labelAnd3dMockupTemplateUrl || null;
@@ -317,6 +485,16 @@ async function main(): Promise<void> {
       mockupTemplateTifUrl,
       labelTemplateUrl,
       mockupUrl,
+      templatePageLastUpdated: templateAssets?.templateAssets.labelTemplateAi?.lastUpdated || null,
+      httpEtag: aiEvidence?.httpEtag || null,
+      httpLastModified: aiEvidence?.httpLastModified || null,
+      httpContentLength: aiEvidence?.httpContentLength || null,
+      httpContentType: aiEvidence?.httpContentType || null,
+      lastCheckedAt: aiEvidence?.lastCheckedAt || null,
+      extractedAt: aiEvidence?.extractedAt || null,
+      extractionStatus: aiEvidence?.extractionStatus || null,
+      extractionMethod: aiEvidence?.extractionMethod || null,
+      readyForAiLabelTextExtraction: Boolean(labelTemplateAiUrl),
       assets: [
         coaUrl
           ? {
@@ -340,7 +518,7 @@ async function main(): Promise<void> {
               format: "ai",
               url: labelTemplateAiUrl,
               source: "templates_page",
-              confidence: "high",
+              confidence: aiEvidence?.extractionStatus === "success" || aiEvidence?.extractionStatus === "reused_cached" ? "high" : "medium",
             }
           : null,
         mockupTemplateTifUrl
@@ -400,6 +578,13 @@ async function main(): Promise<void> {
   });
   const auditCsv = toAuditCsv(auditRows);
 
+  const aiArtifact = {
+    supplierSlug: "rocktomic",
+    generatedAt,
+    policyVersion: AI_POLICY_VERSION,
+    records: aiEvidenceRows,
+  };
+
   await fs.writeFile(path.join(LATEST_DIR, "sourceFacts.json"), JSON.stringify(sourceFacts, null, 2));
   await fs.writeFile(path.join(LATEST_DIR, "pricing.json"), JSON.stringify(pricing, null, 2));
   await fs.writeFile(path.join(LATEST_DIR, "inventory.json"), JSON.stringify(inventory, null, 2));
@@ -409,6 +594,17 @@ async function main(): Promise<void> {
   await fs.writeFile(path.join(LATEST_DIR, "catalog-link-evidence.json"), JSON.stringify(catalogLinkExtraction, null, 2));
   await fs.writeFile(path.join(LATEST_DIR, "template-asset-evidence.json"), JSON.stringify(templateExtraction, null, 2));
   await fs.writeFile(path.join(LATEST_DIR, "ocr-evidence.json"), JSON.stringify(ocrEvidence, null, 2));
+  await fs.writeFile(path.join(LATEST_DIR, "ai-label-text-evidence.json"), JSON.stringify(aiArtifact, null, 2));
+
+  const aiAttempted = aiEvidenceRows.length;
+  const aiReused = aiEvidenceRows.filter((entry) => entry.extractionStatus === "reused_cached").length;
+  const aiSuccess = aiEvidenceRows.filter((entry) => entry.extractionStatus === "success" || entry.extractionStatus === "reused_cached").length;
+  const aiNeedsReview = aiEvidenceRows.filter(
+    (entry) => (entry.extractionStatus === "success" || entry.extractionStatus === "reused_cached") && entry.needsReview
+  ).length;
+  const aiNonPdf = aiEvidenceRows.filter((entry) => entry.extractionStatus === "non_pdf_ai").length;
+  const aiNoText = aiEvidenceRows.filter((entry) => entry.extractionStatus === "no_extractable_text").length;
+  const aiErrors = aiEvidenceRows.filter((entry) => entry.extractionStatus === "extraction_error").length;
 
   const ocrSucceeded = ocrEvidence.filter((entry) => !entry.needsReview).length;
   const ocrPartial = ocrEvidence.filter((entry) => entry.needsReview).length;
@@ -420,9 +616,21 @@ async function main(): Promise<void> {
   log(`pricing_sheet_links_mapped: ${catalogLinkExtraction.counts.pricingLinksMapped}`);
   log(`label_template_ai_found: ${templateExtraction.counts.labelTemplatesFound}`);
   log(`mockup_template_tif_found: ${templateExtraction.counts.mockupTemplatesFound}`);
+  log(`ai_label_assets_discovered: ${aiInputRows.length}`);
+  log(`ai_metadata_checked: ${aiAttempted}`);
+  log(`ai_files_skipped_unchanged: ${aiReused}`);
+  log(`ai_files_temp_downloaded: ${aiAttempted - aiReused}`);
+  log(`pdf_compatible_ai_count: ${aiEvidenceRows.filter((entry) => entry.compatibility === "pdf_compatible").length}`);
+  log(`non_pdf_ai_count: ${aiNonPdf}`);
+  log(`ai_text_extraction_successes: ${aiSuccess}`);
+  log(`ai_text_extraction_partial_or_needs_review: ${aiNeedsReview}`);
+  log(`ai_text_extraction_no_extractable_text: ${aiNoText}`);
+  log(`ai_text_extraction_errors: ${aiErrors}`);
+  log(`ocr_fallback_eligible_count: ${ocrFallbackSkus.length}`);
   log(`ocr_attempted: ${ocrEvidence.length}`);
   log(`ocr_succeeded: ${ocrSucceeded}`);
   log(`ocr_partial_or_low_confidence: ${ocrPartial}`);
+  log(`supplement_facts_coverage_total: ${validationReport.supplementFactsCoverageTotal.presentSkuCount}/${validationReport.supplementFactsCoverageTotal.requiredSkuCount}`);
   log(`skus_blocked: ${validationReport.blockedSkuCount}`);
 
   const topBlockingCounts = new Map<string, number>();
@@ -438,11 +646,12 @@ async function main(): Promise<void> {
     .join(", ");
   log(`top_blocking_defect_types: ${topBlocking || "none"}`);
 
-  if (!templatesSourceUrl) {
-    log("warning: templates source not found in registry run");
+  for (const aiRow of aiEvidenceRows.filter((entry) => entry.errorDetail)) {
+    log(`ai_error_${aiRow.sku}: ${maskAssetUrlForLogs(aiRow.url)} -> ${aiRow.errorDetail}`);
   }
+
   if (ocrFixtureEntries.length === 0) {
-    log("ocr_mode: fallback_catalog_text (set ROCKTOMIC_OCR_FIXTURE_PATH for deterministic OCR fixtures)");
+    log("ocr_mode: fallback_only (set ROCKTOMIC_OCR_FIXTURE_PATH for deterministic OCR fixtures)");
   } else {
     log(`ocr_mode: fixture (${ocrFixtureEntries.length} rows)`);
   }
