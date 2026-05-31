@@ -96,3 +96,9 @@ Phase 3.6 builds on this remediation by switching supplement-facts primary extra
 See:
 
 - `planning/apps/ecomviper/shopify/rocktomic-ai-label-text-extraction.md`
+
+## Phase 4 Handoff
+
+Phase 3.5 artifact outputs (`catalog-link-evidence.json`, `template-asset-evidence.json`, `ocr-evidence.json`) are now import inputs for Phase 4 shared ecommerce DB persistence.
+
+Phase 4 persists their evidence payloads and readiness/defect implications in `ecommerce_supplier_*` tables without changing Product Editor/Generate Intelligence runtime behavior.

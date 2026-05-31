@@ -156,3 +156,39 @@ Likely ecommerce-platform concerns (eventual move toward `ECOMMERCE_DATABASE_URL
 - Phase 3.6 does not switch runtime ecommerce reads/writes to `ECOMMERCE_DATABASE_URL`.
 - `DATABASE_URL` and `ECOMMERCE_DATABASE_URL` boundaries are unchanged.
 - No Product Editor/Generate Intelligence/channel-runtime DB behavior changes occur in this phase.
+
+## Phase 4 Delivery
+
+Phase 4 introduces shared ecommerce supplier-intelligence persistence in `ibrains-ecommerce-prod-postgres`.
+
+Implemented boundaries:
+
+- schema/migrations run only against `ECOMMERCE_DATABASE_URL`
+- no fallback to `DATABASE_URL`
+- no use of `ecomviper-prod-postgres`
+
+Phase 4 table family:
+
+- `ecommerce_suppliers`
+- `ecommerce_supplier_package_imports`
+- `ecommerce_supplier_products`
+- `ecommerce_supplier_product_facts`
+- `ecommerce_supplier_pricing`
+- `ecommerce_supplier_inventory`
+- `ecommerce_supplier_assets`
+- `ecommerce_supplier_validation_results`
+
+Phase 4 import behavior:
+
+- imports all SKUs from offline package artifacts, including blocked SKUs
+- persists validation/readiness/defects/evidence payloads
+- preserves AI-label and OCR evidence payloads plus remote asset metadata
+- stores remote `.ai`/`.tif` references + metadata only (no large binary storage)
+- uses idempotent upserts keyed by `(supplier_slug, sku)` where appropriate
+
+Phase 4 non-goals preserved:
+
+- no Product Editor binding switch
+- no Generate Intelligence binding switch
+- no admin render DB requirement by default
+- no runtime route extraction/fetch/sync side effects

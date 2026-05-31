@@ -101,3 +101,12 @@ The route remains:
 - read-only
 - package-backed
 - non-extractive/non-syncing at render time
+
+## Phase 4 Compatibility Note
+
+- Phase 4 introduces shared ecommerce DB import scripts and persistence tables.
+- This Phase 3 admin route remains package-backed by default in Phase 4:
+  - no automatic switch to DB-backed reads
+  - no admin render dependency on `ECOMMERCE_DATABASE_URL`
+  - no import trigger in admin UI
+- DB-backed admin visibility can be added in a future explicit phase with auth and safety review.

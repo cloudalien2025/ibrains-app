@@ -138,3 +138,11 @@ Merchant `/ecomviper` routes remain customer workflows and should not expose:
   - no admin-triggered extraction or OCR
   - no runtime source fetching on admin render
   - no DB import/migration
+
+## Phase 4 Admin Boundary
+
+- Phase 4 imports the offline package into shared ecommerce DB tables, but admin audit route defaults remain unchanged:
+  - `/admin/ecomviper/suppliers/rocktomic/audit` stays read-only and package-file backed in this phase.
+- No admin write/edit/import UI is introduced in Phase 4.
+- No admin render dependency on `ECOMMERCE_DATABASE_URL` is introduced by default.
+- DB-backed admin read surfaces are a future enhancement after Phase 4 verification is stable.
