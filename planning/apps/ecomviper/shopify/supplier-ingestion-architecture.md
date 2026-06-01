@@ -262,6 +262,13 @@ New artifact:
 
 Phase 5 adds read-only supplier facts visibility in Shopify Product Editor from shared ecommerce DB rows.
 
+Route contract after Phase 5.1 cleanup:
+
+- canonical merchant-facing Product Editor route for all products/SKUs:
+  - `/ecomviper/products/[productId-or-handle]`
+- removed mistaken duplicate route family:
+  - `/ecomviper/shopify/products/[productId-or-handle]`
+
 Runtime constraints remain strict:
 
 - Product Editor render must not fetch supplier source URLs.

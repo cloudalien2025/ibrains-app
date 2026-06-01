@@ -35,4 +35,33 @@ describe("ecomviper product editor route contract", () => {
     expect(clientSource).toContain("data-testid=\"ecomviper-product-editor-tabs\"");
     expect(clientSource).toContain("ecomviper.com when the publishing backend is enabled");
   });
+
+  it("removes duplicate /ecomviper/shopify/products/[productId-or-handle] route globally", () => {
+    const duplicateRoutePath = path.join(
+      process.cwd(),
+      "app/ecomviper/shopify/products/[productId-or-handle]/page.tsx"
+    );
+    const duplicateClientPath = path.join(
+      process.cwd(),
+      "app/ecomviper/shopify/products/[productId-or-handle]/shopify-product-editor-client.tsx"
+    );
+    const shopifyWorkspacePath = path.join(process.cwd(), "app/ecomviper/shopify/shopify-workspace-client.tsx");
+    const canonicalPagePath = path.join(process.cwd(), "app/ecomviper/products/[productId-or-handle]/page.tsx");
+    const canonicalClientPath = path.join(
+      process.cwd(),
+      "app/ecomviper/products/[productId-or-handle]/product-editor-client.tsx"
+    );
+
+    expect(fs.existsSync(duplicateRoutePath)).toBe(false);
+    expect(fs.existsSync(duplicateClientPath)).toBe(false);
+
+    const shopifyWorkspaceSource = fs.readFileSync(shopifyWorkspacePath, "utf8");
+    const canonicalPageSource = fs.readFileSync(canonicalPagePath, "utf8");
+    const canonicalClientSource = fs.readFileSync(canonicalClientPath, "utf8");
+
+    expect(shopifyWorkspaceSource).toContain("/ecomviper/products/");
+    expect(shopifyWorkspaceSource).not.toContain("/ecomviper/shopify/products/");
+    expect(canonicalPageSource).not.toContain("ROC948");
+    expect(canonicalClientSource).not.toContain("ROC948");
+  });
 });

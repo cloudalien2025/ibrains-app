@@ -77,7 +77,7 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 function ProductsPanel({ state }: { state: ShopifyAgenticWorkspaceState }) {
   function productEditorHref(identifier: string): string {
-    return `/ecomviper/shopify/products/${encodeURIComponent(identifier)}`;
+    return `/ecomviper/products/${encodeURIComponent(identifier)}`;
   }
 
   return (

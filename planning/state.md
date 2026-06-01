@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-05-31 (UTC)
+Last updated: 2026-06-01 (UTC)
 
 ## Program Status
 
@@ -48,6 +48,7 @@ Last updated: 2026-05-31 (UTC)
 - Admin Foundation Sprint: In progress (`admin-foundation-ecomviper-supplier-intelligence`, internal `/admin` route foundation + EcomViper supplier intelligence console).
 - Shopify Hotfix Sprint 009.8 Data Binding: Merged and production deployed (`hotfix-009-8-global-supplier-data-scope-product-editor-binding`, global supplier normalized data boundary + merchant membership/Product Editor binding correction); mandatory signed-in desktop/mobile verification is still blocked pending an authenticated browser session.
 - Shopify Hotfix Sprint 009.9: In progress (`hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`, deterministic all-SKU sourceFacts field mapping + Product Editor/Generate Intelligence binding + settings tier auth save reliability).
+- Shopify Phase 5.1 Route Reconciliation: In progress (`sprint-5-1-remove-duplicate-shopify-product-route`, global removal of mistaken duplicate `/ecomviper/shopify/products/[productId-or-handle]` merchant route family).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
 
 ## Sprint Checkpoint: Phase 1.5 Shared Ecommerce Database Foundation (Local Branch)
@@ -2958,3 +2959,32 @@ Recommended next phase:
 - Risks/follow-ups:
   - signed-in Product Editor scenario verification (exact match/no match/missing COA/missing pricing/ingredient blocked) should be completed with authenticated session and captured in next ops pass.
   - baseline unrelated test failures remain outside Phase 5 scope.
+
+## Sprint Checkpoint: Phase 5.1 Duplicate Shopify Product Route Removal (Local Branch)
+
+- Branch: `sprint-5-1-remove-duplicate-shopify-product-route`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks in progress; MR/deploy verification pending.
+- Scope implemented locally:
+  - removed mistaken duplicate merchant route family:
+    - deleted `app/ecomviper/shopify/products/[productId-or-handle]/page.tsx`
+    - deleted `app/ecomviper/shopify/products/[productId-or-handle]/shopify-product-editor-client.tsx`
+  - updated Shopify products table navigation to canonical route:
+    - `app/ecomviper/shopify/shopify-workspace-client.tsx`
+    - product links now route to `/ecomviper/products/[productId-or-handle]`
+  - removed duplicate-route-only tests and updated route contract coverage:
+    - deleted `tests/ecomviper_shopify_product_editor_workflow.test.tsx`
+    - deleted `tests/ecomviper_shopify_supplier_facts_panel.test.tsx`
+    - updated `tests/ecomviper_shopify_products_table_navigation.test.tsx`
+    - updated `tests/ecomviper_product_editor_route_contract.test.ts`
+    - updated `tests/ecomviper_route_render_sync_safety.test.ts`
+- Architecture/boundary confirmation:
+  - canonical Product Editor route remains `/ecomviper/products/[productId-or-handle]` for all products/SKUs.
+  - no route-level SKU hardcoding or ROC948 special-casing introduced.
+  - supplier-facts backend read/match modules remain preserved and route-agnostic:
+    - `lib/ecommerce/supplier-facts-read.ts`
+    - `lib/ecommerce/supplier-facts-types.ts`
+    - `lib/ecommerce/supplier-product-match.ts`
+  - no Generate Intelligence binding changes.
+  - no Product Editor layout redesign/polish changes.
+  - no supplier write/import/sync/extraction/OCR/AI-label behavior added.

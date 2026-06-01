@@ -1,6 +1,6 @@
 # EcomViper Overview
 
-Last updated: 2026-05-31 (UTC)
+Last updated: 2026-06-01 (UTC)
 
 EcomViper is the iBrains parent app family for multi-channel commerce operations.
 
@@ -235,6 +235,10 @@ Phase 4.3 contract source:
 ## Product Editor Supplier Facts Binding (Phase 5)
 
 - Shopify Product Editor now reads supplier facts from shared ecommerce DB (`ecommerce_supplier_*`) in read-only mode.
+- Canonical Product Editor route for all products/SKUs is:
+  - `/ecomviper/products/[productId-or-handle]`
+- Mistaken duplicate route family removed globally in Phase 5.1:
+  - `/ecomviper/shopify/products/[productId-or-handle]`
 - Product Editor matching/readiness gates use calibrated dimensions:
   - `ingredientMatchingReadiness`
   - `productEditorFactsReadiness`
