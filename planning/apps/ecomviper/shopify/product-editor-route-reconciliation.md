@@ -79,3 +79,13 @@ Phase 6.1 contract/eval harness work is route-agnostic and must not alter route 
 - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 - no Product Editor UI layout redesign
 - no live Generate Intelligence runtime behavior changes in this phase
+
+## Phase 6.2 Guardrail (Generate Intelligence Binding)
+
+Phase 6.2 introduces Generate Intelligence runtime binding on the canonical route only:
+
+- canonical Product Editor workflow remains `/ecomviper/products/[productId-or-handle]`
+- no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+- model invocation occurs only on explicit Generate action
+- no model call during Product Editor page render
+- proposal remains review-only (no auto-save/publish)

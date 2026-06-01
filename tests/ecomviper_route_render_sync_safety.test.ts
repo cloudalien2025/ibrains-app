@@ -34,6 +34,8 @@ describe("ecomviper route render sync safety", () => {
     expect(productEditorClient).not.toContain("hydrateSupplierCatalogPdf");
     expect(productEditorClient).not.toContain("runSupplierIngestion");
     expect(productEditorClient).not.toContain("openai.responses.create(");
+    expect(productEditorClient).not.toContain("ECOMVIPER_COPYWRITING_OPENAI_API_KEY");
+    expect(productEditorClient).not.toContain("OPENAI_API_KEY");
     expect(fs.existsSync(duplicateShopifyEditorRoutePath)).toBe(false);
     expect(fs.existsSync(duplicateShopifyEditorClientPath)).toBe(false);
 

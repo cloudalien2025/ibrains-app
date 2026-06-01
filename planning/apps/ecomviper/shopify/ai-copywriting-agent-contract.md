@@ -1,4 +1,4 @@
-# AI Copywriting Agent Contract (Phase 6.1)
+# AI Copywriting Agent Contract (Phase 6.1 / 6.2)
 
 Last updated: 2026-06-01 (UTC)
 
@@ -108,3 +108,16 @@ Phase 6.1 does not change live Product Editor or Generate Intelligence behavior:
 Canonical Product Editor route remains:
 
 - `/ecomviper/products/[productId-or-handle]`
+
+## Phase 6.2 Runtime Binding Notes
+
+- Generate Intelligence now invokes this contract through an explicit server action/API call only.
+- Product page render remains model-call-free.
+- Runner path enforces:
+  - strict output schema validation
+  - compliance/factual safety guard checks
+  - plain missing-data notices for missing facts
+- Generate output is review-only in Phase 6.2:
+  - no auto-save
+  - no auto-publish
+  - no supplier writes/import/sync/extraction/OCR side effects

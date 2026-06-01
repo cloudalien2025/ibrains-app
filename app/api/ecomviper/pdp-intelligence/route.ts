@@ -4,7 +4,9 @@ import { NextRequest } from "next/server";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getShopifyOpenAiApiKeyForUser } from "@/lib/ecomviper/shopify/openai-connection";
-import { generateShopifyPdpIntelligence } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence-generator";
+import { buildProductCopywritingInputFromShopifyEditorState } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-input-builder";
+import { runProductCopywritingAgent } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-runner";
+import type { ProductCopywritingOutput } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-types";
 import { evaluateShopifyPdpCompliance } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence-compliance";
 import {
   createEmptyShopifyPdpIntelligenceRecord,
@@ -36,6 +38,78 @@ function asObject(value: unknown): Record<string, unknown> {
 
 function asErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unexpected PDP intelligence error.";
+}
+
+function toArray(value: string[] | null | undefined): string[] {
+  return Array.isArray(value) ? value.map((entry) => asString(entry)).filter(Boolean) : [];
+}
+
+function mapRunStatusToGenerationStatus(
+  status: "success" | "validation_error" | "model_error" | "unavailable" | "blocked"
+): ShopifyPdpIntelligenceRecord["generation_status"] {
+  if (status === "success") return "generated";
+  if (status === "unavailable") return "generation_unavailable";
+  return "failed";
+}
+
+function toReviewRecord(input: {
+  base: ShopifyPdpIntelligenceRecord;
+  output: ProductCopywritingOutput | null;
+  status: "success" | "validation_error" | "model_error" | "unavailable" | "blocked";
+  safeMessage: string;
+  missingDataNotices: string[];
+  complianceWarnings: string[];
+  generatedAt: string;
+}): ShopifyPdpIntelligenceRecord {
+  const output = input.output;
+  const mergedNotes = toArray([
+    ...input.complianceWarnings,
+    ...input.missingDataNotices,
+    input.safeMessage,
+  ]);
+
+  if (!output) {
+    return sanitizeShopifyPdpIntelligenceRecord(
+      {
+        ...input.base,
+        generation_status: mapRunStatusToGenerationStatus(input.status),
+        compliance_notes: mergedNotes,
+        warnings_text: toArray([...input.base.warnings_text, ...input.complianceWarnings]),
+        last_generated_at: input.generatedAt,
+        updated_at: input.generatedAt,
+      },
+      input.base
+    );
+  }
+
+  return sanitizeShopifyPdpIntelligenceRecord(
+    {
+      ...input.base,
+      ai_product_summary: output.shortDescription || output.fullDescription || output.listingSubtitle,
+      key_features: output.benefitBullets,
+      ingredient_highlights: output.ingredientHighlights,
+      use_cases: output.agenticVisibilitySignals.primaryIntents,
+      trust_signals: output.agenticVisibilitySignals.trustSignals,
+      compliance_safe_claims: output.benefitBullets,
+      comparison_content: output.agenticVisibilitySignals.comparisonHooks.join("; "),
+      agentic_selection_notes: output.agenticVisibilitySignals.faqCoverage.join("; "),
+      warnings_text: toArray([...output.complianceWarnings, ...input.complianceWarnings]),
+      compliance_notes: mergedNotes,
+      seo_title: output.metaTitle,
+      meta_description: output.metaDescription,
+      faqs: output.faqSuggestions.map((faq) => ({
+        question: faq.question,
+        answer: faq.answer,
+        category: "review",
+        schema_eligible: true,
+        compliance_status: "review_required",
+      })),
+      generation_status: mapRunStatusToGenerationStatus(input.status),
+      last_generated_at: input.generatedAt,
+      updated_at: input.generatedAt,
+    },
+    input.base
+  );
 }
 
 async function resolveCurrentEditorState(input: { userId: string; productReference: string }) {
@@ -171,33 +245,39 @@ export async function POST(req: NextRequest) {
 
     const supplierFactsSynced = Boolean(sourceFacts?.supplierProductRecordFound && supplierProduct);
     const openAiApiKey = await getShopifyOpenAiApiKeyForUser(userId);
-
-    const generated = await generateShopifyPdpIntelligence({
-      product,
-      supplierMatch: {
-        supplier: supplierProduct?.supplier ?? null,
-        supplierSku: sourceFacts?.normalizedSku || editorState.supplierContext?.matchedSku || null,
-        product: supplierProduct,
-        inventoryAvailable: sourceFacts?.inventoryRecordFound ?? false,
-        syncStatus: editorState.supplierContext?.syncStatus ?? null,
-        supplierFactsSynced,
-      },
-      sourceFacts,
-      existing,
+    const generatedAt = new Date().toISOString();
+    const copywritingInput = buildProductCopywritingInputFromShopifyEditorState(editorState);
+    if (!copywritingInput) {
+      return fail(400, "Product copywriting input could not be prepared.", "VALIDATION_ERROR");
+    }
+    const runResult = await runProductCopywritingAgent({
+      copywritingInput,
       openAiApiKey,
     });
-
-    const persisted = await savePersistedShopifyPdpIntelligence({
-      userId,
-      shopifyProductId: product.productId,
-      productHandle: product.handle || null,
-      record: generated,
+    const reviewRecord = toReviewRecord({
+      base: existing ?? fallbackRecord,
+      output: runResult.output,
+      status: runResult.status,
+      safeMessage: runResult.safeMessage,
+      missingDataNotices: runResult.missingDataNotices,
+      complianceWarnings: runResult.complianceWarnings,
+      generatedAt,
     });
 
     return ok({
       ok: true,
       action: "generate",
-      intelligence: persisted,
+      intelligence: reviewRecord,
+      reviewOnly: true,
+      copywriting: {
+        status: runResult.status,
+        output: runResult.output,
+        missingDataNotices: runResult.missingDataNotices,
+        complianceWarnings: runResult.complianceWarnings,
+        errorCode: runResult.errorCode,
+        safeMessage: runResult.safeMessage,
+        generationMetadata: runResult.generationMetadata,
+      },
       diagnostics: {
         normalized_sku: sourceFacts?.normalizedSku || null,
         supplier_product_record_status: sourceFacts?.supplierProductRecordFound ? "synced" : "missing",
@@ -218,13 +298,11 @@ export async function POST(req: NextRequest) {
       assetRecordStatus: sourceFacts?.assetsRecordFound ? "synced" : "missing",
       supplementFactsStatus: sourceFacts?.supplementFacts?.status ?? "missing",
       coaStatus: sourceFacts?.assets?.coaStatus ?? "missing",
-      generationUnavailable: persisted.generation_status === "generation_unavailable",
+      generationUnavailable: runResult.status === "unavailable",
       message:
         !supplierFactsSynced
-          ? "Supplier facts not synced. Generated copy will be limited to Shopify data."
-          : persisted.generation_status === "generation_unavailable"
-          ? "generation unavailable: missing server configuration"
-          : null,
+          ? "Supplier facts not synced. Generated proposal uses available Shopify facts."
+          : runResult.safeMessage,
     });
   } catch (error) {
     return fail(500, asErrorMessage(error));

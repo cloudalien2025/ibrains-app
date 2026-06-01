@@ -94,5 +94,11 @@ Phase 6.1 eval harness remains offline/non-runtime:
 
 Future phases:
 
-- Phase 6.2: wire Generate Intelligence to contract/model path
+- Phase 6.2: wire Generate Intelligence to contract/model path (review-only binding implemented; no auto-save/publish)
 - Phase 6.3: add model-backed agentic visibility improvement loop
+
+## Phase 6.2 Relationship
+
+- Eval harness remains available for offline regression and fixture scoring.
+- Live Generate Intelligence binding in Phase 6.2 reuses the same contracts but does not expose eval-score dashboard UI.
+- Runtime proposal behavior is review-only with strict validation and plain missing-data notices.
