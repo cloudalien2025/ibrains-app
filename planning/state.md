@@ -56,7 +56,46 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 6.2.2-C Live Source Facts + Merchant Output Fix: Completed and merged (`sprint-6-2-2-c-live-generate-intelligence-source-facts`, live Generate Intelligence source-facts parity + output sanitization + Product Editor merchant wording cleanup; production deployed; signed-in browser QA pending user verification).
 - Shopify Phase 6.2.2-D Live Supplier Facts Hydration Fix: In progress (`sprint-6-2-2-d-live-supplier-facts-hydration`, live route supplier-facts rehydration by SKU + compact trace read-source diagnostics to prevent false `image_only` degradation when structured facts exist).
 - Shopify Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix: In progress (`sprint-6-2-2-e-hydration-compliance-fix`, parity diagnostics expansion + ROC123/ROC948 class hydration/compliance hardening).
-- Current recommended sprint: `Shopify Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix`.
+- Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation: In progress (`sprint-6-3-firecrawl-supplier-intelligence-extractor`, upstream Firecrawl-backed supplier extraction foundation + normalized package schema/provenance/validation and ROC948 fixture proof).
+- Current recommended sprint: `Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation`.
+
+## Sprint Checkpoint: Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation (Local Branch)
+
+- Branch: `sprint-6-3-firecrawl-supplier-intelligence-extractor`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: `IMPLEMENTED_ONLY` (MR/pipeline/deploy/merge pending)
+- Foundation scope implemented:
+  - Firecrawl wrapper with env-gated live mode + local cache + fixture mode:
+    - `lib/ecomviper/suppliers/firecrawl/firecrawl-client.ts`
+  - normalized supplier-intelligence schema/provenance/readiness contract:
+    - `lib/ecomviper/suppliers/rocktomic/supplier-intelligence-schema.ts`
+  - Rocktomic Firecrawl-backed extractor foundation + source-manifest loader:
+    - `lib/ecomviper/suppliers/rocktomic/firecrawl-supplier-intelligence.ts`
+  - package validator + audit CSV generation:
+    - `lib/ecomviper/suppliers/rocktomic/supplier-intelligence-validation.ts`
+  - read-model compatibility projection bridge:
+    - `lib/ecomviper/suppliers/rocktomic/supplier-intelligence-read-model.ts`
+  - new builder CLI with dry-run/fixture/firecrawl/cache/report/candidate-write modes:
+    - `scripts/ecomviper/build_rocktomic_supplier_intelligence.ts`
+    - `npm run ecomviper:rocktomic:supplier-intelligence`
+  - source manifest extended for Firecrawl policy/modes:
+    - `data/ecomviper/suppliers/rocktomic/sources.json`
+  - ROC948 golden fixture baseline plus additional partial SKU fixture:
+    - `data/ecomviper/suppliers/rocktomic/fixtures/supplier-intelligence-fixtures.json`
+- Local validation snapshot:
+  - focused suites added/passing:
+    - `tests/ecomviper_firecrawl_supplier_client.test.ts`
+    - `tests/ecomviper_rocktomic_supplier_intelligence_extractor.test.ts`
+    - `tests/ecomviper_supplier_intelligence_schema.test.ts`
+    - `tests/ecomviper_supplier_intelligence_validation.test.ts`
+    - `tests/ecommerce_supplier_facts_read.test.ts` (extended compatibility checks)
+- Boundaries preserved:
+  - no Product Editor auto-save/auto-publish changes
+  - no model call during page render
+  - no production DB writes/imports/migrations in this phase
+  - no default OCR extraction path in extractor foundation
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
 
 ## Sprint Checkpoint: Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix (Local Branch)
 

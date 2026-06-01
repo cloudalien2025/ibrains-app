@@ -259,6 +259,23 @@ Phase 5 contract source:
 - Selection behavior is generic for all products/SKUs:
 - no SKU/handle hardcoding
 
+## Firecrawl Supplier Intelligence Foundation (Phase 6.3)
+
+- Supplier Intelligence Extractor is now the intended upstream source of truth for supplier facts.
+- Firecrawl is introduced as the backbone for controlled source acquisition + structured extraction.
+- Foundation command:
+  - `npm run ecomviper:rocktomic:supplier-intelligence`
+- Phase 6.3 delivers:
+  - Firecrawl wrapper with fixture/cache/live modes
+  - normalized supplier intelligence schema + provenance model
+  - ROC948 proof fixture with structured supplement facts
+  - validation/audit artifacts for structured/partial/image_text_only/missing status
+- Phase 6.3 preserves runtime safety boundaries:
+  - no Product Editor auto-save/auto-publish
+  - no model call during page render
+  - no production DB writes/imports by extractor
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
 ## Generate Intelligence Per-SKU Hydration + Compliance Calibration (Phase 6.2.2-E)
 
 - Added per-SKU parity diagnostics and compare tooling for live supplier-facts hydration triage:

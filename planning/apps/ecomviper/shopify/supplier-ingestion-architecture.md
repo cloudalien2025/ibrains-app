@@ -1,6 +1,6 @@
 # EcomViper Supplier Ingestion Architecture (Stabilization)
 
-Last updated: 2026-05-31 (UTC)
+Last updated: 2026-06-01 (UTC)
 
 ## Objective
 
@@ -257,6 +257,33 @@ Phase 3.6 keeps ingestion runtime boundaries unchanged and upgrades only offline
 New artifact:
 
 - `latest/ai-label-text-evidence.json`
+
+## Firecrawl Supplier Intelligence Extractor Foundation (Phase 6.3)
+
+Phase 6.3 establishes Firecrawl-backed supplier-source acquisition as the upstream foundation for normalized supplier facts.
+
+Architecture path:
+
+1. Rocktomic supplier source manifest (`data/ecomviper/suppliers/rocktomic/sources.json`)
+2. Firecrawl wrapper (`lib/ecomviper/suppliers/firecrawl/firecrawl-client.ts`) in fixture/cache/live modes
+3. Rocktomic normalized extractor (`lib/ecomviper/suppliers/rocktomic/firecrawl-supplier-intelligence.ts`)
+4. normalized package + validation artifacts (candidate directory writes only)
+5. downstream read-model consumers (Product Editor + Generate Intelligence)
+
+Phase 6.3 guardrails:
+
+- `FIRECRAWL_API_KEY` is env-driven only
+- deterministic local cache key: `url + mode + schema hash`
+- tests run without a live Firecrawl key via fixture mode
+- no unbounded crawling, no render-path extraction, no DB writes/imports
+- no default OCR path; OCR remains fallback-only outside this foundation scope
+
+Output boundaries:
+
+- generated package remains candidate-only (`data/ecomviper/suppliers/rocktomic/candidates/<timestamp>/`)
+- no promotion to `latest/` in this phase
+- no Product Editor auto-save/publish behavior change
+- no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
 ## Product Editor Shared DB Read Binding (Phase 5)
 
