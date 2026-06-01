@@ -1,0 +1,226 @@
+{
+  "generatedAt": "2026-06-01T12:25:37.974Z",
+  "dbConnected": true,
+  "totalProductsAudited": 164,
+  "totalSupplierBackedProducts": 164,
+  "totalShopifyOnlyOrUnmatchedProducts": 0,
+  "totalSupplementProducts": 164,
+  "totalProductsWhereSupplementFactsMissingIsAccurate": 16,
+  "totalProductsWithFactsImageAvailableButStructuredFactsMissing": 18,
+  "totalProductsWithAiLabelTextAvailableButNotMapped": 147,
+  "totalProductsWithArtifactStructuredFactsButDbMissing": 0,
+  "totalProductsWithDbFactsButInputMissing": 130,
+  "totalProductsWithInputMissingDespiteEvidence": 148,
+  "totalProductsMissingCoa": 40,
+  "totalProductsMissingPricing": 0,
+  "totalProductsMissingInventory": 0,
+  "totalProductsLikelyWeakIngredientCopy": 164,
+  "countsByAuditCategory": {
+    "A": 0,
+    "B": 1,
+    "C": 17,
+    "D": 0,
+    "E": 130,
+    "F": 16,
+    "G": 0,
+    "H": 0
+  },
+  "topSuspectedRootCauses": [
+    [
+      "read_model_to_copywriting_input_gap",
+      130
+    ],
+    [
+      "ai_label_text_mapping_gap",
+      17
+    ],
+    [
+      "true_missing_source_data",
+      16
+    ],
+    [
+      "label_text_extraction_gap",
+      1
+    ]
+  ],
+  "top20AffectedSkus": [
+    {
+      "sku": "ROC010",
+      "title": "Pump Non-Stim Pre-Workout Cherry Blast 312g w/ Natural Flavor",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC011",
+      "title": "Non-Stim Pump Pre-Workout: Pineapple 312.5g w/ Natural Flavor",
+      "category": "C",
+      "rootCause": "ai_label_text_mapping_gap"
+    },
+    {
+      "sku": "ROC012",
+      "title": "Pump Pre-Workout Citrus Blast 312g w/ Natural Flavor",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC013",
+      "title": "Pre-Workout Blast-Off 312g w/ Natural Flavor",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC014",
+      "title": "BCAA + EAA Strawberry Candy 300g w/Natural Flavor",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC015",
+      "title": "All-In/One Greens & Red SuperFood + Immune 270g Mixed Berry w/Natural Flavor",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC016",
+      "title": "Recovery Carb + Electrolytes: Lemon Lime 1365g",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC017",
+      "title": "Recovery Carb + Electrolyte Summer Punch 1365g",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC018",
+      "title": "Pump Pre-Workout Georgia Peach Rings 312g",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC102",
+      "title": "African Mango “Ultra Burn” Drops",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC105",
+      "title": "Best Sellers Blend",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC107M",
+      "title": "BCAA Grape 325g – 50 servings",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC110M",
+      "title": "BCAA Lemon Lime 325g – 50 servings",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC1120",
+      "title": "6lb Bulk Up! Mass Gainer Chocolate Milkshake w/Low Sugar",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC1125",
+      "title": "6lb Bulk Up! Mass Gainer Vanilla Milkshake w/Low Sugar",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC1205",
+      "title": "2.9lb Essential Meal Replacement Protein Chocolate Milkshake w/0% Added Sugar",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC121",
+      "title": "Green Coffee Bean w/GCA - 800mg",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC1215",
+      "title": "2.9lb Essential Meal Replacement Protein Vanilla Milkshake w/0% Added Sugar",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC123",
+      "title": "Oxy Burn",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    },
+    {
+      "sku": "ROC126",
+      "title": "Raspberry Ketone Ultra Blend",
+      "category": "E",
+      "rootCause": "read_model_to_copywriting_input_gap"
+    }
+  ],
+  "roc123": {
+    "productHandle": "oxy-burn",
+    "productTitle": "Oxy Burn",
+    "shopifySku": "ROC123",
+    "supplierSku": "ROC123",
+    "supplierMatchStatus": "matched",
+    "productType": "supplement",
+    "sourceMode": "supplier-backed",
+    "hasShopifyFactsImage": null,
+    "shopifyFactsImageUrlsCount": null,
+    "hasSupplierFactsImage": true,
+    "supplierFactsImageUrlsCount": 1,
+    "hasTemplateLabelAsset": true,
+    "hasMockupAsset": true,
+    "hasAiLabelTextEvidence": true,
+    "aiLabelTextStatus": "reused_cached",
+    "hasOcrEvidence": false,
+    "hasStructuredSupplementFactsInArtifacts": true,
+    "hasStructuredSupplementFactsInDb": true,
+    "hasSupplementFactsInCopywritingInput": false,
+    "servingSizePresentInArtifacts": false,
+    "servingSizePresentInDb": false,
+    "servingSizePresentInInput": false,
+    "servingsPerContainerPresentInArtifacts": false,
+    "servingsPerContainerPresentInDb": false,
+    "servingsPerContainerPresentInInput": false,
+    "activeIngredientsPresentInArtifacts": true,
+    "activeIngredientsPresentInDb": true,
+    "activeIngredientsPresentInInput": false,
+    "ingredientAmountsPresentInArtifacts": true,
+    "ingredientAmountsPresentInDb": true,
+    "ingredientAmountsPresentInInput": false,
+    "otherIngredientsPresent": false,
+    "suggestedUsePresent": false,
+    "warningsPresent": false,
+    "coaPresent": true,
+    "pricingPresent": true,
+    "inventoryPresent": true,
+    "copywritingSupplementFactsMissingFlag": true,
+    "copywritingIngredientFactsMissingFlag": true,
+    "copywritingMissingDataNotices": [
+      "COA missing.",
+      "Pricing missing.",
+      "Supplement Facts missing."
+    ],
+    "validationIngredientMatchingReadiness": "needs_review",
+    "validationProductEditorFactsReadiness": "blocked",
+    "globalValidationStatus": "blocked",
+    "incorrectlyClassifiedSupplementFactsMissing": true,
+    "labelImageEvidenceButNoStructuredFacts": false,
+    "aiLabelTextAvailableButInputMissing": true,
+    "structuredFactsInArtifactsButDbMissing": false,
+    "structuredFactsInDbButInputMissing": true,
+    "sourceDataInSupplierSnapshotButNotInput": true,
+    "auditCategory": "E",
+    "suspectedRootCause": "read_model_to_copywriting_input_gap",
+    "recommendedFixLane": "read_model_to_copywriting_input_gap"
+  }
+}
