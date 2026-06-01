@@ -53,33 +53,57 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 6.1 AI Copywriting Agent Contract + Eval Harness: Completed and merged (`sprint-6-1-ai-copywriting-agent-contract-evals`, all-product contract/schema/prompt/eval harness foundation with no live Product Editor or Generate Intelligence behavior change).
 - Shopify Phase 6.2 Generate Intelligence Copywriting Agent Binding: Completed and merged (`sprint-6-2-generate-intelligence-copywriting-agent`, review-only Generate Intelligence model binding using all-product copywriting contract).
 - Shopify Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix: In progress (`sprint-6-2-1-generate-intelligence-prod-hotfix`, fix signed-in Generate Intelligence production failure caused by incorrect localhost HTTPS proxy behavior + safe error mapping/UI stale-state handling).
-- Shopify Phase 6.2.2-C Live Source Facts + Merchant Output Fix: In progress (`sprint-6-2-2-c-live-generate-intelligence-source-facts`, live Generate Intelligence source-facts parity + output sanitization + Product Editor merchant wording cleanup).
-- Current recommended sprint: `Shopify Phase 6.2.2-C Live Source Facts + Merchant Output Fix`.
+- Shopify Phase 6.2.2-C Live Source Facts + Merchant Output Fix: Completed and merged (`sprint-6-2-2-c-live-generate-intelligence-source-facts`, live Generate Intelligence source-facts parity + output sanitization + Product Editor merchant wording cleanup; production deployed; signed-in browser QA pending user verification).
+- Current recommended sprint: `Shopify Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix`.
 
-## Sprint Checkpoint: Phase 6.2.2-C Live Source Facts + Merchant Output Fix (Local Branch)
+## Sprint Closure Update: Phase 6.2.2-C Live Source Facts + Merchant Output Fix
 
-- Branch: `sprint-6-2-2-c-live-generate-intelligence-source-facts`
-- Date: `2026-06-01 (UTC)`
-- Local checkpoint status: implementation + focused tests/checks complete locally; MR/pipeline/deploy + signed-in production browser QA pending.
+- Sprint/branch: `sprint-6-2-2-c-live-generate-intelligence-source-facts`
 - Root cause confirmed:
-  - live Generate Intelligence input path underused shared ecommerce supplier read-model facts/evidence and could project stale/partial source states into copywriting input;
+  - live Generate Intelligence input path underused shared ecommerce supplier read-model facts/evidence and could project stale/partial source states into copywriting input.
   - merchant proposal path surfaced internal/debug warning strings and OCR/dev wording.
-- Implemented scope:
+- MR:
+  - `!304`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/304`
+  - source branch commit SHA: `702919f7d0f18fa73641a6f1b6c696f9bec64baf`
+  - merge commit SHA: `de4b46c52be324a1ecc01c762de96b2a6c966f3c`
+  - MR pipeline `2567442958`: success
+- Main/deploy pipeline:
+  - pipeline `2567454601`: success
+- Branch cleanup:
+  - remote source branch deletion: completed via merge (`--remove-source-branch`)
+  - local source branch deletion: completed (`git branch -d sprint-6-2-2-c-live-generate-intelligence-source-facts`)
+  - local repository reset: clean `main` synced to `origin/main` before closure metadata branch
+- Production release verification:
+  - `/api/meta/release`:
+    - `git_sha=de4b46c52be324a1ecc01c762de96b2a6c966f3c`
+    - `build_id=2567454601`
+    - `deployed_at=2026-06-01T14:05:34Z`
+    - `release_metadata_complete=true`
+  - `/api/health`: `{"ok":true,...,"upstream_ok":true}`
+- Production smoke and signed-out checks:
+  - `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai`: pass
+  - `/admin` -> `307` to `/sign-in?redirect_url=%2Fadmin`
+  - `/admin/ecomviper` -> `307` to `/sign-in?redirect_url=%2Fadmin%2Fecomviper`
+  - `/admin/ecomviper/suppliers/rocktomic/audit` -> `307` to `/sign-in?redirect_url=%2Fadmin%2Fecomviper%2Fsuppliers%2Frocktomic%2Faudit`
+  - `/ecomviper/products/opa-oxy-burn-thermogenic-support` -> `307` to sign-in with preserved redirect URL
+- Production env presence (masked):
+  - `ECOMMERCE_DATABASE_URL=SET`
+  - `OPENAI_API_KEY=SET`
+  - `ECOMVIPER_COPYWRITING_OPENAI_MODEL=SET`
+  - `ECOMVIPER_COPYWRITING_OPENAI_TIMEOUT_MS=SET`
+- Production log checks:
+  - app log tail still contains historical pre-deploy `https://localhost:3001` / SSL `wrong version number` entries.
+  - `journalctl -u ibrains-app --since \"2026-06-01 14:06:54\"` has no new `https://localhost:3001`, SSL wrong-version, or copywriting exception entries after this deployment.
+- Delivered behavior summary:
   - supplier facts read model now exposes ingredient amount evidence to live consumers.
   - Product Editor source-facts projection now consumes supplier facts panel fields for structured facts/evidence precedence.
   - copywriting input builder now merges source facts + supplier facts panel + supplier snapshot for live parity.
-  - runner now sanitizes internal/debug warnings and drops contradictory missing-data notices.
+  - runner sanitizes internal/debug warnings and drops contradictory missing-data notices.
   - Product Editor merchant text replaced dev-like `supplier intelligence update`/OCR directive wording with plain user-facing text.
   - safe server-side Generate trace logging added (`trace_id` + compact redacted summaries).
-- Local dry-run and check summary:
-  - `prepare --all --dry-run`: `supplementFactsMissing=16`, `coaMissing=40`, `pricingMissing=22`, `inventoryMissing=38`.
-  - focused tests for route/input-builder/runner/UI parity passed.
-  - `npm run build` passed in this run.
-  - `git diff --check` passed.
-- Pending closure items:
-  - GitLab MR/pipeline/merge/branch cleanup flow.
-  - deploy verification + `/api/meta/release` and `/api/health` checks on deployed release.
-  - signed-in browser QA confirmation on Oxy-Burn + one additional affected SKU.
+  - all-product dry-run counts remain improved: `supplementFactsMissing=16`, `coaMissing=40`, `pricingMissing=22`, `inventoryMissing=38`.
+- Signed-in/manual QA status:
+  - pending user browser verification (CLI run cannot complete authenticated Product Editor Generate Intelligence checks on Oxy-Burn + additional affected SKU).
 
 ## Sprint Checkpoint: Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix (Local Branch)
 
