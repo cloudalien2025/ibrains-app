@@ -97,3 +97,16 @@ Phase 6.2 does not introduce:
 ## Future Phases
 
 - Phase 6.3 may add model-backed agentic visibility scoring/improvement loop.
+
+## Phase 6.2.2-B Mapping Hotfix Addendum
+
+- Input-mapping normalization now preserves supplement-facts evidence in all-product prep path.
+- Plain notices are more specific for partial-facts cases:
+  - serving size missing
+  - servings per container missing
+  - ingredient amounts missing
+  - image-only facts evidence / AI text needs-review
+- `Supplement Facts missing.` is reserved for true no-evidence conditions.
+- Review-only behavior remains unchanged:
+  - no auto-save
+  - no auto-publish

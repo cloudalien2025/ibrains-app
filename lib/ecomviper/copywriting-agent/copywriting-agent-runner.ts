@@ -57,6 +57,15 @@ function canonicalMissingNotices(input: ProductCopywritingInput): string[] {
   if (input.missingData.pricingMissing) notices.push("Pricing missing.");
   if (input.missingData.inventoryMissing) notices.push("Inventory missing.");
   if (input.missingData.supplementFactsMissing) notices.push("Supplement Facts missing.");
+  if (input.missingData.supplementFactsImageOnly) {
+    notices.push("Supplement Facts image available; ingredient details are not structured yet.");
+  }
+  if (input.missingData.supplementFactsTextNeedsReview) notices.push("Supplement Facts text needs review.");
+  if (input.missingData.servingSizeMissing) notices.push("Serving size missing.");
+  if (input.missingData.servingsPerContainerMissing) notices.push("Servings per container missing.");
+  if (input.missingData.ingredientAmountsMissing && !input.missingData.ingredientFactsMissing) {
+    notices.push("Ingredient amounts missing.");
+  }
   if (input.missingData.supplierMatchMissing) notices.push("Supplier match not found.");
   return notices;
 }
@@ -66,6 +75,13 @@ function normalizeMissingNotice(value: string): string {
   if (normalized.includes("coa")) return "COA missing.";
   if (normalized.includes("pricing")) return "Pricing missing.";
   if (normalized.includes("inventory")) return "Inventory missing.";
+  if (normalized.includes("serving size")) return "Serving size missing.";
+  if (normalized.includes("servings per container")) return "Servings per container missing.";
+  if (normalized.includes("ingredient amounts")) return "Ingredient amounts missing.";
+  if (normalized.includes("image") && normalized.includes("structured")) {
+    return "Supplement Facts image available; ingredient details are not structured yet.";
+  }
+  if (normalized.includes("text") && normalized.includes("review")) return "Supplement Facts text needs review.";
   if (normalized.includes("supplement")) return "Supplement Facts missing.";
   if (normalized.includes("supplier")) return "Supplier match not found.";
   return `${value.trim().replace(/\.+$/, "")}.`;

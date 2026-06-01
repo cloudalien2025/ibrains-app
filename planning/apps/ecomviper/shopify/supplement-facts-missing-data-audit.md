@@ -163,3 +163,14 @@ These are audit outputs only.
 - No application runtime behavior was changed.
 - No DB writes/imports/migrations were run.
 - No Product Editor/Generate Intelligence behavior was changed in this task.
+
+## Phase 6.2.2-B Follow-On Status
+
+Phase 6.2.2-B implementation addresses the primary audit root cause (`read_model_to_copywriting_input_gap`) by normalizing nested supplement-facts and source-evidence mapping in all-product input preparation.
+
+Before/after all-product dry-run (`prepare --all --dry-run`) from Phase 6.2.2-B branch:
+
+- before: `supplementFactsMissing=164`
+- after: `supplementFactsMissing=16`
+
+This confirms the audit’s Category E failure class is substantially reduced via mapping normalization rather than source rebuild/import.

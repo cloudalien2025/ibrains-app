@@ -199,6 +199,47 @@ describe("ecomviper copywriting agent input builder", () => {
 
     expect(input.missingData.supplementFactsMissing).toBe(true);
     expect(input.missingData.ingredientFactsMissing).toBe(true);
+    expect(input.missingData.servingSizeMissing).toBe(true);
+    expect(input.missingData.servingsPerContainerMissing).toBe(true);
+    expect(input.missingData.ingredientAmountsMissing).toBe(true);
+  });
+
+  it("does not mark supplement facts missing when ingredient facts exist but serving fields are missing", () => {
+    const input = buildProductCopywritingInput({
+      productIdentity: { productId: "p3", title: "Partial Facts", productType: "Supplements" },
+      variants: [{ sku: "S4", barcode: null, upc: null, gtin: null, price: 15, compareAtPrice: null, inventory: 2 }],
+      supplementFacts: {
+        activeIngredients: ["L-Arginine"],
+        ingredientAmounts: ["L-Arginine 500mg"],
+      },
+      sourceEvidence: {
+        labelEvidencePresent: true,
+        supplementFactsImagePresent: true,
+        aiLabelTextEvidencePresent: true,
+      },
+    });
+
+    expect(input.missingData.supplementFactsMissing).toBe(false);
+    expect(input.missingData.ingredientFactsMissing).toBe(false);
+    expect(input.missingData.ingredientAmountsMissing).toBe(false);
+    expect(input.missingData.servingSizeMissing).toBe(true);
+    expect(input.missingData.servingsPerContainerMissing).toBe(true);
+  });
+
+  it("treats image-only supplement evidence as not-structured instead of fully missing", () => {
+    const input = buildProductCopywritingInput({
+      productIdentity: { productId: "p4", title: "Image Only", productType: "Supplements" },
+      variants: [{ sku: "S5", barcode: null, upc: null, gtin: null, price: 12, compareAtPrice: null, inventory: 1 }],
+      sourceEvidence: {
+        labelEvidencePresent: true,
+        supplementFactsImagePresent: true,
+        aiLabelTextEvidencePresent: false,
+      },
+    });
+
+    expect(input.missingData.supplementFactsMissing).toBe(false);
+    expect(input.missingData.supplementFactsImageOnly).toBe(true);
+    expect(input.missingData.structuredSupplementFactsMissing).toBe(true);
   });
 
   it("does not hardcode ROC123/ROC948/product handles in builder logic", () => {

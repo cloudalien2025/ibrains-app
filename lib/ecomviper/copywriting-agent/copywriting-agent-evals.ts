@@ -201,6 +201,29 @@ export function evaluateProductCopywritingOutput(input: ProductCopywritingInput,
     hardFailures.push("missing required notice: supplement facts missing");
     missingDataBehavior -= 20;
   }
+  if (input.missingData.servingSizeMissing && !ensureMissingNotice(output, "serving size")) {
+    hardFailures.push("missing required notice: serving size missing");
+    missingDataBehavior -= 10;
+  }
+  if (input.missingData.servingsPerContainerMissing && !ensureMissingNotice(output, "servings per container")) {
+    hardFailures.push("missing required notice: servings per container missing");
+    missingDataBehavior -= 10;
+  }
+  if (input.missingData.ingredientAmountsMissing && !input.missingData.ingredientFactsMissing && !ensureMissingNotice(output, "ingredient amounts")) {
+    hardFailures.push("missing required notice: ingredient amounts missing");
+    missingDataBehavior -= 10;
+  }
+  if (
+    input.missingData.supplementFactsImageOnly
+    && !ensureMissingNotice(output, "not structured")
+  ) {
+    hardFailures.push("missing required notice: supplement facts image available but not structured");
+    missingDataBehavior -= 10;
+  }
+  if (input.missingData.supplementFactsTextNeedsReview && !ensureMissingNotice(output, "needs review")) {
+    hardFailures.push("missing required notice: supplement facts text needs review");
+    missingDataBehavior -= 10;
+  }
   if (input.missingData.supplierMatchMissing && !ensureMissingNotice(output, "supplier")) {
     hardFailures.push("missing required notice: supplier match not found");
     missingDataBehavior -= 20;

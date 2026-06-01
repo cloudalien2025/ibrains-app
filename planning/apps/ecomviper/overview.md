@@ -329,3 +329,26 @@ Phase 6.1 contract sources:
 Phase 6.2 contract source:
 
 - `planning/apps/ecomviper/shopify/generate-intelligence-copywriting-agent-binding.md`
+
+## Supplement Facts Input Mapping Hotfix (Phase 6.2.2-B)
+
+- Phase 6.2.2-B normalizes all-product copywriting input mapping so supplement-facts evidence from the real source schema is preserved in `ProductCopywritingInput`.
+- Primary root cause addressed:
+  - `read_model_to_copywriting_input_gap` identified in Phase 6.2.2-A audit (148 products had evidence present but input flagged facts missing).
+- Mapping now distinguishes true no-evidence from partial/incomplete facts:
+  - true missing: `Supplement Facts missing.`
+  - partial facts: serving-size/servings/amount notices
+  - evidence-only states: image-only and AI-label-text-review notices
+- Dry-run prep count improvement (`--all --dry-run`):
+  - `supplementFactsMissing` reduced from `164` to `16`
+- Guardrails unchanged:
+  - Generate Intelligence remains review-only
+  - no auto-save
+  - no auto-publish
+  - no Product Editor layout redesign
+  - no supplier import/OCR/.ai extraction/source fetch
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
+Phase 6.2.2-B contract source:
+
+- `planning/apps/ecomviper/shopify/supplement-facts-input-mapping-hotfix.md`

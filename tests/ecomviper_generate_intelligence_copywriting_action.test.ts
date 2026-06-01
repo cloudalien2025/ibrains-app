@@ -502,7 +502,7 @@ describe("ecomviper generate intelligence copywriting action", () => {
     expect((payload.copywriting?.output?.ingredientHighlights || []).length).toBeGreaterThan(0);
   });
 
-  it("prevents ingredient-backed claims when Supplement Facts are missing", async () => {
+  it("prevents ingredient-backed claims when ingredient facts are unavailable", async () => {
     const missingFactsState = stateFixture({
       sourceFacts: {
         ...stateFixture().sourceFacts!,
@@ -547,7 +547,12 @@ describe("ecomviper generate intelligence copywriting action", () => {
 
     const payload = await response.json();
     expect(payload.copywriting?.status).toBe("success");
-    expect(payload.copywriting?.missingDataNotices).toContain("Supplement Facts missing.");
+    expect(payload.copywriting?.missingDataNotices).toContain("Serving size missing.");
+    expect(payload.copywriting?.missingDataNotices).toContain("Servings per container missing.");
+    expect(payload.copywriting?.missingDataNotices).toContain(
+      "Supplement Facts image available; ingredient details are not structured yet."
+    );
+    expect(payload.copywriting?.missingDataNotices).not.toContain("Supplement Facts missing.");
     expect(payload.copywriting?.output?.ingredientHighlights).toEqual([]);
   });
 });

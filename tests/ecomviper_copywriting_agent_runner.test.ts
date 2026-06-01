@@ -247,7 +247,53 @@ describe("ecomviper copywriting agent runner", () => {
     expect(result.status).toBe("success");
     expect(result.output?.ingredientHighlights).toEqual([]);
     expect(result.missingDataNotices).toContain("Supplement Facts missing.");
+    expect(result.missingDataNotices).toContain("Serving size missing.");
+    expect(result.missingDataNotices).toContain("Servings per container missing.");
     expect(result.missingDataNotices).toContain("COA missing.");
     expect(result.missingDataNotices).toContain("Supplier match not found.");
+  });
+
+  it("returns specific serving-field notices without blanket Supplement Facts missing when ingredient facts exist", async () => {
+    const input = buildProductCopywritingInput({
+      productIdentity: { productId: "p-3", title: "Partial Facts Product", productType: "Supplements" },
+      variants: [{ sku: "SKU-3", barcode: null, upc: null, gtin: null, price: 25, compareAtPrice: null, inventory: 5 }],
+      supplementFacts: {
+        activeIngredients: ["L-Citrulline"],
+        ingredientAmounts: ["L-Citrulline 1500mg"],
+      },
+      sourceEvidence: {
+        coaPresent: true,
+        labelEvidencePresent: true,
+        supplementFactsImagePresent: true,
+        aiLabelTextEvidencePresent: true,
+        aiLabelTextEvidenceStatus: "reused_cached",
+      },
+      supplierContext: { matchStatus: "matched" },
+    });
+
+    const modelClient: ProductCopywritingModelClient = {
+      async generateStructuredOutput() {
+        return {
+          content: JSON.stringify({
+            ...validOutput(),
+            ingredientHighlights: ["L-Citrulline"],
+            missingDataNotices: [],
+          }),
+          model: "gpt-4.1-mini",
+        };
+      },
+    };
+
+    const result = await runProductCopywritingAgent({
+      copywritingInput: input,
+      openAiApiKey: "sk-test",
+      modelClient,
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.missingDataNotices).toContain("Serving size missing.");
+    expect(result.missingDataNotices).toContain("Servings per container missing.");
+    expect(result.missingDataNotices).not.toContain("Supplement Facts missing.");
+    expect(result.missingDataNotices).not.toContain("Ingredient amounts missing.");
   });
 });

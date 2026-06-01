@@ -102,3 +102,11 @@ Future phases:
 - Eval harness remains available for offline regression and fixture scoring.
 - Live Generate Intelligence binding in Phase 6.2 reuses the same contracts but does not expose eval-score dashboard UI.
 - Runtime proposal behavior is review-only with strict validation and plain missing-data notices.
+
+## Phase 6.2.2-B Mapping Regression Coverage
+
+- Eval/prepare harness remains contract-regression tooling for all-product inputs.
+- After mapping normalization, all-product `prepare --all --dry-run` no longer reports blanket `supplementFactsMissing` for every SKU.
+- Harness is used to verify:
+  - true no-evidence SKUs still report `Supplement Facts missing.`
+  - partial-facts SKUs emit specific missing notices instead of blanket missing-facts notice.
