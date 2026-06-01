@@ -257,7 +257,17 @@ Phase 5 contract source:
   - `/ecomviper/products/[productId-or-handle]`
 - On product open, Product Gallery now defaults to the best front/primary/featured image using deterministic global selection logic.
 - Selection behavior is generic for all products/SKUs:
-  - no SKU/handle hardcoding
+- no SKU/handle hardcoding
+
+## Generate Intelligence Per-SKU Hydration + Compliance Calibration (Phase 6.2.2-E)
+
+- Added per-SKU parity diagnostics and compare tooling for live supplier-facts hydration triage:
+  - `npm run ecomviper:live-supplier-facts:parity -- --sku <SKU>`
+  - `npm run ecomviper:live-supplier-facts:compare -- --sku <SKU_A> --compare-sku <SKU_B>`
+- Live hydration read diagnostics now expose DB/artifact attempted/found/error state for trace parity.
+- Live input source-fact summary now reflects effective merged facts state (`present/missing`) instead of stale source status tags.
+- Compliance evaluator now supports source-backed ingredient highlight normalization (including title/supplier-name evidence) and removes unsupported highlights without blocking safe proposals.
+- Guardrails remain strict for prohibited disease/treatment/cure/drug-comparison claims and unsupported factual claims.
 
 ## Generate Intelligence Live Supplier Facts Hydration (Phase 6.2.2-D, Local)
 

@@ -94,6 +94,52 @@ describe("ecomviper copywriting agent eval rubric", () => {
     expect(result.hardFailures.join(" ").toLowerCase()).toContain("invented ingredient highlight");
   });
 
+  it("allows ingredient highlight backed by product title evidence", () => {
+    const input = buildProductCopywritingInput({
+      productIdentity: {
+        productId: "p-4",
+        title: "Nitric Oxide Gummies L-Arginine Citrulline",
+        productType: "Supplements",
+      },
+      supplementFacts: {
+        activeIngredients: ["Calcium"],
+      },
+      sourceEvidence: { coaPresent: true, sourceFactsUsed: ["supplement_facts:extracted"] },
+    });
+
+    const output = {
+      ...validOutput(),
+      ingredientHighlights: ["L-Arginine - supports nitric oxide pathways"],
+      sourceFactsUsed: ["supplement_facts:extracted"],
+      missingDataNotices: ["COA missing", "Pricing missing", "Supplier match not found", "Supplement Facts missing"],
+    };
+
+    const result = evaluateProductCopywritingOutput(input, output);
+    expect(result.hardFailures.join(" ").toLowerCase()).not.toContain("invented ingredient highlight");
+  });
+
+  it("hard-fails unsupported dosage in ingredient highlights", () => {
+    const input = buildProductCopywritingInput({
+      productIdentity: { productId: "p-5", title: "Dosage Product", productType: "Supplements" },
+      supplementFacts: {
+        activeIngredients: ["Calcium"],
+        ingredientAmounts: ["Calcium 18 mg"],
+      },
+      sourceEvidence: { coaPresent: true, sourceFactsUsed: ["supplement_facts:extracted"] },
+    });
+
+    const output = {
+      ...validOutput(),
+      ingredientHighlights: ["Calcium (300 mg) - supports muscle function"],
+      sourceFactsUsed: ["supplement_facts:extracted"],
+      missingDataNotices: ["COA missing", "Pricing missing", "Supplier match not found", "Supplement Facts missing"],
+    };
+
+    const result = evaluateProductCopywritingOutput(input, output);
+    expect(result.passed).toBe(false);
+    expect(result.hardFailures.join(" ").toLowerCase()).toContain("invented ingredient highlight");
+  });
+
   it("hard-fails when required missing-data notices are absent", () => {
     const input = buildProductCopywritingInput({
       productIdentity: { productId: "p-3", title: "Missing Data Product", productType: "Supplements" },

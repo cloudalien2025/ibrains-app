@@ -55,7 +55,50 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix: In progress (`sprint-6-2-1-generate-intelligence-prod-hotfix`, fix signed-in Generate Intelligence production failure caused by incorrect localhost HTTPS proxy behavior + safe error mapping/UI stale-state handling).
 - Shopify Phase 6.2.2-C Live Source Facts + Merchant Output Fix: Completed and merged (`sprint-6-2-2-c-live-generate-intelligence-source-facts`, live Generate Intelligence source-facts parity + output sanitization + Product Editor merchant wording cleanup; production deployed; signed-in browser QA pending user verification).
 - Shopify Phase 6.2.2-D Live Supplier Facts Hydration Fix: In progress (`sprint-6-2-2-d-live-supplier-facts-hydration`, live route supplier-facts rehydration by SKU + compact trace read-source diagnostics to prevent false `image_only` degradation when structured facts exist).
-- Current recommended sprint: `Shopify Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix`.
+- Shopify Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix: In progress (`sprint-6-2-2-e-hydration-compliance-fix`, parity diagnostics expansion + ROC123/ROC948 class hydration/compliance hardening).
+- Current recommended sprint: `Shopify Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix`.
+
+## Sprint Checkpoint: Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix (Local Branch)
+
+- Branch: `sprint-6-2-2-e-hydration-compliance-fix`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: `IMPLEMENTED_ONLY` (MR/pipeline/deploy/signed-in production QA pending)
+- Root causes confirmed:
+  - hydration parity/trace ambiguity: live projection could continue showing stale `ocr_required`-style source summaries even after hydration, and fallback diagnostics were too coarse for per-SKU triage.
+  - ROC948 compliance false block: ingredient highlight validation was too strict (full-string match) and did not properly normalize source-backed ingredient evidence across supplement facts + product title/supplier title cues.
+- Implemented scope:
+  - `copywriting-agent-evals.ts`: normalized ingredient/dosage grounding + title/supplier evidence support.
+  - `copywriting-agent-runner.ts`: repair/remove unsupported ingredient highlights instead of blocking entire proposal when remaining output is safe.
+  - `copywriting-agent-input-builder.ts`: source facts summary now reflects merged effective facts state (`present/missing`) for trace parity.
+  - `live-supplier-facts-hydration.ts`: added db/artifact read diagnostics and AI label evidence shape compatibility (`records[]` or raw array).
+  - `live_supplier_facts_parity_check.ts`: expanded parity output + compare mode (`--compare-sku`).
+  - new npm alias: `ecomviper:live-supplier-facts:compare`.
+- Local validation summary:
+  - focused suites: pass
+    - `tests/ecomviper_copywriting_agent_evals.test.ts`
+    - `tests/ecomviper_copywriting_agent_runner.test.ts`
+    - `tests/ecomviper_copywriting_agent_input_builder.test.ts`
+    - `tests/ecomviper_live_supplier_facts_hydration.test.ts`
+    - `tests/ecomviper_generate_intelligence_copywriting_action.test.ts`
+    - `tests/ecomviper_pdp_intelligence_route.test.ts`
+    - `tests/ecomviper_product_editor_source_mapping.test.tsx`
+    - `tests/ecomviper_shopify_route_consolidation.test.ts`
+    - `tests/ecomviper_product_image_selection.test.ts`
+    - `tests/ecomviper_product_editor_generate_intelligence_review.test.tsx`
+  - dry-run harness:
+    - `prepare --all --dry-run`: `supplementFactsMissing=16`, `coaMissing=40`, `pricingMissing=22`, `inventoryMissing=38`
+    - no regression to historical `supplementFactsMissing=164`
+  - parity CLI:
+    - ROC123 and ROC948 both report structured facts present locally with explicit DB/artifact read diagnostics
+  - `npm run build`: pass
+  - `git diff --check`: pass
+  - `npm test`: fails in unrelated baseline suites outside this sprint scope (10 failing tests; none from modified ecomviper copywriting/hydration suites)
+- Boundary confirmation:
+  - no auto-save / no auto-publish
+  - no model call during page render
+  - no supplier DB writes/import/migrations
+  - no OCR/.ai extraction/source fetch in Product Editor generate path
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
 ## Sprint Checkpoint: Phase 6.2.2-D Live Supplier Facts Hydration Fix (Local Branch)
 

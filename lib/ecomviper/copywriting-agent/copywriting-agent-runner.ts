@@ -1,7 +1,10 @@
 import "server-only";
 
 import { buildCopywritingPromptPayload } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-prompt";
-import { evaluateProductCopywritingOutput } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-evals";
+import {
+  evaluateProductCopywritingOutput,
+  removeUnsupportedIngredientHighlights,
+} from "@/lib/ecomviper/copywriting-agent/copywriting-agent-evals";
 import {
   parseProductCopywritingOutput,
   type ProductCopywritingInput,
@@ -198,11 +201,16 @@ function enforceInputGuards(input: ProductCopywritingInput, output: ProductCopyw
     })
   );
 
-  return {
+  const repairedHighlights = removeUnsupportedIngredientHighlights(input, {
     ...sanitizedOutput,
     ingredientHighlights,
     missingDataNotices: mergedNotices,
     complianceWarnings: mergedWarnings,
+  });
+
+  return {
+    ...sanitizedOutput,
+    ...repairedHighlights.output,
   };
 }
 

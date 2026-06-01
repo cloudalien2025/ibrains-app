@@ -100,3 +100,37 @@ The gap was in the live route input preparation path:
 
 - Local implementation + focused tests complete.
 - Production merge/deploy, signed-in browser QA, and production trace verification are still pending in this branch checkpoint.
+
+## Phase 6.2.2-E Addendum (Per-SKU Hydration + Compliance)
+
+- state: `IMPLEMENTED_ONLY`
+- branch: `sprint-6-2-2-e-hydration-compliance-fix`
+
+Hydration-focused updates:
+
+- added explicit hydration read diagnostics in `live-supplier-facts-hydration.ts`:
+  - `readDiagnostics.db.{attempted,found,errorCode}`
+  - `readDiagnostics.artifact.{attempted,found,errorCode}`
+- expanded artifact AI label evidence loader compatibility:
+  - supports both `{ records: [...] }` and raw array payload shapes
+- updated live input `sourceFactsUsed` projection to effective merged fact state (`present/missing`) so traces do not misreport stale `ocr_required` statuses after hydration
+- parity CLI now reports:
+  - DB/artifact read status
+  - AI label text status
+  - facts image status
+  - serving/servings presence
+  - explicit `imageOnlyReason` when applicable
+  - compare mode: `--compare-sku`
+
+Local parity snapshot (no production DB in this runner):
+
+- ROC123: DB not found, artifact found, structured facts present, ingredient amounts present, serving fields missing.
+- ROC948: DB not found, artifact found, structured facts present, ingredient amounts present, serving fields present.
+
+Boundary confirmation remains unchanged:
+
+- no auto-save/publish
+- no model call during page render
+- no supplier writes/import/migrations
+- no OCR/.ai extraction/live-source fetch in Product Editor generate path
+- no duplicate route restoration

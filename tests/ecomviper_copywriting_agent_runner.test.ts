@@ -123,7 +123,7 @@ describe("ecomviper copywriting agent runner", () => {
     expect(result.safeMessage).toBe("Generated response could not be validated.");
   });
 
-  it("blocks invented ingredient claims", async () => {
+  it("repairs unsupported ingredient claims without blocking the full proposal", async () => {
     const modelClient: ProductCopywritingModelClient = {
       async generateStructuredOutput() {
         return {
@@ -142,8 +142,85 @@ describe("ecomviper copywriting agent runner", () => {
       modelClient,
     });
 
-    expect(result.status).toBe("blocked");
-    expect(result.errorCode).toBe("COMPLIANCE_BLOCKED");
+    expect(result.status).toBe("success");
+    expect(result.errorCode).toBeNull();
+    expect(result.output?.ingredientHighlights).toEqual([]);
+    expect(result.complianceWarnings.join(" ").toLowerCase()).toContain("removed");
+  });
+
+  it("keeps title-backed ingredient highlights with safe structure/function phrasing", async () => {
+    const input = buildProductCopywritingInput({
+      channel: "shopify",
+      productIdentity: {
+        productId: "gid://shopify/Product/2",
+        handle: "nitric-oxide",
+        title: "Nitric Oxide Gummies L-Arginine Citrulline",
+        productType: "Supplements",
+      },
+      variants: [{ sku: "SKU-2", barcode: null, upc: null, gtin: null, price: 24.99, compareAtPrice: null, inventory: 2 }],
+      supplementFacts: {
+        activeIngredients: ["Calcium"],
+        ingredientAmounts: ["Calcium 18 mg", "Magnesium 13 mg"],
+      },
+      sourceEvidence: {
+        coaPresent: true,
+        sourceFactsUsed: ["supplement_facts:extracted"],
+      },
+      supplierContext: {
+        matchStatus: "matched",
+      },
+    });
+
+    const modelClient: ProductCopywritingModelClient = {
+      async generateStructuredOutput() {
+        return {
+          content: JSON.stringify({
+            ...validOutput(),
+            ingredientHighlights: [
+              "L-Arginine - supports nitric oxide pathways",
+              "Calcium (18 mg) - supports bone and muscle function",
+            ],
+          }),
+          model: "gpt-4.1-mini",
+        };
+      },
+    };
+
+    const result = await runProductCopywritingAgent({
+      copywritingInput: input,
+      openAiApiKey: "sk-test",
+      modelClient,
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.output?.ingredientHighlights).toContain("L-Arginine - supports nitric oxide pathways");
+  });
+
+  it("removes unsupported dosage highlights while keeping safe supported highlights", async () => {
+    const modelClient: ProductCopywritingModelClient = {
+      async generateStructuredOutput() {
+        return {
+          content: JSON.stringify({
+            ...validOutput(),
+            ingredientHighlights: [
+              "Magnesium (30mg) - supports muscle and nerve function",
+              "Magnesium (300mg) - supports cardiovascular function",
+            ],
+          }),
+          model: "gpt-4.1-mini",
+        };
+      },
+    };
+
+    const result = await runProductCopywritingAgent({
+      copywritingInput: baseInput(),
+      openAiApiKey: "sk-test",
+      modelClient,
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.output?.ingredientHighlights).toContain("Magnesium (30mg) - supports muscle and nerve function");
+    expect(result.output?.ingredientHighlights).not.toContain("Magnesium (300mg) - supports cardiovascular function");
   });
 
   it("blocks prohibited disease/treatment claims", async () => {
