@@ -55,6 +55,11 @@ describe("ecomviper product editor route contract", () => {
       process.cwd(),
       "lib/ecomviper/shopify/product-image-selection.ts"
     );
+    const pdpIntelligenceRoutePath = path.join(process.cwd(), "app/api/ecomviper/pdp-intelligence/route.ts");
+    const pdpIntelligenceGeneratorPath = path.join(
+      process.cwd(),
+      "lib/ecomviper/shopify/shopify-pdp-intelligence-generator.ts"
+    );
 
     expect(fs.existsSync(duplicateRoutePath)).toBe(false);
     expect(fs.existsSync(duplicateClientPath)).toBe(false);
@@ -63,6 +68,8 @@ describe("ecomviper product editor route contract", () => {
     const canonicalPageSource = fs.readFileSync(canonicalPagePath, "utf8");
     const canonicalClientSource = fs.readFileSync(canonicalClientPath, "utf8");
     const imageSelectionSource = fs.readFileSync(imageSelectionHelperPath, "utf8");
+    const pdpIntelligenceRouteSource = fs.readFileSync(pdpIntelligenceRoutePath, "utf8");
+    const pdpIntelligenceGeneratorSource = fs.readFileSync(pdpIntelligenceGeneratorPath, "utf8");
 
     expect(shopifyWorkspaceSource).toContain("/ecomviper/products/");
     expect(shopifyWorkspaceSource).not.toContain("/ecomviper/shopify/products/");
@@ -71,5 +78,8 @@ describe("ecomviper product editor route contract", () => {
     expect(imageSelectionSource).not.toContain("ROC123");
     expect(imageSelectionSource).not.toContain("ROC948");
     expect(imageSelectionSource).not.toContain("opa-oxy-burn-thermogenic-support");
+    expect(pdpIntelligenceRouteSource).toContain("generateShopifyPdpIntelligence");
+    expect(pdpIntelligenceGeneratorSource).toContain("openai");
+    expect(canonicalClientSource).not.toContain("copywriting-agent");
   });
 });

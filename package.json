@@ -23,6 +23,8 @@
     "ecommerce:verify-rocktomic-import": "npx --yes tsx scripts/ecommerce/verify_rocktomic_supplier_import.ts",
     "ecomviper:sync-supplier-sources": "bash scripts/ecomviper_sync_supplier_sources.sh",
     "ecomviper:build-rocktomic-supplier-data": "npx --yes tsx scripts/ecomviper/build_rocktomic_supplier_data.ts",
+    "ecomviper:copywriting-agent:prepare": "npx --yes tsx scripts/ecomviper/copywriting_agent_prepare.ts",
+    "ecomviper:copywriting-agent:evaluate": "npx --yes tsx scripts/ecomviper/copywriting_agent_evaluate.ts",
     "codex:run": "bash scripts/codex_pipeline.sh",
     "pr:automerge": "bash scripts/gh_automerge_pr.sh",
     "postinstall": "node scripts/patch_next_route_types.mjs"
