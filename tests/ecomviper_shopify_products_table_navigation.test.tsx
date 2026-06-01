@@ -52,7 +52,7 @@ describe("Shopify workspace products table navigation", () => {
     delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
   });
 
-  it("renders clickable product links to product-specific Shopify editor routes", async () => {
+  it("renders clickable product links to canonical product editor routes", async () => {
     await act(async () => {
       root.render(<ShopifyWorkspaceClient initialState={buildWorkspaceState()} />);
     });
@@ -65,7 +65,8 @@ describe("Shopify workspace products table navigation", () => {
     expect(container.querySelector('[data-testid="ecomviper-shopify-products-table"]')).not.toBeNull();
     const firstLink = container.querySelector('[data-testid="ecomviper-shopify-product-link"]') as HTMLAnchorElement;
     expect(firstLink).not.toBeNull();
-    expect(firstLink.getAttribute("href")).toContain("/ecomviper/shopify/products/");
+    expect(firstLink.getAttribute("href")).toContain("/ecomviper/products/");
+    expect(firstLink.getAttribute("href")).not.toContain("/ecomviper/shopify/products/");
     expect(container.textContent).not.toContain("Demo data");
   });
 
@@ -95,4 +96,3 @@ describe("Shopify workspace products table navigation", () => {
     expect(container.textContent).toContain("No stable Shopify product id/handle available.");
   });
 });
-

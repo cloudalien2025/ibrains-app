@@ -1,6 +1,6 @@
 # Product Editor Supplier Facts Binding (Phase 5)
 
-Last updated: 2026-05-31 (UTC)
+Last updated: 2026-06-01 (UTC)
 
 ## Purpose
 
@@ -8,7 +8,7 @@ Phase 5 binds Shopify Product Editor to shared ecommerce supplier facts as a rea
 
 Target runtime surface:
 
-- `/ecomviper/shopify/products/[productId-or-handle]`
+- `/ecomviper/products/[productId-or-handle]` (canonical merchant-facing Product Editor route for all products/SKUs)
 
 Data source:
 
@@ -80,6 +80,29 @@ Phase 5 preserves runtime boundaries:
 - no import/migration/write actions from Product Editor
 - no fallback to `DATABASE_URL` for supplier facts reads
 - Product Editor remains functional when `ECOMMERCE_DATABASE_URL` is unavailable (panel shows unavailable state)
+
+## Phase 5.1 Route Reconciliation (2026-06-01 UTC)
+
+Phase 5 introduced an incorrect duplicate merchant-facing route family:
+
+- `/ecomviper/shopify/products/[productId-or-handle]`
+
+Phase 5.1 removes that duplicate route family globally. Product workflow routing is now single-path:
+
+- `/ecomviper/products/[productId-or-handle]` for all products and all SKUs.
+
+Phase 5.1 preserves reusable supplier-facts backend/read-model logic for future integration:
+
+- `lib/ecommerce/supplier-facts-read.ts`
+- `lib/ecommerce/supplier-facts-types.ts`
+- `lib/ecommerce/supplier-product-match.ts`
+
+Phase 5.1 boundary confirmation:
+
+- no ROC948 hardcoding or SKU special-casing
+- no Generate Intelligence binding changes
+- no Product Editor layout polish/redesign changes
+- no supplier write/import/sync/extraction/OCR/AI-label behavior added
 
 ## Forward Path
 

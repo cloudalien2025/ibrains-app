@@ -1,6 +1,6 @@
 # Shopify Product Intent
 
-Last updated: 2026-05-29 (UTC)
+Last updated: 2026-06-01 (UTC)
 
 This document describes the Shopify app as it exists today in this repository.
 
@@ -70,11 +70,8 @@ Typical flow based on implemented routes/UI:
 4. Run `Sync Now` to import/hydrate Shopify product data.
 5. Optionally connect OpenAI (for optimization proposals) and SerpAPI (for visibility scans).
 6. Review `Command Center` and lane diagnostics (Knowledge Base, Prompt Match, Trust Signals, Semantic Gaps, Marketplace Health).
-7. Open `Products` lane and click a product to enter `/ecomviper/shopify/products/[productId-or-handle]`.
-8. Use 3-step product editor:
-   - Step 1: review current listing snapshot,
-   - Step 2: generate AI proposal (if OpenAI connected),
-   - Step 3: edit draft and prepare update.
+7. Open `Products` lane and click a product to enter canonical route `/ecomviper/products/[productId-or-handle]`.
+8. Use the canonical Product Editor workflow (Generate Intelligence, Save Changes, Publish placeholder) and product tabs.
 
 Important current behavior: Step 3 is draft-prep oriented; it does not auto-publish product updates to Shopify.
 
@@ -126,12 +123,12 @@ Route: `/ecomviper/shopify`
 
 ### C. Product Editor Page
 
-Route: `/ecomviper/shopify/products/[productId-or-handle]`
+Route: `/ecomviper/products/[productId-or-handle]` (canonical for all products/SKUs)
 
 - Loads product state from live, fallback snapshot, demo, or unavailable mode.
-- Step 1: read-only current listing docket.
-- Step 2: generate optimization proposal (OpenAI-gated; deterministic fallback exists).
-- Step 3: editable draft with staged change summary and "Save draft"/"Prepare update" interactions.
+- Product gallery + summary context.
+- Generate Intelligence / Save Changes / Publish controls.
+- Product-level ingredient/compliance/commerce/inventory/shipping/return workflow sections.
 
 ## 5) What Problem The App Solves
 
@@ -238,7 +235,7 @@ Primary implementation references:
 - `app/ecomviper/shopify/page.tsx`
 - `app/ecomviper/shopify/shopify-workspace-client.tsx`
 - `app/ecomviper/shopify/_components/*`
-- `app/ecomviper/shopify/products/[productId-or-handle]/*`
+- `app/ecomviper/products/[productId-or-handle]/*`
 - `lib/ecomviper/shopify/shopify-workspace-state.ts`
 - `lib/ecomviper/shopify/shopify-live-hydrator.ts`
 - `lib/ecomviper/shopify/shopify-policy-capabilities.ts`
