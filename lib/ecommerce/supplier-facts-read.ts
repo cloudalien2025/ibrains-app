@@ -336,23 +336,43 @@ function buildMatchedState(product: ShopifyProductRecord, row: SupplierCandidate
   const channelImageGeneration = pickReadiness(mergedReadiness, ["channelImageGenerationReadiness", "channelImageGeneration"]);
 
   const activeIngredients = asStringArray(
-    supplementFacts.activeIngredients || sourceFacts.activeIngredients || asObject(sourceFacts.supplementFacts).activeIngredients
+    supplementFacts.activeIngredients
+    || supplementFacts.active_ingredients
+    || sourceFacts.activeIngredients
+    || sourceFacts.active_ingredients
+    || asObject(sourceFacts.supplementFacts).activeIngredients
+    || asObject(sourceFacts.supplementFacts).active_ingredients
   );
   const ingredientAmounts = toAmountPerServingList(
     supplementFacts.amountPerServing
+    || supplementFacts.amount_per_serving
     || sourceFacts.amountPerServing
+    || sourceFacts.amount_per_serving
     || asObject(sourceFacts.supplementFacts).amountPerServing
+    || asObject(sourceFacts.supplementFacts).amount_per_serving
   );
   const otherIngredientsRaw =
     asStringArray(supplementFacts.otherIngredients).length > 0
       ? asStringArray(supplementFacts.otherIngredients)
-      : asString(sourceFacts.otherIngredients)
+      : asStringArray(supplementFacts.other_ingredients).length > 0
+          ? asStringArray(supplementFacts.other_ingredients)
+          : asString(sourceFacts.otherIngredients || sourceFacts.other_ingredients)
           .split(",")
           .map((entry) => entry.trim())
           .filter(Boolean);
 
-  const servingSize = asNullableString(supplementFacts.servingSize || sourceFacts.servingSize);
-  const servingsPerContainer = asNullableString(supplementFacts.servingsPerContainer || sourceFacts.servingsPerContainer);
+  const servingSize = asNullableString(
+    supplementFacts.servingSize
+    || supplementFacts.serving_size
+    || sourceFacts.servingSize
+    || sourceFacts.serving_size
+  );
+  const servingsPerContainer = asNullableString(
+    supplementFacts.servingsPerContainer
+    || supplementFacts.servings_per_container
+    || sourceFacts.servingsPerContainer
+    || sourceFacts.servings_per_container
+  );
 
   const pricingAvailable = Object.keys(pricing).length > 0;
   const wholesaleCost = asNumber(pricing.wholesaleCost || pricing.cost || pricing.membershipCost);

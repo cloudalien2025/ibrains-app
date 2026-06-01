@@ -54,7 +54,42 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 6.2 Generate Intelligence Copywriting Agent Binding: Completed and merged (`sprint-6-2-generate-intelligence-copywriting-agent`, review-only Generate Intelligence model binding using all-product copywriting contract).
 - Shopify Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix: In progress (`sprint-6-2-1-generate-intelligence-prod-hotfix`, fix signed-in Generate Intelligence production failure caused by incorrect localhost HTTPS proxy behavior + safe error mapping/UI stale-state handling).
 - Shopify Phase 6.2.2-C Live Source Facts + Merchant Output Fix: Completed and merged (`sprint-6-2-2-c-live-generate-intelligence-source-facts`, live Generate Intelligence source-facts parity + output sanitization + Product Editor merchant wording cleanup; production deployed; signed-in browser QA pending user verification).
+- Shopify Phase 6.2.2-D Live Supplier Facts Hydration Fix: In progress (`sprint-6-2-2-d-live-supplier-facts-hydration`, live route supplier-facts rehydration by SKU + compact trace read-source diagnostics to prevent false `image_only` degradation when structured facts exist).
 - Current recommended sprint: `Shopify Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix`.
+
+## Sprint Checkpoint: Phase 6.2.2-D Live Supplier Facts Hydration Fix (Local Branch)
+
+- Branch: `sprint-6-2-2-d-live-supplier-facts-hydration`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: implementation + focused checks complete; MR/pipeline/deploy/signed-in production QA pending.
+- Root cause confirmed:
+  - live route input preparation lacked an explicit authoritative supplier-facts rehydration-by-SKU gate.
+  - degraded snapshot/editor facts could still yield `supplementFactsSource=image_only` and zero ingredient counts.
+- Implemented scope:
+  - added server-side hydration module (`lib/ecomviper/copywriting-agent/live-supplier-facts-hydration.ts`) with DB-first + artifact fallback read-only flow.
+  - route now hydrates before input build and logs safe compact read diagnostics:
+    - `supplier_facts_read_source`
+    - `supplier_facts_read_found`
+    - `supplier_facts_read_error_code`
+  - removed `userId` from input trace payload.
+  - added snake_case structured-facts mapping fallback in supplier read model.
+  - added parity CLI:
+    - `npm run ecomviper:live-supplier-facts:parity -- --sku ROC123`
+  - added focused tests:
+    - `tests/ecomviper_live_supplier_facts_hydration.test.ts`
+    - updated route action + supplier read tests for rehydration precedence.
+- Local validation summary:
+  - focused suites: pass
+  - `npm run ecomviper:copywriting-agent:prepare -- --all --dry-run`: `supplementFactsMissing=16`, `coaMissing=40`, `pricingMissing=22`, `inventoryMissing=38`
+  - `npm run ecomviper:copywriting-agent:evaluate -- --all --dry-run`: no regression in all-product coverage
+  - `npm run build`: pass
+  - `npm test`: fails in unrelated baseline suites outside this sprint scope (documented in branch handoff)
+- Boundary confirmation:
+  - no auto-save / no auto-publish
+  - no model call during page render
+  - no DB migration / no supplier writes/imports
+  - no OCR / no `.ai` extraction run
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
 ## Sprint Closure Update: Phase 6.2.2-C Live Source Facts + Merchant Output Fix
 

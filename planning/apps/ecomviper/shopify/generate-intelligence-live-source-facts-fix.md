@@ -136,3 +136,36 @@ From `npm run ecomviper:copywriting-agent:prepare -- --all --dry-run`:
 - no supplier DB writes/import/OCR/.ai extraction/source fetch in render path
 - no ecommerce schema change
 - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
+## Phase 6.2.2-D Follow-Up Checkpoint (Local)
+
+- state: `IMPLEMENTED_ONLY`
+- branch: `sprint-6-2-2-d-live-supplier-facts-hydration`
+- trigger: signed-in QA still showed ROC123 as `image_only` with zero structured ingredient counts in live traces.
+
+### additional root cause detail
+
+- live route input build lacked an explicit authoritative server-side supplier-facts rehydration step by SKU before generation.
+- degraded editor/source snapshot states could still produce `image_only` despite available structured DB/read-model facts.
+
+### additional implementation in 6.2.2-D
+
+- added `lib/ecomviper/copywriting-agent/live-supplier-facts-hydration.ts`:
+  - DB-first read by normalized SKU
+  - read-only artifact fallback
+  - merged hydrated facts back into supplier panel context used by live input builder
+- route now records:
+  - `supplier_facts_read_source` (`db|artifact|none|failed`)
+  - `supplier_facts_read_found`
+  - `supplier_facts_read_error_code` (safe code only)
+- route trace input no longer logs `userId`.
+- added snake_case fallback mapping in supplier read model for structured facts keys.
+- added live parity CLI:
+  - `npm run ecomviper:live-supplier-facts:parity -- --sku ROC123`
+
+### local verification snapshot
+
+- focused route/hydration tests: pass
+- all-product dry-run counts unchanged from corrected baseline (`supplementFactsMissing=16`)
+- full repository `npm test` still has unrelated baseline failures outside this sprint scope
+- production deploy + signed-in browser trace verification pending
