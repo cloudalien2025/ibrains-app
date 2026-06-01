@@ -50,7 +50,7 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Hotfix Sprint 009.9: In progress (`hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`, deterministic all-SKU sourceFacts field mapping + Product Editor/Generate Intelligence binding + settings tier auth save reliability).
 - Shopify Phase 5.1 Route Reconciliation: In progress (`sprint-5-1-remove-duplicate-shopify-product-route`, global removal of mistaken duplicate `/ecomviper/shopify/products/[productId-or-handle]` merchant route family).
 - Shopify Phase 5.2 Product Editor Default Front Image: Completed and merged (`sprint-5-2-product-editor-default-front-image`, canonical Product Editor defaults main gallery image to best front/primary/featured candidate for all products).
-- Shopify Phase 6.1 AI Copywriting Agent Contract + Eval Harness: In progress (`sprint-6-1-ai-copywriting-agent-contract-evals`, all-product contract/schema/prompt/eval harness foundation with no live Product Editor or Generate Intelligence behavior change).
+- Shopify Phase 6.1 AI Copywriting Agent Contract + Eval Harness: Completed and merged (`sprint-6-1-ai-copywriting-agent-contract-evals`, all-product contract/schema/prompt/eval harness foundation with no live Product Editor or Generate Intelligence behavior change).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
 
 ## Sprint Checkpoint: Phase 6.1 All-Product AI Copywriting Agent Contract + Eval Harness (Local Branch)
@@ -84,6 +84,43 @@ Last updated: 2026-06-01 (UTC)
   - no Product Editor UI/layout change
   - no model calls required for Phase 6.1 tests/scripts
   - no supplier writes/import/sync/extraction/OCR added
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
+## Sprint Closure Update: Phase 6.1 All-Product AI Copywriting Agent Contract + Eval Harness
+
+- Sprint/branch: `sprint-6-1-ai-copywriting-agent-contract-evals`
+- MR:
+  - `!297`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/297`
+  - source branch commit SHA: `f8c3e08d1882467d1aec545645b6f5ac228b1489`
+  - merge commit SHA: `4c2045a684e9d78c96d868b7de69435dabdf4344`
+  - MR pipeline `2566089523`: success
+- Main/deploy pipeline:
+  - pipeline `2566092655`: success
+- Branch cleanup:
+  - remote source branch deletion: completed via merge (`--remove-source-branch`)
+  - local source branch deletion: completed (`git branch -d sprint-6-1-ai-copywriting-agent-contract-evals`)
+  - local repository reset: clean `main` synced to `origin/main` before closure metadata branch
+- Production release verification:
+  - `/api/meta/release`:
+    - `git_sha=4c2045a684e9d78c96d868b7de69435dabdf4344`
+    - `build_id=2566092655`
+    - `deployed_at=2026-06-01T03:47:41Z`
+    - `release_metadata_complete=true`
+  - `/api/health`: `{"ok":true,...,"upstream_ok":true}`
+- Signed-out route verification:
+  - `/admin` -> `307` to `/sign-in?redirect_url=%2Fadmin`
+  - `/admin/ecomviper` -> `307` to `/sign-in?redirect_url=%2Fadmin%2Fecomviper`
+  - `/admin/ecomviper/suppliers/rocktomic/audit` -> `307` to `/sign-in?redirect_url=%2Fadmin%2Fecomviper%2Fsuppliers%2Frocktomic%2Faudit`
+  - `/ecomviper/products/opa-oxy-burn-thermogenic-support` -> `307` to sign-in with preserved redirect URL
+- Signed-in/manual QA status:
+  - blocked in CLI-only run (no authenticated browser session available).
+  - remaining checks: Oxy-Burn and Magnesium front-image default verification and Product Editor signed-in Generate Intelligence/no-yellow-error visual confirmation.
+- Delivered behavior summary:
+  - all-product `ProductCopywritingInput`/`ProductCopywritingOutput` contract foundation implemented
+  - prompt/source-facts contract and eval harness added without live model calls
+  - representative golden fixtures added for regression scoring only
+  - no live Generate Intelligence runtime changes
+  - no Product Editor UI/layout changes
   - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
 ## Sprint Checkpoint: Phase 5.2 Product Editor Default Front Image (Local Branch)
