@@ -69,7 +69,12 @@ export interface ProductCopywritingInput {
     coaPresent: boolean;
     coaUrl: string | null;
     labelEvidencePresent: boolean;
+    supplementFactsImagePresent: boolean;
     aiLabelTextEvidencePresent: boolean;
+    aiLabelTextEvidenceStatus: string | null;
+    aiLabelTextNeedsReview: boolean;
+    structuredSupplementFactsPresent: boolean;
+    supplementFactsSource: "db" | "artifact" | "ai_label_text" | "image_only" | "none" | "unknown";
     sourceFactsUsed: string[];
   };
   missingData: {
@@ -79,6 +84,12 @@ export interface ProductCopywritingInput {
     supplementFactsMissing: boolean;
     supplierMatchMissing: boolean;
     ingredientFactsMissing: boolean;
+    structuredSupplementFactsMissing: boolean;
+    servingSizeMissing: boolean;
+    servingsPerContainerMissing: boolean;
+    ingredientAmountsMissing: boolean;
+    supplementFactsImageOnly: boolean;
+    supplementFactsTextNeedsReview: boolean;
   };
   brandVoice: {
     tone: string;

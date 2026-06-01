@@ -3245,3 +3245,47 @@ Recommended next phase:
   - clean working tree confirmed
 - Recommended next sprint:
   - complete authenticated signed-in QA pass for canonical Product Editor routes (at least two products) and then resume Shopify Sprint 011 stabilization planning.
+
+## Sprint Checkpoint: Phase 6.2.2-B Supplement Facts Input Mapping Hotfix (Local Branch)
+
+- Branch: `sprint-6-2-2-copywriting-input-facts-mapping`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: implementation + focused regression coverage complete; MR/deploy verification pending.
+- Scope completed locally:
+  - normalized all-product source mapping in `lib/ecomviper/copywriting-agent/copywriting-agent-data.ts`:
+    - nested `sourceFacts.supplementFacts.*` shape mapping
+    - top-level assets URL mapping (`coaUrl`, `labelTemplateUrl`, `labelTemplateAiUrl`, `mockupUrl`)
+    - AI label-text evidence ingestion for source-evidence/missing-data decisions
+  - refined input missing-data semantics in:
+    - `lib/ecomviper/copywriting-agent/copywriting-agent-types.ts`
+    - `lib/ecomviper/copywriting-agent/copywriting-agent-input-builder.ts`
+  - updated plain notice mapping in:
+    - `lib/ecomviper/copywriting-agent/copywriting-agent-runner.ts`
+  - added/updated focused tests:
+    - `tests/ecomviper_copywriting_agent_missing_data_mapping.test.ts`
+    - `tests/ecomviper_copywriting_agent_input_builder.test.ts`
+    - `tests/ecomviper_copywriting_agent_runner.test.ts`
+    - `tests/ecomviper_generate_intelligence_copywriting_action.test.ts`
+  - updated planning docs:
+    - `planning/apps/ecomviper/shopify/supplement-facts-input-mapping-hotfix.md`
+    - `planning/apps/ecomviper/shopify/supplement-facts-missing-data-audit.md`
+    - `planning/apps/ecomviper/shopify/ai-copywriting-agent-contract.md`
+    - `planning/apps/ecomviper/shopify/generate-intelligence-copywriting-agent-binding.md`
+    - `planning/apps/ecomviper/shopify/generate-intelligence-eval-harness.md`
+    - `planning/apps/ecomviper/overview.md`
+- Root cause confirmation:
+  - Phase 6.2.2-A audit showed pervasive false `supplementFactsMissing` due primarily to `read_model_to_copywriting_input_gap`.
+  - fixed without SKU/handle hardcoding.
+- Dry-run prep delta (`npm run ecomviper:copywriting-agent:prepare -- --all --dry-run`):
+  - before: `supplementFactsMissing=164`, `coaMissing=164`, `pricingMissing=164`
+  - after: `supplementFactsMissing=16`, `coaMissing=40`, `pricingMissing=22`
+- ROC123 expected/verified mapping behavior after hotfix:
+  - no blanket `Supplement Facts missing.` when structured active ingredients/amounts exist
+  - serving-size/servings notices are emitted only when those fields are missing
+- Guardrails preserved:
+  - Generate Intelligence remains review-only.
+  - no auto-save/publish.
+  - no Product Editor layout changes.
+  - no supplier import/OCR/.ai extraction/source fetch.
+  - no DB migrations/writes required by this hotfix.
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration.

@@ -34,10 +34,16 @@ export function buildProductCopywritingPromptContract(input: ProductCopywritingI
     boolLabel("COA present", input.sourceEvidence.coaPresent),
     `COA URL: ${input.sourceEvidence.coaUrl || "missing"}`,
     boolLabel("Label evidence present", input.sourceEvidence.labelEvidencePresent),
+    boolLabel("Supplement facts image present", input.sourceEvidence.supplementFactsImagePresent),
     boolLabel("AI label text evidence present", input.sourceEvidence.aiLabelTextEvidencePresent),
+    `AI label text status: ${input.sourceEvidence.aiLabelTextEvidenceStatus || "none"}`,
+    boolLabel("Structured supplement facts present", input.sourceEvidence.structuredSupplementFactsPresent),
     boolLabel("Pricing missing", input.missingData.pricingMissing),
     boolLabel("Inventory missing", input.missingData.inventoryMissing),
     boolLabel("Supplement facts missing", input.missingData.supplementFactsMissing),
+    boolLabel("Serving size missing", input.missingData.servingSizeMissing),
+    boolLabel("Servings per container missing", input.missingData.servingsPerContainerMissing),
+    boolLabel("Ingredient amounts missing", input.missingData.ingredientAmountsMissing),
     boolLabel("Supplier match missing", input.missingData.supplierMatchMissing),
     asList("Allowed source facts", input.sourceEvidence.sourceFactsUsed),
   ].join("\n");
@@ -62,7 +68,7 @@ export function buildProductCopywritingPromptContract(input: ProductCopywritingI
     "Return only JSON matching ProductCopywritingOutput schema.",
     "Every required field must be present.",
     "Set qualityScores fields from 0-100 based on grounded quality.",
-    "If source facts are missing, populate missingDataNotices with plain notices like 'COA missing', 'Pricing missing', 'Supplement Facts missing', or 'Supplier match not found'.",
+    "If source facts are missing or partial, populate missingDataNotices with plain notices like 'COA missing', 'Pricing missing', 'Serving size missing', 'Servings per container missing', 'Ingredient amounts missing', 'Supplement Facts image available; ingredient details are not structured yet.', 'Supplement Facts text needs review.', or 'Supplier match not found'.",
   ].join(" ");
 
   return {

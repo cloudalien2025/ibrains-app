@@ -39,6 +39,20 @@ function dedupe(values: Array<string | null | undefined>): string[] {
   );
 }
 
+function hasStructuredSupplementFacts(input: {
+  servingSize: string | null;
+  servingsPerContainer: string | null;
+  activeIngredients: string[];
+  ingredientAmounts: string[];
+}): boolean {
+  return Boolean(
+    input.servingSize
+    || input.servingsPerContainer
+    || input.activeIngredients.length > 0
+    || input.ingredientAmounts.length > 0
+  );
+}
+
 function inferProductClass(input: { productType: string | null; supplementFacts: { activeIngredients: string[]; servingSize: string | null } }): "supplement" | "non_supplement" | "unknown" {
   const type = (input.productType || "").toLowerCase();
   if (type.includes("supplement") || type.includes("vitamin") || type.includes("gummies")) return "supplement";
@@ -92,7 +106,12 @@ export function buildProductCopywritingInput(context: ProductCopywritingBuildCon
     coaPresent: Boolean(context.sourceEvidence?.coaPresent),
     coaUrl: asNullableString(context.sourceEvidence?.coaUrl),
     labelEvidencePresent: Boolean(context.sourceEvidence?.labelEvidencePresent),
+    supplementFactsImagePresent: Boolean(context.sourceEvidence?.supplementFactsImagePresent),
     aiLabelTextEvidencePresent: Boolean(context.sourceEvidence?.aiLabelTextEvidencePresent),
+    aiLabelTextEvidenceStatus: asNullableString(context.sourceEvidence?.aiLabelTextEvidenceStatus),
+    aiLabelTextNeedsReview: Boolean(context.sourceEvidence?.aiLabelTextNeedsReview),
+    structuredSupplementFactsPresent: Boolean(context.sourceEvidence?.structuredSupplementFactsPresent),
+    supplementFactsSource: context.sourceEvidence?.supplementFactsSource || "unknown",
     sourceFactsUsed: dedupe(context.sourceEvidence?.sourceFactsUsed || []),
   };
 
@@ -121,19 +140,35 @@ export function buildProductCopywritingInput(context: ProductCopywritingBuildCon
   const productType = asNullableString(context.productIdentity?.productType);
   const productClass = context.complianceProfile?.productClass || inferProductClass({ productType, supplementFacts });
 
+  const structuredSupplementFactsPresent =
+    sourceEvidence.structuredSupplementFactsPresent
+    || hasStructuredSupplementFacts(supplementFacts);
+  const servingSizeMissing = !supplementFacts.servingSize;
+  const servingsPerContainerMissing = !supplementFacts.servingsPerContainer;
+  const ingredientFactsMissing =
+    supplementFacts.activeIngredients.length === 0
+    && supplementFacts.ingredientAmounts.length === 0;
+  const ingredientAmountsMissing = supplementFacts.ingredientAmounts.length === 0;
+  const supplementFactsImagePresent = sourceEvidence.supplementFactsImagePresent || sourceEvidence.labelEvidencePresent;
+  const supplementFactsImageOnly = supplementFactsImagePresent && !structuredSupplementFactsPresent;
+  const supplementFactsMissing =
+    !structuredSupplementFactsPresent
+    && !sourceEvidence.aiLabelTextEvidencePresent
+    && !supplementFactsImagePresent;
+
   const missingData = {
     coaMissing: !sourceEvidence.coaPresent,
     pricingMissing: variants.length === 0 || !variants.some((variant) => variant.price != null || variant.compareAtPrice != null),
     inventoryMissing: variants.length === 0 || !variants.some((variant) => variant.inventory != null),
-    supplementFactsMissing:
-      !supplementFacts.servingSize
-      && !supplementFacts.servingsPerContainer
-      && supplementFacts.activeIngredients.length === 0
-      && supplementFacts.ingredientAmounts.length === 0,
+    supplementFactsMissing,
     supplierMatchMissing: supplierContext.matchStatus === "no_match" || supplierContext.matchStatus === "unavailable",
-    ingredientFactsMissing:
-      supplementFacts.activeIngredients.length === 0
-      && supplementFacts.ingredientAmounts.length === 0,
+    ingredientFactsMissing,
+    structuredSupplementFactsMissing: !structuredSupplementFactsPresent,
+    servingSizeMissing,
+    servingsPerContainerMissing,
+    ingredientAmountsMissing,
+    supplementFactsImageOnly,
+    supplementFactsTextNeedsReview: sourceEvidence.aiLabelTextNeedsReview,
   };
 
   return {
@@ -320,7 +355,26 @@ export function buildProductCopywritingInputFromShopifyEditorState(initialState:
     coaPresent: Boolean(sourceFacts?.assets?.coaUrl || supplier?.coa?.url),
     coaUrl: sourceFacts?.assets?.coaUrl || supplier?.coa?.url || null,
     labelEvidencePresent: Boolean(sourceFacts?.assets?.labelTemplateUrl || supplier?.labelTemplate?.url),
-    aiLabelTextEvidencePresent: supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus === "available",
+    supplementFactsImagePresent: Boolean(
+      sourceFacts?.assets?.labelTemplateUrl
+      || sourceFacts?.assets?.mockupUrl
+      || supplier?.labelTemplate?.url
+      || supplier?.mockup?.url
+    ),
+    aiLabelTextEvidencePresent:
+      Boolean(supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus)
+      && supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus !== "unavailable",
+    aiLabelTextEvidenceStatus: supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus || null,
+    aiLabelTextNeedsReview: Boolean(supplierFactsPanel?.evidence?.needsReview),
+    structuredSupplementFactsPresent: hasStructuredSupplementFacts(supplementFacts),
+    supplementFactsSource:
+      hasStructuredSupplementFacts(supplementFacts)
+        ? "db"
+        : supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus && supplierFactsPanel.evidence.aiLabelTextEvidenceStatus !== "unavailable"
+          ? "ai_label_text"
+          : (sourceFacts?.assets?.labelTemplateUrl || sourceFacts?.assets?.mockupUrl || supplier?.labelTemplate?.url || supplier?.mockup?.url)
+            ? "image_only"
+            : "none",
     sourceFactsUsed: dedupe([
       sourceFacts?.supplementFacts?.status ? `supplement_facts:${sourceFacts.supplementFacts.status}` : "",
       sourceFacts?.amountPerServing?.status ? `amount_per_serving:${sourceFacts.amountPerServing.status}` : "",

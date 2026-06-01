@@ -134,4 +134,13 @@ Canonical Product Editor route remains:
 - Contract boundaries remain unchanged:
   - no auto-save/publish
   - no model call during Product Editor render
-  - no duplicate route restoration
+- no duplicate route restoration
+
+## Phase 6.2.2-B Input Mapping Notes
+
+- All-product input mapping now normalizes real source schema:
+  - nested `sourceFacts.supplementFacts.*`
+  - top-level asset evidence fields (`coaUrl`, `labelTemplate*`, `mockup*`)
+  - AI-label evidence status/review metadata
+- `supplementFactsMissing` now represents true no-evidence cases only.
+- Missing-data signaling now distinguishes partial-facts conditions (for example serving size/servings per container/ingredient amounts) from blanket facts absence.
