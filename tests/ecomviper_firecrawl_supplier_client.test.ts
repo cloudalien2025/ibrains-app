@@ -54,10 +54,16 @@ describe("Firecrawl client wrapper", () => {
   });
 
   it("fails clearly when API key is missing in live mode", async () => {
-    const client = new FirecrawlClient({ enabled: true, allowLiveRequests: true, cacheDir: TEMP_CACHE_DIR });
-    await expect(
-      client.scrape({ url: "https://example.com", formats: ["markdown"], useCache: false })
-    ).rejects.toThrow("FIRECRAWL_API_KEY");
+    const priorKey = process.env.FIRECRAWL_API_KEY;
+    delete process.env.FIRECRAWL_API_KEY;
+    try {
+      const client = new FirecrawlClient({ enabled: true, allowLiveRequests: true, cacheDir: TEMP_CACHE_DIR });
+      await expect(
+        client.scrape({ url: "https://example.com", formats: ["markdown"], useCache: false })
+      ).rejects.toThrow("FIRECRAWL_API_KEY");
+    } finally {
+      if (priorKey) process.env.FIRECRAWL_API_KEY = priorKey;
+    }
   });
 
   it("produces deterministic cache keys", () => {

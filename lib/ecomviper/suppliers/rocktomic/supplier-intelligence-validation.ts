@@ -11,6 +11,7 @@ export interface SupplierIntelligenceValidationSummary {
   supplierId: string;
   totalSkus: number;
   structuredSupplementFactsCount: number;
+  partialCount: number;
   imageTextOnlyCount: number;
   missingSupplementFactsCount: number;
   coaAvailableCount: number;
@@ -18,6 +19,10 @@ export interface SupplierIntelligenceValidationSummary {
   inventoryAvailableCount: number;
   assetsAvailableCount: number;
   needsReviewCount: number;
+  parserWarningsCount: number;
+  provenanceMissingCount: number;
+  linkExtractionMissingCount: number;
+  supplementFactsIncompleteCount: number;
   topMissingFields: Array<{ field: string; count: number }>;
   topParseExtractionErrors: Array<{ error: string; count: number }>;
   perSku: Array<{
@@ -60,6 +65,7 @@ export function validateSupplierIntelligencePackage(
   const parseErrorPool: string[] = [];
 
   let structuredSupplementFactsCount = 0;
+  let partialCount = 0;
   let imageTextOnlyCount = 0;
   let missingSupplementFactsCount = 0;
   let coaAvailableCount = 0;
@@ -67,6 +73,10 @@ export function validateSupplierIntelligencePackage(
   let inventoryAvailableCount = 0;
   let assetsAvailableCount = 0;
   let needsReviewCount = 0;
+  let parserWarningsCount = 0;
+  let provenanceMissingCount = 0;
+  let linkExtractionMissingCount = 0;
+  let supplementFactsIncompleteCount = 0;
 
   const perSku = supplierPackage.records
     .map((record) => {
@@ -74,10 +84,12 @@ export function validateSupplierIntelligencePackage(
       const hasAmountPerServing = record.activeIngredients.some((entry) => entry.amount != null)
         || record.nutrientFacts.some((entry) => entry.amount != null);
 
-      if (sourceStatus === "structured" || sourceStatus === "partial") structuredSupplementFactsCount += 1;
+      if (sourceStatus === "structured") structuredSupplementFactsCount += 1;
+      if (sourceStatus === "partial") partialCount += 1;
       if (sourceStatus === "image_text_only") imageTextOnlyCount += 1;
       if (sourceStatus === "missing") missingSupplementFactsCount += 1;
       if (sourceStatus === "needs_review") needsReviewCount += 1;
+      if ((record.extractionWarnings || []).length > 0) parserWarningsCount += (record.extractionWarnings || []).length;
 
       if (record.coaUrl) coaAvailableCount += 1;
       if (record.pricing.sourceStatus !== "missing") pricingAvailableCount += 1;
@@ -85,7 +97,13 @@ export function validateSupplierIntelligencePackage(
       if (recordAssetsStatus(record) !== "missing") assetsAvailableCount += 1;
 
       missingFieldPool.push(...record.missingFields);
-      parseErrorPool.push(...assertRecordProvenance(record).map((entry) => `missing_${entry}`));
+      const provenanceIssues = assertRecordProvenance(record);
+      parseErrorPool.push(...provenanceIssues.map((entry) => `missing_${entry}`));
+      if (provenanceIssues.length > 0) provenanceMissingCount += 1;
+      if (!record.coaUrl && !record.labelTemplateUrl && !record.mockupUrl) linkExtractionMissingCount += 1;
+      if (!record.servingSize || record.servingsPerContainer == null || !record.nutrientFacts.length || !record.activeIngredients.length) {
+        supplementFactsIncompleteCount += 1;
+      }
 
       if (sourceStatus === "image_text_only" && record.provenance.every((entry) => entry.confidence >= 0.7)) {
         parseErrorPool.push("image_text_only_without_low_confidence_evidence");
@@ -114,6 +132,7 @@ export function validateSupplierIntelligencePackage(
     supplierId: supplierPackage.supplierId,
     totalSkus: supplierPackage.records.length,
     structuredSupplementFactsCount,
+    partialCount,
     imageTextOnlyCount,
     missingSupplementFactsCount,
     coaAvailableCount,
@@ -121,6 +140,10 @@ export function validateSupplierIntelligencePackage(
     inventoryAvailableCount,
     assetsAvailableCount,
     needsReviewCount,
+    parserWarningsCount,
+    provenanceMissingCount,
+    linkExtractionMissingCount,
+    supplementFactsIncompleteCount,
     topMissingFields: tally(missingFieldPool).slice(0, 15).map((entry) => ({ field: entry.key, count: entry.count })),
     topParseExtractionErrors: tally(parseErrorPool).slice(0, 15).map((entry) => ({ error: entry.key, count: entry.count })),
     perSku,

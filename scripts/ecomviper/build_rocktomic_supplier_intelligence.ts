@@ -19,6 +19,8 @@ interface CliOptions {
   noWrite: boolean;
   writePackage: boolean;
   reportOnly: boolean;
+  verbose: boolean;
+  debugSnippet: boolean;
 }
 
 const ROOT_DIR = process.cwd();
@@ -46,6 +48,8 @@ function parseCli(argv: string[]): CliOptions {
     noWrite: has("--no-write"),
     writePackage: has("--write-package"),
     reportOnly: has("--report-only"),
+    verbose: has("--verbose"),
+    debugSnippet: has("--debug-snippet"),
   };
 }
 
@@ -61,6 +65,8 @@ function usage(): string {
     "  --no-write",
     "  --write-package",
     "  --report-only",
+    "  --verbose",
+    "  --debug-snippet",
   ].join("\n");
 }
 
@@ -114,15 +120,48 @@ async function main(): Promise<void> {
       reportOnly: options.reportOnly,
     },
     sourceOrigin: result.sourceOrigin,
+    firecrawlSource: result.firecrawlSource,
+    reason: result.reason || "ok",
+    selectedSku: options.sku,
     records: result.package.records.length,
+    recordsExtracted: result.package.records.length,
     structuredSupplementFactsCount: validation.structuredSupplementFactsCount,
+    partialCount: validation.partialCount,
     imageTextOnlyCount: validation.imageTextOnlyCount,
     missingSupplementFactsCount: validation.missingSupplementFactsCount,
+    needsReviewCount: validation.needsReviewCount,
+    parserWarningsCount: validation.parserWarningsCount,
+    provenanceMissingCount: validation.provenanceMissingCount,
+    linkExtractionMissingCount: validation.linkExtractionMissingCount,
+    supplementFactsIncompleteCount: validation.supplementFactsIncompleteCount,
     logs: result.logs,
   };
 
   print(`rocktomic_supplier_intelligence source=${result.sourceOrigin}`);
+  print(`firecrawl_source=${result.firecrawlSource}`);
+  print(`records_extracted=${result.package.records.length}`);
+  if (options.sku) print(`selected_sku=${options.sku}`);
+  if (result.package.records.length === 0 && result.reason) print(`reason=${result.reason}`);
   for (const line of result.logs) print(`log: ${line}`);
+  if (result.package.records.length === 1) {
+    const record = result.package.records[0];
+    print(`sku=${record.sku}`);
+    print(`productName=${record.productName || "unknown"}`);
+    print(`sourceStatus=${record.sourceStatus}`);
+    print(`missingFields=${record.missingFields.join("|") || "none"}`);
+    print(`extractionWarnings=${(record.extractionWarnings || []).join("|") || "none"}`);
+    print(
+      `provenance=${record.provenance.map((entry) => `${entry.sourceType}@${entry.sourceUrl}`).slice(0, 3).join(";") || "none"}`
+    );
+    if (options.debugSnippet) {
+      print(
+        `debug_snippet=${record.provenance.map((entry) => entry.rawSnippet).filter(Boolean).slice(0, 1).join(" ").slice(0, 900)}`
+      );
+    }
+  }
+  if (options.verbose) {
+    print(`validation: ${JSON.stringify(validation)}`);
+  }
   print(`summary: ${JSON.stringify(summary)}`);
 
   const shouldWrite = !options.dryRun && !options.noWrite && (options.writePackage || !options.reportOnly);

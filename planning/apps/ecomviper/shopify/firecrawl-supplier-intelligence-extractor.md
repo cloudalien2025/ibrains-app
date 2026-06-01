@@ -105,3 +105,28 @@ ROC948 fixture proves structured extraction representation for:
 - live Firecrawl extraction mapping beyond fixture baseline still needs expanded per-SKU parsers and confidence calibration
 - candidate promotion workflow to `latest/` is still a follow-up step
 - controlled import command for normalized package -> ecommerce DB remains separately gated
+
+## Phase 6.3.1 Live Parser Calibration Update (IMPLEMENTED_ONLY)
+
+Root cause for `records_extracted=0` with ROC948:
+- Firecrawl acquisition/cache worked, but extractor trusted only `scrape.json.records`.
+- Cached/live catalog markdown contained ROC948, while Firecrawl JSON extraction omitted that row.
+- Result: valid markdown evidence existed but no normalized record boundary was created.
+
+Implemented calibration:
+- Added markdown boundary parser fallback for catalog rows in `firecrawl-catalog-markdown-parser.ts`.
+- Parser now finds SKU windows, parses row/cell patterns, and emits normalized metadata records with provenance raw snippets.
+- Added explicit no-record reasons (`sku_not_found`, `parser_no_record_boundary`, `source_unavailable`) and parser warnings.
+- Added source merge path: Firecrawl JSON records remain primary; markdown fallback fills missing SKU records.
+- Added optional PyMuPDF evidence integration hook for page/link enrichment when local catalog PDF is available.
+
+ROC948 regression result:
+- command: `npm run ecomviper:rocktomic:supplier-intelligence -- --sku ROC948 --use-firecrawl --cache --dry-run`
+- now returns `records_extracted=1`, `productName=Premium Nitric Oxide Gummies`, `sku=ROC948`, `sourceStatus=needs_review`.
+- supplement facts remain incomplete in this source slice, so status is not promoted to `structured`.
+
+Boundaries preserved:
+- no Product Editor auto-save/publish changes
+- no Product Editor render-time source fetch
+- no DB writes/imports/migrations
+- no OCR/vision default extraction path

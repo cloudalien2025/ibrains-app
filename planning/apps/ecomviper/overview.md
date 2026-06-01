@@ -276,6 +276,16 @@ Phase 5 contract source:
   - no production DB writes/imports by extractor
   - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
+## Firecrawl Live Source Parser Calibration (Phase 6.3.1, Local)
+
+- State: `IMPLEMENTED_ONLY`
+- Added catalog markdown fallback parser so cache/live markdown can produce SKU records when `scrape.json.records` is sparse.
+- Added PyMuPDF evidence helper foundation (local PDF page/link extraction).
+- Added Google Sheets CSV helper foundation (CSV export URL + parse + SKU row lookup).
+- Added supplier toolbelt doctor command:
+  - `npm run ecomviper:supplier-toolbelt:doctor`
+- ROC948 cache regression now resolves to `records_extracted=1` and `sourceStatus=needs_review` (metadata present, supplement facts incomplete).
+
 ## Generate Intelligence Per-SKU Hydration + Compliance Calibration (Phase 6.2.2-E)
 
 - Added per-SKU parity diagnostics and compare tooling for live supplier-facts hydration triage:

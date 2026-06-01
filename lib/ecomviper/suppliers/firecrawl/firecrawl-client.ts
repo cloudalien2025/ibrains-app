@@ -190,7 +190,7 @@ export class FirecrawlClient {
       cacheDir:
         config.cacheDir
         || process.env.ECOMVIPER_SUPPLIER_FIRECRAWL_CACHE_DIR
-        || path.join(process.cwd(), ".cache/ecomviper/firecrawl"),
+        || path.join(process.cwd(), ".cache/firecrawl"),
       fixtureDir: config.fixtureDir || path.join(process.cwd(), "data/ecomviper/suppliers/rocktomic/fixtures/firecrawl"),
       allowLiveRequests: config.allowLiveRequests ?? false,
     };

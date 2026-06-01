@@ -19,7 +19,9 @@ describe("supplier intelligence validation", () => {
     const report = validateSupplierIntelligencePackage(built.package);
     expect(report.totalSkus).toBeGreaterThanOrEqual(2);
     expect(report.structuredSupplementFactsCount).toBeGreaterThanOrEqual(1);
+    expect(report.partialCount).toBeGreaterThanOrEqual(0);
     expect(report.imageTextOnlyCount).toBeGreaterThanOrEqual(1);
+    expect(report.supplementFactsIncompleteCount).toBeGreaterThanOrEqual(1);
 
     const csv = toSupplierIntelligenceAuditCsv(report);
     expect(csv).toContain("ROC948");

@@ -24,6 +24,7 @@
     "ecomviper:sync-supplier-sources": "bash scripts/ecomviper_sync_supplier_sources.sh",
     "ecomviper:build-rocktomic-supplier-data": "npx --yes tsx scripts/ecomviper/build_rocktomic_supplier_data.ts",
     "ecomviper:rocktomic:supplier-intelligence": "npx --yes tsx scripts/ecomviper/build_rocktomic_supplier_intelligence.ts",
+    "ecomviper:supplier-toolbelt:doctor": "npx --yes tsx scripts/ecomviper/supplier_toolbelt_doctor.ts",
     "ecomviper:copywriting-agent:prepare": "npx --yes tsx scripts/ecomviper/copywriting_agent_prepare.ts",
     "ecomviper:copywriting-agent:evaluate": "npx --yes tsx scripts/ecomviper/copywriting_agent_evaluate.ts",
     "ecomviper:live-supplier-facts:parity": "npx --yes tsx scripts/ecomviper/live_supplier_facts_parity_check.ts",

@@ -285,6 +285,30 @@ Output boundaries:
 - no Product Editor auto-save/publish behavior change
 - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
+## Phase 6.3.1 Live Source Parser Calibration (IMPLEMENTED_ONLY)
+
+Calibration scope keeps Firecrawl as acquisition/cache backbone while adding deterministic upstream parsing:
+
+1. Firecrawl scrape result handling now uses:
+   - `json.records` (primary when available)
+   - catalog markdown parser fallback (when JSON misses SKU row boundaries)
+2. Merge strategy is SKU-keyed and provenance-preserving.
+3. Record-level parser diagnostics now include:
+   - `missingFields`
+   - `extractionWarnings`
+   - explicit no-record reason codes
+4. PyMuPDF helper foundation added for local catalog PDF evidence:
+   - SKU page search
+   - page text snippets
+   - embedded URI extraction
+   - no default render-time or OCR path
+5. Google Sheets CSV foundation added through deterministic CSV export URL/parse helpers (fixture-safe tests; no live network required in tests).
+
+Runtime safety remains unchanged:
+- no render-path extraction from Product Editor/Generate Intelligence page load
+- no supplier DB write/import/migration side effects
+- no model/vision call in parser path
+
 ## Product Editor Shared DB Read Binding (Phase 5)
 
 Phase 5 adds read-only supplier facts visibility in Shopify Product Editor from shared ecommerce DB rows.

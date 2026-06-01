@@ -2,6 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { FirecrawlClient } from "@/lib/ecomviper/suppliers/firecrawl/firecrawl-client";
 import {
+  mergeSupplierRecordsBySku,
+  parseRocktomicCatalogMarkdown,
+} from "@/lib/ecomviper/suppliers/rocktomic/firecrawl-catalog-markdown-parser";
+import {
+  extractPdfEvidence,
+  resolveCatalogPdfPath,
+} from "@/lib/ecomviper/suppliers/rocktomic/pdf-evidence";
+import {
   calculateRecordSourceStatus,
   ensureUniqueMissingFields,
   normalizeSku,
@@ -56,6 +64,8 @@ export interface BuildSupplierIntelligenceResult {
   pricing: Array<{ sku: string; wholesaleCost: number | null; msrp: number | null; currency: string | null; sourceStatus: string; missingFields: string[] }>;
   inventory: Array<{ sku: string; status: string | null; quantityText: string | null; sourceStatus: string; missingFields: string[] }>;
   sourceOrigin: "fixture" | "firecrawl";
+  firecrawlSource: "live" | "cache" | "fixture" | "not_applicable";
+  reason?: "ok" | "sku_not_found" | "parser_no_record_boundary" | "source_unavailable";
   logs: string[];
 }
 
@@ -168,6 +178,8 @@ async function buildFromFixtures(options: BuildSupplierIntelligenceOptions): Pro
       ]),
     })),
     sourceOrigin: "fixture",
+    firecrawlSource: "not_applicable",
+    reason: records.length > 0 ? "ok" : "sku_not_found",
     logs,
   };
 }
@@ -243,9 +255,13 @@ async function buildFromFirecrawl(options: BuildSupplierIntelligenceOptions): Pr
     onlyMainContent: true,
   });
 
+  const supplierId = options.manifest.supplierId || "rocktomic";
+  const supplierName = options.manifest.supplierName || "Rocktomic";
+  const normalizedSkuFilter = options.skuFilter?.map((entry) => normalizeSku(entry)).filter(Boolean) || null;
+
   const json = scrape.json || {};
   const recordsArray = Array.isArray(json.records) ? json.records : [];
-  const normalizedRecords: NormalizedSupplierIntelligenceRecord[] = recordsArray
+  const jsonRecords: NormalizedSupplierIntelligenceRecord[] = recordsArray
     .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
     .map((entry) => {
       const sku = normalizeSku(String(entry.sku || ""));
@@ -297,8 +313,8 @@ async function buildFromFirecrawl(options: BuildSupplierIntelligenceOptions): Pr
       ]);
 
       const record: NormalizedSupplierIntelligenceRecord = {
-        supplierId: options.manifest.supplierId || "rocktomic",
-        supplierName: options.manifest.supplierName || "Rocktomic",
+        supplierId,
+        supplierName,
         sku,
         productName,
         productType: "supplement",
@@ -348,12 +364,90 @@ async function buildFromFirecrawl(options: BuildSupplierIntelligenceOptions): Pr
 
       return { ...record, sourceStatus: calculateRecordSourceStatus(record) };
     })
-    .filter((record) => !options.skuFilter || options.skuFilter.map((entry) => normalizeSku(entry)).includes(record.sku))
+    .filter((record) => !normalizedSkuFilter || normalizedSkuFilter.includes(record.sku))
     .sort((a, b) => a.sku.localeCompare(b.sku));
 
+  const markdownParse = parseRocktomicCatalogMarkdown({
+    markdown: scrape.markdown || "",
+    sourceUrl: catalog.url,
+    supplierId,
+    supplierName,
+    skuFilter: options.skuFilter,
+  });
+
+  let normalizedRecords = mergeSupplierRecordsBySku({
+    primary: jsonRecords,
+    fallback: markdownParse.records,
+  }).map((record) => {
+    const missingFields = ensureUniqueMissingFields(record.missingFields || []);
+    return {
+      ...record,
+      missingFields,
+      sourceStatus: calculateRecordSourceStatus({ ...record, missingFields }),
+    };
+  });
+
+  const pdfPath = await resolveCatalogPdfPath();
+  if (pdfPath && normalizedRecords.length > 0) {
+    const enriched = await Promise.all(
+      normalizedRecords.map(async (record) => {
+        const evidence = await extractPdfEvidence({
+          pdfPath,
+          query: record.sku || String(record.productName || ""),
+        });
+        if (!evidence.found) {
+          return {
+            ...record,
+            extractionWarnings: ensureUniqueMissingFields([
+              ...(record.extractionWarnings || []),
+              ...evidence.errors.map((entry) => `pdf_evidence_${entry}`),
+              "pdf_evidence_not_found",
+            ]),
+          };
+        }
+
+        const snippet = evidence.textSnippets[0]?.text || `PyMuPDF evidence for ${record.sku}`;
+        const evidenceProvenance = createProvenance({
+          sourceType: "catalog_pdf",
+          sourceUrl: catalog.url,
+          pageNumber: evidence.pageNumbers[0] ?? null,
+          rawSnippet: snippet,
+          confidence: 0.84,
+        });
+        const coaLink = evidence.links.find((entry) => /coa|analysis|certificate/i.test(entry.uri))?.uri || null;
+        const templateLink = evidence.links.find((entry) => /templates\\.html|\\.ai(?:\\?|$)|\\.tif(?:\\?|$)/i.test(entry.uri))?.uri || null;
+
+        return {
+          ...record,
+          coaUrl: record.coaUrl || coaLink,
+          labelTemplateUrl: record.labelTemplateUrl || templateLink,
+          mockupUrl: record.mockupUrl || templateLink,
+          extractionWarnings: ensureUniqueMissingFields([
+            ...(record.extractionWarnings || []),
+            ...(evidence.errors || []),
+          ]),
+          provenance: [...record.provenance, evidenceProvenance],
+        };
+      })
+    );
+    normalizedRecords = enriched.map((record) => {
+      const missingFields = ensureUniqueMissingFields(record.missingFields || []);
+      return {
+        ...record,
+        missingFields,
+        sourceStatus: calculateRecordSourceStatus({ ...record, missingFields }),
+      };
+    });
+  } else if (normalizedRecords.length > 0) {
+    normalizedRecords = normalizedRecords.map((record) => ({
+      ...record,
+      extractionWarnings: ensureUniqueMissingFields([...(record.extractionWarnings || []), "pdf_source_unavailable"]),
+    }));
+  }
+
   const supplierPackage: NormalizedSupplierIntelligencePackage = {
-    supplierId: options.manifest.supplierId || "rocktomic",
-    supplierName: options.manifest.supplierName || "Rocktomic",
+    supplierId,
+    supplierName,
     generatedAt: nowIso(),
     extractor: "rocktomic_firecrawl_extractor_foundation_v1",
     sourceManifestVersion: options.manifest.sourceManifestVersion || options.manifest.version || 1,
@@ -392,7 +486,15 @@ async function buildFromFirecrawl(options: BuildSupplierIntelligenceOptions): Pr
     pricing,
     inventory,
     sourceOrigin: "firecrawl",
-    logs: [`firecrawl_source=${scrape.source}`, `records_extracted=${normalizedRecords.length}`],
+    firecrawlSource: scrape.source,
+    reason: normalizedRecords.length > 0 ? "ok" : markdownParse.reason,
+    logs: [
+      `firecrawl_source=${scrape.source}`,
+      `records_extracted=${normalizedRecords.length}`,
+      `json_records_extracted=${jsonRecords.length}`,
+      `markdown_records_extracted=${markdownParse.records.length}`,
+      ...(markdownParse.warnings || []).map((entry) => `warning:${entry}`),
+    ],
   };
 }
 
