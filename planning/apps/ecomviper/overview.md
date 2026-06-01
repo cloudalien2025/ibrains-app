@@ -259,6 +259,19 @@ Phase 5 contract source:
 - Selection behavior is generic for all products/SKUs:
   - no SKU/handle hardcoding
 
+## Generate Intelligence Live Supplier Facts Hydration (Phase 6.2.2-D, Local)
+
+- Added an explicit server-side supplier-facts hydration layer for live PDP generation input.
+- Hydration precedence now enforces:
+  1. structured DB facts by SKU
+  2. structured artifact fallback (read-only)
+  3. AI label-text evidence
+  4. image-only evidence
+  5. none
+- Live trace diagnostics now include supplier facts read source/found/error-code fields.
+- Local focused tests and all-product dry-run counts passed with no regression (`supplementFactsMissing=16`).
+- Production merge/deploy and signed-in trace/browser verification remain pending for this checkpoint.
+
 ## Generate Intelligence Production Hotfix (Phase 6.2.1)
 
 - Phase 6.2.1 is a narrow signed-in production hotfix for Generate Intelligence reliability and messaging.

@@ -165,6 +165,31 @@ describe("supplier facts read model", () => {
     expect(result.readiness.pricing).toBe("ready_with_warnings");
   });
 
+  it("maps snake_case supplement facts fields without degrading ingredient amounts", async () => {
+    process.env.ECOMMERCE_DATABASE_URL = "postgres://ecommerce";
+    mocks.queryEcommerce.mockResolvedValueOnce([
+      createRow({
+        facts_supplement_facts: {
+          active_ingredients: ["L-Carnitine"],
+          amount_per_serving: ["L-Carnitine 500mg"],
+        },
+        source_facts: {
+          supplementFacts: {
+            active_ingredients: ["Green Tea Extract"],
+            amount_per_serving: ["Green Tea Extract 300mg"],
+          },
+        },
+      }),
+    ]).mockResolvedValueOnce([]);
+
+    const { readSupplierFactsForShopifyProduct } = await import("@/lib/ecommerce/supplier-facts-read");
+    const result = await readSupplierFactsForShopifyProduct({ product: createProduct() });
+
+    expect(result.matchStatus).toBe("matched");
+    expect(result.activeIngredients.length).toBeGreaterThan(0);
+    expect(result.ingredientAmounts.length).toBeGreaterThan(0);
+  });
+
   it("returns unavailable state when DB query fails", async () => {
     process.env.ECOMMERCE_DATABASE_URL = "postgres://ecommerce";
     mocks.queryEcommerce.mockRejectedValueOnce(new Error("db down"));

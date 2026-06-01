@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getShopifyOpenAiApiKeyForUser: vi.fn(),
   getPersistedShopifyPdpIntelligenceForProduct: vi.fn(),
   savePersistedShopifyPdpIntelligence: vi.fn(),
+  queryEcommerce: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/requireSignedInUser", () => ({
@@ -29,6 +30,10 @@ vi.mock("@/lib/ecomviper/shopify/openai-connection", () => ({
 vi.mock("@/lib/ecomviper/shopify/shopify-pdp-intelligence-repository", () => ({
   getPersistedShopifyPdpIntelligenceForProduct: mocks.getPersistedShopifyPdpIntelligenceForProduct,
   savePersistedShopifyPdpIntelligence: mocks.savePersistedShopifyPdpIntelligence,
+}));
+
+vi.mock("@/lib/ecommerce/database", () => ({
+  queryEcommerce: mocks.queryEcommerce,
 }));
 
 function stateFixture(overrides?: Partial<ShopifyProductEditorInitialState>): ShopifyProductEditorInitialState {
@@ -303,6 +308,7 @@ describe("ecomviper generate intelligence copywriting action", () => {
     mocks.getShopifyOpenAiApiKeyForUser.mockResolvedValue("sk-test");
     mocks.getPersistedShopifyPdpIntelligenceForProduct.mockResolvedValue(null);
     mocks.savePersistedShopifyPdpIntelligence.mockResolvedValue(null);
+    mocks.queryEcommerce.mockResolvedValue([]);
   });
 
   it("builds all-product input for supplier-backed supplement and returns review-only proposal", async () => {
@@ -570,5 +576,81 @@ describe("ecomviper generate intelligence copywriting action", () => {
     );
     expect(payload.copywriting?.missingDataNotices).not.toContain("Supplement Facts missing.");
     expect(payload.copywriting?.output?.ingredientHighlights).toEqual([]);
+  });
+
+  it("rehydrates structured facts server-side when client/editor state is image-only", async () => {
+    const staleState = stateFixture({
+      sourceFacts: {
+        ...stateFixture().sourceFacts!,
+        supplementFacts: { status: "ocr_required", value: "", displayText: "" },
+        activeIngredients: { status: "ocr_required", values: [], displayText: "" },
+        amountPerServing: { status: "ocr_required", value: "", displayText: "" },
+        servingSize: { status: "source_missing", value: "", displayText: "" },
+        servingsPerContainer: { status: "source_missing", value: "", displayText: "" },
+      },
+      supplierFactsPanel: null,
+      supplierContext: {
+        ...stateFixture().supplierContext,
+        matched: true,
+        matchedSku: "ROC123",
+        product: {
+          ...stateFixture().supplierContext.product!,
+          sku: "ROC123",
+          activeIngredients: [],
+          amountPerServing: null,
+          servingSize: null,
+          servingsPerContainer: null,
+        },
+      },
+      currentShopifyListing: {
+        ...stateFixture().currentShopifyListing!,
+        variants: [{ id: "v1", title: "Default", sku: "ROC123", barcode: "", price: 39.99, compareAtPrice: null, inventoryQuantity: 5 }],
+      },
+    });
+    mocks.buildShopifyProductEditorStateForUser.mockResolvedValue(staleState);
+    mocks.queryEcommerce.mockResolvedValue([
+      {
+        sku: "ROC123",
+        product_name: "OPA Oxy-Burn Thermogenic Support",
+        source_facts: {},
+        supplement_facts: {
+          activeIngredients: ["Caffeine Anhydrous", "Green Tea Extract"],
+          amountPerServing: ["Caffeine Anhydrous 200 mg", "Green Tea Extract 300 mg"],
+        },
+        source_evidence: { supplementFacts: { sourceMethod: "ai_pdf_text", needsReview: false } },
+        coa_url: "https://example.com/coa.pdf",
+        label_template_ai_url: "https://example.com/label.ai",
+        mockup_template_tif_url: "https://example.com/mockup.tif",
+        ai_label_text_evidence: { extractionStatus: "reused_cached" },
+      },
+    ]);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          model: "gpt-4.1-mini",
+          choices: [{ message: { content: JSON.stringify(validOutput()) } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+
+    const { POST } = await import("@/app/api/ecomviper/pdp-intelligence/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/pdp-intelligence", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "generate", productReference: "test-supplement" }),
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.diagnostics?.supplier_facts_read_source).toBe("db");
+    expect(payload.diagnostics?.supplier_facts_read_found).toBe(true);
+    expect(payload.copywriting?.missingDataNotices).not.toContain(
+      "Supplement Facts image available; ingredient details are not structured yet."
+    );
+    expect(payload.copywriting?.missingDataNotices).not.toContain("Ingredient amounts missing.");
   });
 });

@@ -5,6 +5,7 @@ import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getShopifyOpenAiApiKeyForUser } from "@/lib/ecomviper/shopify/openai-connection";
 import { buildProductCopywritingInputFromShopifyEditorState } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-input-builder";
+import { hydrateLiveSupplierFactsForCopywriting } from "@/lib/ecomviper/copywriting-agent/live-supplier-facts-hydration";
 import { runProductCopywritingAgent } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-runner";
 import type { ProductCopywritingInput, ProductCopywritingOutput } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-types";
 import { evaluateShopifyPdpCompliance } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence-compliance";
@@ -52,13 +53,20 @@ function createTraceId(): string {
   }
 }
 
-function summarizeCopywritingInput(input: ProductCopywritingInput) {
+function summarizeCopywritingInput(input: ProductCopywritingInput, factsRead: {
+  supplierFactsReadSource: "db" | "artifact" | "none" | "failed";
+  supplierFactsReadFound: boolean;
+  supplierFactsReadErrorCode: string | null;
+}) {
   return {
-    productId: input.productIdentity.productId,
+    productReference: input.productIdentity.handle || input.productIdentity.productId,
     handle: input.productIdentity.handle,
     sku: input.variants.find((variant) => variant.sku)?.sku || null,
     supplierMatchStatus: input.supplierContext.matchStatus,
     supplierSku: input.supplierContext.supplierSku,
+    supplierFactsReadSource: factsRead.supplierFactsReadSource,
+    supplierFactsReadFound: factsRead.supplierFactsReadFound,
+    supplierFactsReadErrorCode: factsRead.supplierFactsReadErrorCode,
     sourceFactsUsed: input.sourceEvidence.sourceFactsUsed,
     supplementFactsSource: input.sourceEvidence.supplementFactsSource,
     supplementFactsImagePresent: input.sourceEvidence.supplementFactsImagePresent,
@@ -276,15 +284,18 @@ export async function POST(req: NextRequest) {
     const openAiApiKey = await getShopifyOpenAiApiKeyForUser(userId);
     const generatedAt = new Date().toISOString();
     const traceId = createTraceId();
-    const copywritingInput = buildProductCopywritingInputFromShopifyEditorState(editorState);
+    const hydrationResult = await hydrateLiveSupplierFactsForCopywriting(editorState);
+    const copywritingInput = buildProductCopywritingInputFromShopifyEditorState(hydrationResult.state);
     if (!copywritingInput) {
       return fail(400, "Product copywriting input could not be prepared.", "VALIDATION_ERROR");
     }
     console.info("[pdp-intelligence.generate][input]", {
       traceId,
-      userId,
-      productReference,
-      input: summarizeCopywritingInput(copywritingInput),
+      input: summarizeCopywritingInput(copywritingInput, {
+        supplierFactsReadSource: hydrationResult.supplierFactsReadSource,
+        supplierFactsReadFound: hydrationResult.supplierFactsReadFound,
+        supplierFactsReadErrorCode: hydrationResult.supplierFactsReadErrorCode,
+      }),
     });
     const runResult = await runProductCopywritingAgent({
       copywritingInput,
@@ -324,6 +335,9 @@ export async function POST(req: NextRequest) {
       },
       diagnostics: {
         trace_id: traceId,
+        supplier_facts_read_source: hydrationResult.supplierFactsReadSource,
+        supplier_facts_read_found: hydrationResult.supplierFactsReadFound,
+        supplier_facts_read_error_code: hydrationResult.supplierFactsReadErrorCode,
         normalized_sku: sourceFacts?.normalizedSku || null,
         supplier_product_record_status: sourceFacts?.supplierProductRecordFound ? "synced" : "missing",
         pricing_record_status: sourceFacts?.pricingRecordFound ? "synced" : "missing",
