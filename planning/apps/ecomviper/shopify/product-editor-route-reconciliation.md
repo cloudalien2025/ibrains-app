@@ -52,3 +52,21 @@ Semantics preserved:
 - All product table/editor links resolve to `/ecomviper/products/[productId-or-handle]`
 - No merchant-facing route remains under `/ecomviper/shopify/products/*`
 - Canonical Product Editor workflow remains intact
+
+## Phase 5.2 Follow-On Guardrail (Default Image Selection)
+
+Canonical Product Editor image-default behavior is implemented only in the canonical route workflow:
+
+- `/ecomviper/products/[productId-or-handle]`
+
+Behavior scope:
+
+- Product Gallery default selection now resolves to best front/primary/featured image with deterministic global logic.
+- Logic is generic across all products/SKUs (no ROC123/ROC948/handle-specific branches).
+- Thumbnail click behavior remains intact.
+
+Non-goals preserved:
+
+- no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+- no Product Editor layout redesign
+- no Generate Intelligence behavior changes

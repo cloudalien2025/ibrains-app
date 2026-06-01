@@ -35,6 +35,7 @@ function listingFixture() {
     seoDescription: "Daily wellness support",
     productUrl: "https://example.myshopify.com/products/sleep-formula-gummies",
     canonicalUrl: "https://example.myshopify.com/products/sleep-formula-gummies",
+    primaryImageUrl: "https://example.myshopify.com/images/sleep-front.png",
     images: [],
     variants: [{ id: "v1", title: "Default", sku: "ROC817", barcode: "", price: 20, compareAtPrice: null, inventoryQuantity: 3 }],
     metafields: [],

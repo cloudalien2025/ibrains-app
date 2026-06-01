@@ -8,18 +8,25 @@ export type ProductImagePriority =
   | "other";
 
 export interface ProductImageCandidate {
+  id?: string | null;
   url: string | null | undefined;
   altText?: string | null;
+  title?: string | null;
+  role?: string | null;
   type?: string | null;
   source?: string | null;
+  position?: number | null;
 }
 
 export interface OrderedProductImage {
   id: string;
   url: string;
   altText: string;
+  title: string;
+  role: string;
   type: ProductImagePriority;
   source: string;
+  position: number | null;
   originalIndex: number;
 }
 
@@ -65,11 +72,14 @@ export function orderProductImages(candidates: ProductImageCandidate[]): Ordered
 
       const priority = inferPriority(candidate);
       return {
-        id: `image-${index}-${url}`,
+        id: clean(candidate.id) || `image-${index}-${url}`,
         url,
         altText: clean(candidate.altText),
+        title: clean(candidate.title),
+        role: clean(candidate.role),
         type: priority,
         source: clean(candidate.source) || "unknown",
+        position: typeof candidate.position === "number" && Number.isFinite(candidate.position) ? candidate.position : null,
         originalIndex: index,
       } satisfies OrderedProductImage;
     })

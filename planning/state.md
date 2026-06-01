@@ -49,7 +49,34 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Hotfix Sprint 009.8 Data Binding: Merged and production deployed (`hotfix-009-8-global-supplier-data-scope-product-editor-binding`, global supplier normalized data boundary + merchant membership/Product Editor binding correction); mandatory signed-in desktop/mobile verification is still blocked pending an authenticated browser session.
 - Shopify Hotfix Sprint 009.9: In progress (`hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`, deterministic all-SKU sourceFacts field mapping + Product Editor/Generate Intelligence binding + settings tier auth save reliability).
 - Shopify Phase 5.1 Route Reconciliation: In progress (`sprint-5-1-remove-duplicate-shopify-product-route`, global removal of mistaken duplicate `/ecomviper/shopify/products/[productId-or-handle]` merchant route family).
+- Shopify Phase 5.2 Product Editor Default Front Image: In progress (`sprint-5-2-product-editor-default-front-image`, canonical Product Editor defaults main gallery image to best front/primary/featured candidate for all products).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
+
+## Sprint Checkpoint: Phase 5.2 Product Editor Default Front Image (Local Branch)
+
+- Branch: `sprint-5-2-product-editor-default-front-image`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: implementation + focused tests/build checks in progress; MR/pipeline/deploy verification pending.
+- Scope implemented locally:
+  - Added deterministic default-image selector helper:
+    - `lib/ecomviper/shopify/product-image-selection.ts`
+  - Applied helper to canonical Product Editor only:
+    - `app/ecomviper/products/[productId-or-handle]/product-editor-client.tsx`
+    - `components/ecomviper/product-image-gallery.tsx`
+  - Preserved canonical route-only workflow:
+    - `/ecomviper/products/[productId-or-handle]`
+    - no restored duplicate `/ecomviper/shopify/products/[productId-or-handle]` route files
+  - Added focused tests:
+    - `tests/ecomviper_product_image_selection.test.ts`
+    - updated gallery/editor/route contract tests for default selection + no hardcoded SKU signals
+  - Added planning contract doc:
+    - `planning/apps/ecomviper/shopify/product-editor-image-selection.md`
+- Boundary confirmation:
+  - no SKU/product hardcoding
+  - no Product Editor layout redesign
+  - no Generate Intelligence behavior changes
+  - no supplier write/import/sync/extraction/OCR/AI-label runtime behavior changes
+  - no duplicate route restoration
 
 ## Sprint Checkpoint: Phase 1.5 Shared Ecommerce Database Foundation (Local Branch)
 

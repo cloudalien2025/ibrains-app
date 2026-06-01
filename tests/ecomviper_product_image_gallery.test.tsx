@@ -85,6 +85,69 @@ describe("ecomviper product image gallery", () => {
     );
   });
 
+  it("uses the provided default image when initializing a product", async () => {
+    await act(async () => {
+      root.render(
+        <ProductImageGallery
+          productTitle="Sample"
+          selectionKey="sample-product"
+          defaultSelectedImageUrl="https://example.com/front.png"
+          images={[
+            image("https://example.com/facts.png", "facts", 0),
+            image("https://example.com/front.png", "front", 1),
+          ]}
+        />
+      );
+    });
+
+    expect(container.querySelector('[data-testid="product-gallery-main-image"] img')?.getAttribute("src")).toBe(
+      "https://example.com/front.png"
+    );
+  });
+
+  it("keeps manual thumbnail selection when rerendering same product key", async () => {
+    await act(async () => {
+      root.render(
+        <ProductImageGallery
+          productTitle="Sample"
+          selectionKey="sample-product"
+          defaultSelectedImageUrl="https://example.com/front.png"
+          images={[
+            image("https://example.com/front.png", "front", 0),
+            image("https://example.com/facts.png", "facts", 1),
+          ]}
+        />
+      );
+    });
+
+    const secondThumb = container.querySelectorAll("button[aria-label^='Select product image']")[1];
+    await act(async () => {
+      secondThumb?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.querySelector('[data-testid="product-gallery-main-image"] img')?.getAttribute("src")).toBe(
+      "https://example.com/facts.png"
+    );
+
+    await act(async () => {
+      root.render(
+        <ProductImageGallery
+          productTitle="Sample"
+          selectionKey="sample-product"
+          defaultSelectedImageUrl="https://example.com/front.png"
+          images={[
+            image("https://example.com/front.png", "front", 0),
+            image("https://example.com/facts.png", "facts", 1),
+            image("https://example.com/side.png", "side", 2),
+          ]}
+        />
+      );
+    });
+
+    expect(container.querySelector('[data-testid="product-gallery-main-image"] img')?.getAttribute("src")).toBe(
+      "https://example.com/facts.png"
+    );
+  });
+
   it("renders safe fallback when no images are available", async () => {
     await act(async () => {
       root.render(<ProductImageGallery productTitle="Sample" images={[]} />);
