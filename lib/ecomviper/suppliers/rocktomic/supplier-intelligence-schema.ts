@@ -90,6 +90,7 @@ export interface NormalizedSupplierIntelligenceRecord {
   returnPolicy: SupplierPolicyRecord;
   sourceStatus: SupplierSourceStatus;
   missingFields: string[];
+  extractionWarnings?: string[];
   confidence: number;
   provenance: SupplierFactProvenance[];
 }

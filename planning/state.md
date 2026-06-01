@@ -57,6 +57,7 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 6.2.2-D Live Supplier Facts Hydration Fix: In progress (`sprint-6-2-2-d-live-supplier-facts-hydration`, live route supplier-facts rehydration by SKU + compact trace read-source diagnostics to prevent false `image_only` degradation when structured facts exist).
 - Shopify Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix: In progress (`sprint-6-2-2-e-hydration-compliance-fix`, parity diagnostics expansion + ROC123/ROC948 class hydration/compliance hardening).
 - Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation: Completed and merged (`sprint-6-3-firecrawl-supplier-intelligence-extractor`, Firecrawl-backed supplier extraction foundation + normalized package schema/provenance/validation and ROC948 fixture proof; MR `!308`, pipeline `2568207604` success).
+- Shopify Phase 6.3.1 Rocktomic Live Source Parser (Firecrawl cache + PyMuPDF + CSV foundation): In progress (`sprint-6-3-1-rocktomic-live-source-parser`, local implementation complete; MR/pipeline/merge pending).
 - Current recommended sprint: `Shopify Phase 6.3.1 Firecrawl Live Extraction Calibration + Candidate Promotion`.
 
 ## Sprint Checkpoint: Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation (Local Branch)
@@ -118,6 +119,36 @@ Last updated: 2026-06-01 (UTC)
   - no model call during page render
   - no production supplier DB writes/imports/migrations in this phase
   - no default OCR path for extractor foundation
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
+## Sprint Checkpoint: Phase 6.3.1 Rocktomic Live Source Parser (Local Branch)
+
+- Branch: `sprint-6-3-1-rocktomic-live-source-parser`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: `IMPLEMENTED_ONLY`
+- Root cause confirmed:
+  - Firecrawl cache/live markdown contained ROC948, but extractor trusted only `scrape.json.records`; when JSON omitted ROC948, `records_extracted=0` was emitted.
+- Implemented scope:
+  - markdown fallback parser: `lib/ecomviper/suppliers/rocktomic/firecrawl-catalog-markdown-parser.ts`
+  - Firecrawl merge + reason diagnostics + CLI summary hardening:
+    - `lib/ecomviper/suppliers/rocktomic/firecrawl-supplier-intelligence.ts`
+    - `scripts/ecomviper/build_rocktomic_supplier_intelligence.ts`
+  - PyMuPDF evidence foundation:
+    - `scripts/ecomviper/pdf_evidence_extract.py`
+    - `lib/ecomviper/suppliers/rocktomic/pdf-evidence.ts`
+  - Google Sheets CSV foundation:
+    - `lib/ecomviper/suppliers/google-sheets-csv.ts`
+  - Toolbelt doctor:
+    - `lib/ecomviper/suppliers/supplier-toolbelt-doctor.ts`
+    - `scripts/ecomviper/supplier_toolbelt_doctor.ts`
+- Local ROC948 cache validation:
+  - command: `npm run ecomviper:rocktomic:supplier-intelligence -- --sku ROC948 --use-firecrawl --cache --dry-run`
+  - result: `records_extracted=1`, `productName=Premium Nitric Oxide Gummies`, `sourceStatus=needs_review`
+- Boundary confirmation:
+  - no Product Editor behavior change
+  - no Product Editor auto-save/publish
+  - no DB writes/imports/migrations
+  - no OCR/vision default path
   - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
 
