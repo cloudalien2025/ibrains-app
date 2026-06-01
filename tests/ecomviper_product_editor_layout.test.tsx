@@ -29,11 +29,13 @@ function buildState(): ShopifyProductEditorInitialState {
       seoDescription: "",
       productUrl: "",
       canonicalUrl: "",
+      primaryImageUrl: "https://example.com/front.png",
       images: [
         {
+          id: "img-1",
           url: "https://example.com/front.png",
           altText: "front",
-          source: "shopify_media",
+          source: "product",
         },
       ],
       variants: [{ id: "v", title: "Default", sku: "ROC949", barcode: "", price: 39.99, compareAtPrice: null, inventoryQuantity: 5 }],

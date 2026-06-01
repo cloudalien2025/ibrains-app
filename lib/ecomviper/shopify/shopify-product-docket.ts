@@ -74,6 +74,7 @@ export interface ShopifyCurrentListingDocket {
   seoDescription: string;
   productUrl: string;
   canonicalUrl: string;
+  primaryImageUrl: string;
   images: ShopifyDocketImage[];
   variants: ShopifyDocketVariantBasic[];
   metafields: ShopifyDocketMetafield[];
@@ -186,6 +187,7 @@ export function buildCurrentShopifyListingDocket(
     seoDescription: cleanText(product.seoDescription),
     productUrl: cleanText(product.onlineStoreUrl),
     canonicalUrl: cleanText(product.onlineStoreUrl),
+    primaryImageUrl: cleanText(product.primaryImageUrl),
     images,
     variants,
     metafields,

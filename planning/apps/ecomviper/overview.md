@@ -250,3 +250,24 @@ Phase 4.3 contract source:
 Phase 5 contract source:
 
 - `planning/apps/ecomviper/shopify/product-editor-supplier-facts-binding.md`
+
+## Product Editor Default Front/Primary Image Selection (Phase 5.2)
+
+- Canonical merchant-facing Product Editor route remains:
+  - `/ecomviper/products/[productId-or-handle]`
+- On product open, Product Gallery now defaults to the best front/primary/featured image using deterministic global selection logic.
+- Selection behavior is generic for all products/SKUs:
+  - no SKU/handle hardcoding
+  - no product-specific branch logic
+- Thumbnail interaction remains unchanged:
+  - merchants can still click any thumbnail to switch the main image
+  - manual selection is not force-reset during same-product interaction
+- Non-goals preserved in this phase:
+  - no Product Editor layout redesign
+  - no Generate Intelligence behavior changes
+  - no supplier write/import/sync/extraction/OCR/AI-label runtime behavior changes
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
+Phase 5.2 contract source:
+
+- `planning/apps/ecomviper/shopify/product-editor-image-selection.md`

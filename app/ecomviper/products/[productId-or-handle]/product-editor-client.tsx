@@ -10,6 +10,7 @@ import {
   type ShopifyPdpIntelligenceRecord,
 } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence";
 import { orderProductImages } from "@/lib/ecomviper/shopify/product-image-ordering";
+import { getDefaultProductImageIndex } from "@/lib/ecomviper/shopify/product-image-selection";
 import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
 import { safeIsoDate, safeMoney } from "@/lib/ui/safe-formatters";
 
@@ -267,38 +268,55 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     () =>
       orderProductImages([
         ...product.images.map((image) => ({
+          id: image.id,
           url: image.url,
           altText: image.altText,
+          title: product.title,
           type: image.altText,
+          role: image.altText,
           source: `shopify:${image.source}`,
         })),
         ...validImageUrls(record.product_images).map((url) => ({
           url,
           altText: `${product.title} product asset`,
+          title: product.title,
           type: "product",
           source: "pdp-record",
         })),
         ...validImageUrls(record.supplement_facts_assets).map((url) => ({
           url,
           altText: `${product.title} supplement facts`,
+          title: product.title,
           type: "supplement facts",
           source: "supplement-facts",
         })),
         ...validImageUrls(record.label_assets).map((url) => ({
           url,
           altText: `${product.title} label`,
+          title: product.title,
           type: "label",
           source: "label-assets",
         })),
         ...validImageUrls(record.mockup_assets).map((url) => ({
           url,
           altText: `${product.title} lifestyle`,
+          title: product.title,
           type: "lifestyle",
           source: "mockup-assets",
         })),
       ]),
     [product.images, product.title, record.label_assets, record.mockup_assets, record.product_images, record.supplement_facts_assets]
   );
+  const defaultSelectedImageUrl = useMemo(() => {
+    const index = getDefaultProductImageIndex({
+      images: assetGalleryImages.map((image) => ({
+        ...image,
+        position: image.position ?? image.originalIndex,
+      })),
+      featuredImageUrl: product.primaryImageUrl,
+    });
+    return index >= 0 ? assetGalleryImages[index]?.url || null : null;
+  }, [assetGalleryImages, product.primaryImageUrl]);
 
   function handleAddImageUrl(url: string) {
     setRecord((current) => {
@@ -376,6 +394,8 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
         <ProductImageGallery
           images={assetGalleryImages}
           productTitle={product.title}
+          defaultSelectedImageUrl={defaultSelectedImageUrl}
+          selectionKey={productReference}
           onAddImageUrl={handleAddImageUrl}
         />
         <article className="rounded-2xl border border-[#D5E2F0] bg-white p-4 shadow-sm" data-testid="ecomviper-product-summary-card">

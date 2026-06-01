@@ -1,11 +1,13 @@
 "use client";
 
-import { type ChangeEvent, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { OrderedProductImage } from "@/lib/ecomviper/shopify/product-image-ordering";
 
 interface ProductImageGalleryProps {
   images: OrderedProductImage[];
   productTitle: string;
+  defaultSelectedImageUrl?: string | null;
+  selectionKey?: string;
   onAddImageUrl?: (url: string) => void;
 }
 
@@ -31,13 +33,20 @@ function dedupeByUrl(images: OrderedProductImage[]): OrderedProductImage[] {
   return result;
 }
 
-export default function ProductImageGallery({ images, productTitle, onAddImageUrl }: ProductImageGalleryProps) {
+export default function ProductImageGallery({
+  images,
+  productTitle,
+  defaultSelectedImageUrl,
+  selectionKey,
+  onAddImageUrl,
+}: ProductImageGalleryProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [failedUrls, setFailedUrls] = useState<Record<string, boolean>>({});
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [pendingUrl, setPendingUrl] = useState("");
   const [addMessage, setAddMessage] = useState<string | null>(null);
   const [localImages, setLocalImages] = useState<OrderedProductImage[]>([]);
+  const lastSelectionScopeRef = useRef<string | null>(null);
 
   useEffect(() => {
     setFailedUrls({});
@@ -69,6 +78,17 @@ export default function ProductImageGallery({ images, productTitle, onAddImageUr
     }
   }, [selectableImages.length, selectedIndex]);
 
+  useEffect(() => {
+    const scope = selectionKey || productTitle;
+    const scopeChanged = lastSelectionScopeRef.current !== scope;
+    if (!scopeChanged) return;
+    lastSelectionScopeRef.current = scope;
+    const nextIndex = defaultSelectedImageUrl
+      ? selectableImages.findIndex((image) => image.url === defaultSelectedImageUrl)
+      : -1;
+    setSelectedIndex(nextIndex >= 0 ? nextIndex : 0);
+  }, [defaultSelectedImageUrl, productTitle, selectableImages, selectionKey]);
+
   function appendLocalImage(input: { url: string; altText: string; source: string }) {
     setLocalImages((current) => {
       if (current.some((image) => image.url === input.url)) return current;
@@ -78,8 +98,11 @@ export default function ProductImageGallery({ images, productTitle, onAddImageUr
           id: `${input.source}-${Date.now()}-${input.url}`,
           url: input.url,
           altText: input.altText,
+          title: productTitle,
+          role: "other",
           type: "other",
           source: input.source,
+          position: null,
           originalIndex: images.length + current.length,
         },
       ];

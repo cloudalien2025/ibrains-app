@@ -51,6 +51,10 @@ describe("ecomviper product editor route contract", () => {
       process.cwd(),
       "app/ecomviper/products/[productId-or-handle]/product-editor-client.tsx"
     );
+    const imageSelectionHelperPath = path.join(
+      process.cwd(),
+      "lib/ecomviper/shopify/product-image-selection.ts"
+    );
 
     expect(fs.existsSync(duplicateRoutePath)).toBe(false);
     expect(fs.existsSync(duplicateClientPath)).toBe(false);
@@ -58,10 +62,14 @@ describe("ecomviper product editor route contract", () => {
     const shopifyWorkspaceSource = fs.readFileSync(shopifyWorkspacePath, "utf8");
     const canonicalPageSource = fs.readFileSync(canonicalPagePath, "utf8");
     const canonicalClientSource = fs.readFileSync(canonicalClientPath, "utf8");
+    const imageSelectionSource = fs.readFileSync(imageSelectionHelperPath, "utf8");
 
     expect(shopifyWorkspaceSource).toContain("/ecomviper/products/");
     expect(shopifyWorkspaceSource).not.toContain("/ecomviper/shopify/products/");
     expect(canonicalPageSource).not.toContain("ROC948");
     expect(canonicalClientSource).not.toContain("ROC948");
+    expect(imageSelectionSource).not.toContain("ROC123");
+    expect(imageSelectionSource).not.toContain("ROC948");
+    expect(imageSelectionSource).not.toContain("opa-oxy-burn-thermogenic-support");
   });
 });

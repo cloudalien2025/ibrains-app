@@ -48,6 +48,7 @@ describe("ecomviper product editor source sync required", () => {
         seoDescription: "",
         productUrl: "",
         canonicalUrl: "",
+        primaryImageUrl: "",
         images: [],
         variants: [{ id: "v", title: "Default", sku: "ROC949", barcode: "", price: 39.99, compareAtPrice: null, inventoryQuantity: 1 }],
         metafields: [],
