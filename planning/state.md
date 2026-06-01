@@ -57,8 +57,8 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 6.2.2-D Live Supplier Facts Hydration Fix: In progress (`sprint-6-2-2-d-live-supplier-facts-hydration`, live route supplier-facts rehydration by SKU + compact trace read-source diagnostics to prevent false `image_only` degradation when structured facts exist).
 - Shopify Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix: In progress (`sprint-6-2-2-e-hydration-compliance-fix`, parity diagnostics expansion + ROC123/ROC948 class hydration/compliance hardening).
 - Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation: Completed and merged (`sprint-6-3-firecrawl-supplier-intelligence-extractor`, Firecrawl-backed supplier extraction foundation + normalized package schema/provenance/validation and ROC948 fixture proof; MR `!308`, pipeline `2568207604` success).
-- Shopify Phase 6.3.1 Rocktomic Live Source Parser (Firecrawl cache + PyMuPDF + CSV foundation): In progress (`sprint-6-3-1-rocktomic-live-source-parser`, local implementation complete; MR/pipeline/merge pending).
-- Current recommended sprint: `Shopify Phase 6.3.1 Firecrawl Live Extraction Calibration + Candidate Promotion`.
+- Shopify Phase 6.3.1 Rocktomic Live Source Parser (Firecrawl cache + PyMuPDF + CSV foundation): Completed and merged (`sprint-6-3-1-rocktomic-live-source-parser`, MR `!310`, pipeline `2568493491` success).
+- Current recommended sprint: `Shopify Phase 6.3.2 Firecrawl Candidate Promotion + Expanded Multi-SKU Calibration`.
 
 ## Sprint Checkpoint: Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation (Local Branch)
 
@@ -150,6 +150,24 @@ Last updated: 2026-06-01 (UTC)
   - no DB writes/imports/migrations
   - no OCR/vision default path
   - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
+## Sprint Closure Update: Phase 6.3.1 Rocktomic Live Source Parser
+
+- Sprint/branch: `sprint-6-3-1-rocktomic-live-source-parser`
+- MR:
+  - `!310`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/310`
+  - source branch commit SHA: `823e5e4433b188520832c4e9c74b19797d33b2ad`
+  - merge commit SHA: `652a0c8a024ec79fec3b323f87f39bafffcbb641`
+  - MR pipeline `2568493491`: success
+- Branch cleanup:
+  - remote source branch deletion: completed via MR merge (`--remove-source-branch`)
+  - local source branch deletion: completed (`git branch -d sprint-6-3-1-rocktomic-live-source-parser`)
+  - local repository reset: clean `main` synced to `origin/main`
+- Delivered behavior summary:
+  - Firecrawl markdown fallback parser now emits SKU records when JSON extraction omits target SKU.
+  - ROC948 cache/live proof now returns `records_extracted=1` with normalized metadata and provenance.
+  - source-status policy now keeps incomplete supplement-facts records in `needs_review` (no fabricated structured facts).
+  - PyMuPDF evidence helper + Google Sheets CSV helper + toolbelt doctor foundations are added with fixture-safe tests.
 
 
 ## Sprint Checkpoint: Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix (Local Branch)
