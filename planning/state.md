@@ -49,7 +49,7 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Hotfix Sprint 009.8 Data Binding: Merged and production deployed (`hotfix-009-8-global-supplier-data-scope-product-editor-binding`, global supplier normalized data boundary + merchant membership/Product Editor binding correction); mandatory signed-in desktop/mobile verification is still blocked pending an authenticated browser session.
 - Shopify Hotfix Sprint 009.9: In progress (`hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`, deterministic all-SKU sourceFacts field mapping + Product Editor/Generate Intelligence binding + settings tier auth save reliability).
 - Shopify Phase 5.1 Route Reconciliation: In progress (`sprint-5-1-remove-duplicate-shopify-product-route`, global removal of mistaken duplicate `/ecomviper/shopify/products/[productId-or-handle]` merchant route family).
-- Shopify Phase 5.2 Product Editor Default Front Image: In progress (`sprint-5-2-product-editor-default-front-image`, canonical Product Editor defaults main gallery image to best front/primary/featured candidate for all products).
+- Shopify Phase 5.2 Product Editor Default Front Image: Completed and merged (`sprint-5-2-product-editor-default-front-image`, canonical Product Editor defaults main gallery image to best front/primary/featured candidate for all products).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
 
 ## Sprint Checkpoint: Phase 5.2 Product Editor Default Front Image (Local Branch)
@@ -77,6 +77,44 @@ Last updated: 2026-06-01 (UTC)
   - no Generate Intelligence behavior changes
   - no supplier write/import/sync/extraction/OCR/AI-label runtime behavior changes
   - no duplicate route restoration
+
+## Sprint Closure Update: Phase 5.2 Product Editor Default Front Image
+
+- Sprint/branch: `sprint-5-2-product-editor-default-front-image`
+- MR:
+  - `!295`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/295`
+  - source branch commit SHA: `e0ec229cd298c32c0e86ff0fdae96ce900aa8724`
+  - merge commit SHA: `e3c7bc8388a72a583fbe3613ac696e8764314071`
+  - MR pipeline `2566005733`: success
+- Main/deploy pipeline:
+  - pipeline `2566010001`: success
+- Branch cleanup:
+  - remote source branch deletion: completed via merge (`--remove-source-branch`)
+  - local source branch deletion: completed (`git branch -d sprint-5-2-product-editor-default-front-image`)
+  - local repository reset: clean `main` synced to `origin/main` before closure metadata branch
+- Production release verification:
+  - `/api/meta/release`:
+    - `git_sha=e3c7bc8388a72a583fbe3613ac696e8764314071`
+    - `build_id=2566010001`
+    - `deployed_at=2026-06-01T02:37:10Z`
+    - `release_metadata_complete=true`
+  - `/api/health`: `{"ok":true,...,"upstream_ok":true}`
+  - smoke script: `RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai` passed
+- Signed-out route verification:
+  - `/admin` -> `307` to `/sign-in?redirect_url=%2Fadmin`
+  - `/admin/ecomviper` -> `307` to `/sign-in?redirect_url=%2Fadmin%2Fecomviper`
+  - `/admin/ecomviper/suppliers/rocktomic/audit` -> `307` to `/sign-in?redirect_url=%2Fadmin%2Fecomviper%2Fsuppliers%2Frocktomic%2Faudit`
+  - `/ecomviper/products/opa-oxy-burn-thermogenic-support` -> `307` to sign-in with preserved redirect URL
+- Signed-in/manual Product Editor QA status:
+  - blocked in this CLI-only closure run (no authenticated browser session available).
+  - required signed-in checks remain: Oxy-Burn and Magnesium default front-image verification, thumbnail interaction confirmation, and no yellow onlineStoreUrl error check.
+- Delivered behavior summary:
+  - canonical Product Editor route only (`/ecomviper/products/[productId-or-handle]`)
+  - deterministic front/primary/featured default image selection helper is global (no SKU/handle hardcoding)
+  - thumbnail click behavior preserved
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restored
+  - no Product Editor layout redesign
+  - no Generate Intelligence behavior changes
 
 ## Sprint Checkpoint: Phase 1.5 Shared Ecommerce Database Foundation (Local Branch)
 
