@@ -24,8 +24,26 @@ vi.mock("@/lib/ecomviper/suppliers/firecrawl/firecrawl-client", () => {
 });
 
 vi.mock("@/lib/ecomviper/suppliers/rocktomic/pdf-evidence", () => ({
-  resolveCatalogPdfPath: async () => null,
-  extractPdfEvidence: async () => ({ found: false, pageNumbers: [], textSnippets: [], links: [], errors: ["pdf_missing"], sourceFile: "", provenance: { extractor: "mock", query: "" } }),
+  resolveOrAcquireCatalogPdfPath: async () => ({
+    pdfPath: null,
+    sourceHash: null,
+    acquisitionSource: "unavailable",
+    warnings: ["pdf_source_unavailable"],
+    errors: [],
+  }),
+  extractPdfEvidence: async () => ({
+    found: false,
+    sku: null,
+    productName: null,
+    candidatePages: [],
+    pageNumbers: [],
+    textSnippets: [],
+    links: [],
+    errors: ["pdf_missing"],
+    sourceFile: "",
+    sourceHash: null,
+    provenance: { extractor: "mock", query: "" },
+  }),
 }));
 
 import {

@@ -77,7 +77,38 @@ describe("supplier intelligence schema", () => {
     ];
     record.provenance = record.activeIngredients[0].provenance;
     record.missingFields = [];
+    record.servingSize = "2 Gummies";
+    record.servingsPerContainer = 30;
 
     expect(calculateRecordSourceStatus(record)).toBe("structured");
+  });
+
+  it("keeps partial status when serving metadata is missing", () => {
+    const record = baseRecord();
+    record.activeIngredients = [
+      {
+        name: "Vitamin C",
+        amount: 30,
+        unit: "mg",
+        standardization: null,
+        rawText: "Vitamin C 30mg",
+        provenance: [
+          {
+            sourceType: "catalog_pdf",
+            sourceUrl: "https://example.com",
+            pageNumber: 1,
+            extractedAt: "2026-06-01T00:00:00.000Z",
+            extractor: "test",
+            rawSnippet: "Vitamin C 30mg",
+            confidence: 0.99,
+          },
+        ],
+      },
+    ];
+    record.provenance = record.activeIngredients[0].provenance;
+    record.missingFields = [];
+    record.servingSize = null;
+    record.servingsPerContainer = null;
+    expect(calculateRecordSourceStatus(record)).toBe("partial");
   });
 });

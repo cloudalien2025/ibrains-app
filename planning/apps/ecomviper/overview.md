@@ -286,6 +286,19 @@ Phase 5 contract source:
   - `npm run ecomviper:supplier-toolbelt:doctor`
 - ROC948 cache regression now resolves to `records_extracted=1` and `sourceStatus=needs_review` (metadata present, supplement facts incomplete).
 
+## Rocktomic Supplement Facts Panel Extraction (Phase 6.3.2, Local)
+
+- Added deterministic catalog PDF acquisition/cache metadata helper and expanded PyMuPDF page evidence extraction.
+- Added strict supplement-facts panel parser + validator for structured promotion gating.
+- Added optional OpenAI vision fallback contract (explicit CLI + env gating + cache).
+- Added panel extraction/render candidate CLI flags and safe candidate artifact outputs.
+- Local ROC948 cache run now provides candidate page/render evidence and explicit validation failure reasons when structured facts cannot be proven; record remains `needs_review` in this local evidence state.
+- Runtime boundaries remain unchanged:
+  - no Product Editor behavior change
+  - no auto-save/publish
+  - no render-time model call
+  - no DB writes/imports/migrations
+
 ## Generate Intelligence Per-SKU Hydration + Compliance Calibration (Phase 6.2.2-E)
 
 - Added per-SKU parity diagnostics and compare tooling for live supplier-facts hydration triage:
