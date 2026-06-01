@@ -50,7 +50,41 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Hotfix Sprint 009.9: In progress (`hotfix-009-9-all-sku-supplier-field-mapping-product-editor-binding`, deterministic all-SKU sourceFacts field mapping + Product Editor/Generate Intelligence binding + settings tier auth save reliability).
 - Shopify Phase 5.1 Route Reconciliation: In progress (`sprint-5-1-remove-duplicate-shopify-product-route`, global removal of mistaken duplicate `/ecomviper/shopify/products/[productId-or-handle]` merchant route family).
 - Shopify Phase 5.2 Product Editor Default Front Image: Completed and merged (`sprint-5-2-product-editor-default-front-image`, canonical Product Editor defaults main gallery image to best front/primary/featured candidate for all products).
+- Shopify Phase 6.1 AI Copywriting Agent Contract + Eval Harness: In progress (`sprint-6-1-ai-copywriting-agent-contract-evals`, all-product contract/schema/prompt/eval harness foundation with no live Product Editor or Generate Intelligence behavior change).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
+
+## Sprint Checkpoint: Phase 6.1 All-Product AI Copywriting Agent Contract + Eval Harness (Local Branch)
+
+- Branch: `sprint-6-1-ai-copywriting-agent-contract-evals`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks in progress; MR/pipeline/deploy verification pending.
+- Scope implemented locally:
+  - added all-product copywriting contracts/modules:
+    - `lib/ecomviper/copywriting-agent/copywriting-agent-types.ts`
+    - `lib/ecomviper/copywriting-agent/copywriting-agent-input-builder.ts`
+    - `lib/ecomviper/copywriting-agent/copywriting-agent-prompt.ts`
+    - `lib/ecomviper/copywriting-agent/copywriting-agent-evals.ts`
+    - `lib/ecomviper/copywriting-agent/copywriting-agent-data.ts`
+  - added all-product-ready CLI scripts:
+    - `scripts/ecomviper/copywriting_agent_prepare.ts`
+    - `scripts/ecomviper/copywriting_agent_evaluate.ts`
+    - `npm` scripts: `ecomviper:copywriting-agent:prepare`, `ecomviper:copywriting-agent:evaluate`
+  - added representative regression fixtures:
+    - `data/ecomviper/copywriting-agent/fixtures/golden-products.json`
+  - added focused tests:
+    - `tests/ecomviper_copywriting_agent_types.test.ts`
+    - `tests/ecomviper_copywriting_agent_input_builder.test.ts`
+    - `tests/ecomviper_copywriting_agent_prompt.test.ts`
+    - `tests/ecomviper_copywriting_agent_evals.test.ts`
+    - `tests/ecomviper_copywriting_agent_scripts.test.ts`
+- Boundary confirmation:
+  - all products are in scope for contract/input builder; no SKU-specific architecture
+  - golden fixtures are representative regression fixtures only
+  - no live Generate Intelligence behavior change
+  - no Product Editor UI/layout change
+  - no model calls required for Phase 6.1 tests/scripts
+  - no supplier writes/import/sync/extraction/OCR added
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
 ## Sprint Checkpoint: Phase 5.2 Product Editor Default Front Image (Local Branch)
 

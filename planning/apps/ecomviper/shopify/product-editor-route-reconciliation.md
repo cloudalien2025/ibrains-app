@@ -70,3 +70,12 @@ Non-goals preserved:
 - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 - no Product Editor layout redesign
 - no Generate Intelligence behavior changes
+
+## Phase 6.1 Guardrail (AI Copywriting Contract Foundation)
+
+Phase 6.1 contract/eval harness work is route-agnostic and must not alter route topology:
+
+- canonical Product Editor workflow remains `/ecomviper/products/[productId-or-handle]`
+- no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+- no Product Editor UI layout redesign
+- no live Generate Intelligence runtime behavior changes in this phase

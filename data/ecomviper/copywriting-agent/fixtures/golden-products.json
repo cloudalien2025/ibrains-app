@@ -1,0 +1,420 @@
+{
+  "fixtures": [
+    {
+      "id": "supplier-backed-supplement-complete",
+      "mode": "supplier-backed supplement",
+      "context": {
+        "channel": "shopify",
+        "productIdentity": {
+          "productId": "gid://shopify/Product/1001",
+          "handle": "opa-oxy-burn-thermogenic-support",
+          "title": "OPA Oxy-Burn Thermogenic Support",
+          "brand": "OPA Nutrition",
+          "productType": "Supplements",
+          "category": "Thermogenic",
+          "tags": ["supplement", "thermogenic", "metabolism"],
+          "vendor": "OPA Nutrition"
+        },
+        "currentListing": {
+          "title": "OPA Oxy-Burn Thermogenic Support",
+          "descriptionText": "Source-backed thermogenic support gummies.",
+          "descriptionHtml": "<p>Source-backed thermogenic support gummies.</p>",
+          "bullets": ["Thermogenic support", "Daily wellness use"],
+          "metaTitle": "OPA Oxy-Burn Thermogenic Support",
+          "metaDescription": "Thermogenic gummies with source-backed facts",
+          "existingFaqs": [{ "question": "How do I use it?", "answer": "Use as directed." }]
+        },
+        "variants": [
+          { "sku": "ROC123", "barcode": "123456789012", "upc": "123456789012", "gtin": null, "price": 39.99, "compareAtPrice": 49.99, "inventory": 14 }
+        ],
+        "images": {
+          "selectedPrimaryImageUrl": "https://cdn.example.com/roc123-front.jpg",
+          "items": [
+            { "id": "img-front", "url": "https://cdn.example.com/roc123-front.jpg", "altText": "Front bottle", "filename": "roc123-front.jpg", "role": "front", "order": 0 },
+            { "id": "img-facts", "url": "https://cdn.example.com/roc123-facts.jpg", "altText": "Supplement Facts", "filename": "roc123-facts.jpg", "role": "supplement_facts", "order": 1 }
+          ]
+        },
+        "supplierContext": {
+          "supplierSlug": "rocktomic",
+          "supplierName": "Rocktomic",
+          "supplierSku": "ROC123",
+          "supplierProductName": "OPA Oxy-Burn Thermogenic Support",
+          "matchStatus": "matched",
+          "matchConfidence": "exact_sku",
+          "matchReasons": ["exact SKU match"],
+          "ingredientMatchingReadiness": "ready",
+          "productEditorFactsReadiness": "ready",
+          "complianceEvidenceReadiness": "ready",
+          "pricingReadiness": "ready",
+          "inventoryReadiness": "ready",
+          "optiPixelAssetReadiness": "ready_with_warnings"
+        },
+        "supplementFacts": {
+          "servingSize": "2 gummies",
+          "servingsPerContainer": "30",
+          "activeIngredients": ["Green Tea Extract", "Caffeine"],
+          "ingredientAmounts": ["Green Tea Extract 300mg", "Caffeine 80mg"],
+          "otherIngredients": ["Pectin", "Natural flavors"],
+          "suggestedUse": "Take two gummies daily.",
+          "warnings": "Not for children."
+        },
+        "sourceEvidence": {
+          "coaPresent": true,
+          "coaUrl": "https://cdn.example.com/coa/roc123.pdf",
+          "labelEvidencePresent": true,
+          "aiLabelTextEvidencePresent": true,
+          "sourceFactsUsed": ["supplement_facts:extracted", "amount_per_serving:extracted", "coa_status:available"]
+        }
+      },
+      "expectedOutput": {
+        "optimizedTitle": "OPA Oxy-Burn Thermogenic Support Gummies",
+        "listingSubtitle": "Source-backed thermogenic support",
+        "shortDescription": "Daily thermogenic support gummies with source-backed ingredient details.",
+        "fullDescription": "OPA Oxy-Burn Thermogenic Support delivers source-backed ingredient transparency for daily wellness support.",
+        "benefitBullets": ["Source-backed formula", "Daily wellness support", "Clear serving guidance"],
+        "ingredientHighlights": ["Green Tea Extract", "Caffeine"],
+        "usageSummary": "Take two gummies daily as directed on product label.",
+        "faqSuggestions": [{ "question": "How should I use this product?", "answer": "Take two gummies daily as directed." }],
+        "imageAltTextSuggestions": [{ "imageId": "img-front", "altText": "OPA Oxy-Burn Thermogenic Support front bottle" }],
+        "metaTitle": "OPA Oxy-Burn Thermogenic Support Gummies",
+        "metaDescription": "Source-backed thermogenic support gummies with transparent ingredient details.",
+        "agenticVisibilitySignals": {
+          "primaryIntents": ["what is this product", "how to use"],
+          "comparisonHooks": ["serving size", "active ingredients"],
+          "trustSignals": ["source-backed facts", "COA available"],
+          "faqCoverage": ["usage", "ingredients"]
+        },
+        "complianceWarnings": [],
+        "missingDataNotices": [],
+        "sourceFactsUsed": ["supplement_facts:extracted", "amount_per_serving:extracted", "coa_status:available"],
+        "claimsRejected": ["No disease-treatment claims"],
+        "qualityScores": {
+          "schemaValidity": 100,
+          "factualGrounding": 95,
+          "supplementCompliance": 98,
+          "agenticVisibility": 90,
+          "conversionQuality": 88,
+          "missingDataBehavior": 100,
+          "brandVoice": 90,
+          "sourceUseTransparency": 95
+        },
+        "channelVariants": {
+          "shopify": "Shopify long description variant",
+          "optibay": null,
+          "optiwal": null,
+          "optizon": null,
+          "genericMarketplace": "Marketplace short variant"
+        },
+        "generationMetadata": {
+          "contractVersion": "phase_6_1",
+          "generatedAt": "2026-06-01T00:00:00.000Z",
+          "sourceMode": "fixture",
+          "model": null
+        }
+      }
+    },
+    {
+      "id": "supplier-backed-supplement-missing-coa",
+      "mode": "supplier-backed supplement missing COA",
+      "context": {
+        "channel": "shopify",
+        "productIdentity": {
+          "productId": "gid://shopify/Product/1002",
+          "handle": "opa-magnesium-glycinate-gummies",
+          "title": "OPA Magnesium Glycinate Gummies",
+          "brand": "OPA Nutrition",
+          "productType": "Supplements",
+          "category": "Minerals",
+          "tags": ["supplement", "magnesium"],
+          "vendor": "OPA Nutrition"
+        },
+        "variants": [{ "sku": "ROC949", "barcode": null, "upc": null, "gtin": null, "price": 29.99, "compareAtPrice": null, "inventory": 9 }],
+        "supplierContext": {
+          "supplierSlug": "rocktomic",
+          "supplierName": "Rocktomic",
+          "supplierSku": "ROC949",
+          "supplierProductName": "Premium Magnesium Glycinate Gummies",
+          "matchStatus": "matched",
+          "matchConfidence": "exact_sku",
+          "matchReasons": ["exact SKU match"],
+          "ingredientMatchingReadiness": "ready",
+          "productEditorFactsReadiness": "ready_with_warnings",
+          "complianceEvidenceReadiness": "blocked",
+          "pricingReadiness": "ready",
+          "inventoryReadiness": "ready",
+          "optiPixelAssetReadiness": "ready"
+        },
+        "supplementFacts": {
+          "servingSize": "1 gummy",
+          "servingsPerContainer": "60",
+          "activeIngredients": ["Magnesium (as Magnesium Glycinate)"],
+          "ingredientAmounts": ["Magnesium 30mg"],
+          "otherIngredients": ["Glucose syrup"],
+          "suggestedUse": "Take one gummy daily.",
+          "warnings": null
+        },
+        "sourceEvidence": {
+          "coaPresent": false,
+          "coaUrl": null,
+          "labelEvidencePresent": true,
+          "aiLabelTextEvidencePresent": true,
+          "sourceFactsUsed": ["supplement_facts:extracted", "coa_status:missing"]
+        }
+      },
+      "expectedOutput": {
+        "optimizedTitle": "OPA Magnesium Glycinate Gummies",
+        "listingSubtitle": "Magnesium glycinate daily support",
+        "shortDescription": "Source-backed magnesium gummies for daily wellness support.",
+        "fullDescription": "This listing uses available source facts and includes plain notices for missing data.",
+        "benefitBullets": ["Source-backed ingredient facts", "Clear serving guidance", "Daily wellness positioning"],
+        "ingredientHighlights": ["Magnesium (as Magnesium Glycinate)"],
+        "usageSummary": "Take one gummy daily as directed on label.",
+        "faqSuggestions": [{ "question": "Is COA available?", "answer": "COA missing." }],
+        "imageAltTextSuggestions": [],
+        "metaTitle": "OPA Magnesium Glycinate Gummies",
+        "metaDescription": "Source-backed magnesium glycinate gummies with transparent notices.",
+        "agenticVisibilitySignals": {
+          "primaryIntents": ["magnesium gummies", "daily use"],
+          "comparisonHooks": ["form", "serving size"],
+          "trustSignals": ["source-backed facts"],
+          "faqCoverage": ["COA notice", "usage"]
+        },
+        "complianceWarnings": [],
+        "missingDataNotices": ["COA missing"],
+        "sourceFactsUsed": ["supplement_facts:extracted", "coa_status:missing"],
+        "claimsRejected": ["No disease-treatment claims"],
+        "qualityScores": {
+          "schemaValidity": 100,
+          "factualGrounding": 92,
+          "supplementCompliance": 98,
+          "agenticVisibility": 84,
+          "conversionQuality": 82,
+          "missingDataBehavior": 100,
+          "brandVoice": 88,
+          "sourceUseTransparency": 92
+        },
+        "channelVariants": { "shopify": "Shopify variant", "optibay": null, "optiwal": null, "optizon": null, "genericMarketplace": null },
+        "generationMetadata": { "contractVersion": "phase_6_1", "generatedAt": "2026-06-01T00:00:00.000Z", "sourceMode": "fixture", "model": null }
+      }
+    },
+    {
+      "id": "supplier-backed-supplement-missing-pricing",
+      "mode": "supplier-backed supplement missing pricing",
+      "context": {
+        "channel": "shopify",
+        "productIdentity": {
+          "productId": "gid://shopify/Product/1003",
+          "handle": "opa-nitric-oxide-gummies",
+          "title": "OPA Nitric Oxide Gummies",
+          "brand": "OPA Nutrition",
+          "productType": "Supplements",
+          "category": "Performance",
+          "tags": ["supplement", "nitric-oxide"],
+          "vendor": "OPA Nutrition"
+        },
+        "variants": [{ "sku": "ROC948", "barcode": null, "upc": null, "gtin": null, "price": null, "compareAtPrice": null, "inventory": 5 }],
+        "supplierContext": {
+          "supplierSlug": "rocktomic",
+          "supplierName": "Rocktomic",
+          "supplierSku": "ROC948",
+          "supplierProductName": "Premium Nitric Oxide Gummies",
+          "matchStatus": "matched",
+          "matchConfidence": "exact_sku",
+          "matchReasons": ["exact SKU match"],
+          "ingredientMatchingReadiness": "ready",
+          "productEditorFactsReadiness": "ready",
+          "complianceEvidenceReadiness": "ready_with_warnings",
+          "pricingReadiness": "blocked",
+          "inventoryReadiness": "ready",
+          "optiPixelAssetReadiness": "ready"
+        },
+        "supplementFacts": {
+          "servingSize": "2 gummies",
+          "servingsPerContainer": "30",
+          "activeIngredients": ["Beet Root Blend"],
+          "ingredientAmounts": ["Beet Root Blend 500mg"],
+          "otherIngredients": ["Pectin"],
+          "suggestedUse": null,
+          "warnings": null
+        },
+        "sourceEvidence": {
+          "coaPresent": true,
+          "coaUrl": "https://cdn.example.com/coa/roc948.pdf",
+          "labelEvidencePresent": true,
+          "aiLabelTextEvidencePresent": true,
+          "sourceFactsUsed": ["supplement_facts:extracted", "pricing_status:missing"]
+        }
+      }
+    },
+    {
+      "id": "supplier-backed-supplement-missing-facts",
+      "mode": "supplier-backed supplement missing Supplement Facts",
+      "context": {
+        "channel": "shopify",
+        "productIdentity": {
+          "productId": "gid://shopify/Product/1004",
+          "handle": "opa-beetroot-clean-energy",
+          "title": "OPA Beetroot Clean Energy",
+          "brand": "OPA Nutrition",
+          "productType": "Supplements",
+          "category": "Energy",
+          "tags": ["supplement", "energy"],
+          "vendor": "OPA Nutrition"
+        },
+        "variants": [{ "sku": "ROC914", "barcode": null, "upc": null, "gtin": null, "price": 24.99, "compareAtPrice": null, "inventory": 2 }],
+        "supplierContext": {
+          "supplierSlug": "rocktomic",
+          "supplierName": "Rocktomic",
+          "supplierSku": "ROC914",
+          "supplierProductName": "OPA Beetroot Clean Energy",
+          "matchStatus": "matched",
+          "matchConfidence": "exact_sku",
+          "matchReasons": ["exact SKU match"],
+          "ingredientMatchingReadiness": "ready_with_warnings",
+          "productEditorFactsReadiness": "blocked",
+          "complianceEvidenceReadiness": "ready",
+          "pricingReadiness": "ready",
+          "inventoryReadiness": "ready",
+          "optiPixelAssetReadiness": "needs_review"
+        },
+        "supplementFacts": {
+          "servingSize": null,
+          "servingsPerContainer": null,
+          "activeIngredients": [],
+          "ingredientAmounts": [],
+          "otherIngredients": [],
+          "suggestedUse": null,
+          "warnings": null
+        },
+        "sourceEvidence": {
+          "coaPresent": true,
+          "coaUrl": "https://cdn.example.com/coa/roc914.pdf",
+          "labelEvidencePresent": true,
+          "aiLabelTextEvidencePresent": false,
+          "sourceFactsUsed": ["supplement_facts:ocr_required"]
+        }
+      }
+    },
+    {
+      "id": "shopify-only-no-supplier",
+      "mode": "Shopify-only product with no supplier match",
+      "context": {
+        "channel": "shopify",
+        "productIdentity": {
+          "productId": "gid://shopify/Product/1005",
+          "handle": "opa-hydration-electrolyte-mix",
+          "title": "OPA Hydration Electrolyte Mix",
+          "brand": "OPA Nutrition",
+          "productType": "Supplements",
+          "category": "Hydration",
+          "tags": ["hydration"],
+          "vendor": "OPA Nutrition"
+        },
+        "variants": [{ "sku": "OPA-HYD-001", "barcode": null, "upc": null, "gtin": null, "price": 19.99, "compareAtPrice": null, "inventory": 0 }],
+        "images": {
+          "selectedPrimaryImageUrl": "https://cdn.example.com/hydration-front.jpg",
+          "items": [
+            { "id": "img1", "url": "https://cdn.example.com/hydration-front.jpg", "altText": "Front pouch", "filename": "hydration-front.jpg", "role": "front", "order": 0 },
+            { "id": "img2", "url": "https://cdn.example.com/hydration-lifestyle.jpg", "altText": "Lifestyle", "filename": "hydration-lifestyle.jpg", "role": "lifestyle", "order": 1 }
+          ]
+        },
+        "supplierContext": {
+          "supplierSlug": null,
+          "supplierName": null,
+          "supplierSku": null,
+          "supplierProductName": null,
+          "matchStatus": "no_match",
+          "matchConfidence": "no_match",
+          "matchReasons": ["no supplier candidate met confidence threshold"],
+          "ingredientMatchingReadiness": null,
+          "productEditorFactsReadiness": null,
+          "complianceEvidenceReadiness": null,
+          "pricingReadiness": null,
+          "inventoryReadiness": null,
+          "optiPixelAssetReadiness": null
+        },
+        "supplementFacts": {
+          "servingSize": null,
+          "servingsPerContainer": null,
+          "activeIngredients": [],
+          "ingredientAmounts": [],
+          "otherIngredients": [],
+          "suggestedUse": null,
+          "warnings": null
+        },
+        "sourceEvidence": {
+          "coaPresent": false,
+          "coaUrl": null,
+          "labelEvidencePresent": false,
+          "aiLabelTextEvidencePresent": false,
+          "sourceFactsUsed": []
+        }
+      }
+    },
+    {
+      "id": "non-supplement-product",
+      "mode": "supplier-backed non-supplement",
+      "context": {
+        "channel": "optibay",
+        "productIdentity": {
+          "productId": "SKU-APP-001",
+          "handle": "opa-shaker-bottle-32oz",
+          "title": "OPA Shaker Bottle 32oz",
+          "brand": "OPA Nutrition",
+          "productType": "Accessories",
+          "category": "Shaker Bottle",
+          "tags": ["bottle", "accessory"],
+          "vendor": "OPA Nutrition"
+        },
+        "currentListing": {
+          "title": "OPA Shaker Bottle 32oz",
+          "descriptionText": "BPA-free shaker bottle for mixing drinks.",
+          "descriptionHtml": "<p>BPA-free shaker bottle for mixing drinks.</p>",
+          "bullets": ["BPA-free", "Leak-resistant lid"],
+          "metaTitle": "OPA Shaker Bottle 32oz",
+          "metaDescription": "BPA-free shaker bottle with leak-resistant lid",
+          "existingFaqs": []
+        },
+        "variants": [{ "sku": "APP-001", "barcode": null, "upc": null, "gtin": null, "price": 12.99, "compareAtPrice": 14.99, "inventory": 20 }],
+        "supplierContext": {
+          "supplierSlug": "future_supplier",
+          "supplierName": "Future Supplier",
+          "supplierSku": "APP-001",
+          "supplierProductName": "Shaker Bottle 32oz",
+          "matchStatus": "candidate",
+          "matchConfidence": "strong_title",
+          "matchReasons": ["strong title similarity"],
+          "ingredientMatchingReadiness": "not_applicable",
+          "productEditorFactsReadiness": "ready",
+          "complianceEvidenceReadiness": "ready",
+          "pricingReadiness": "ready",
+          "inventoryReadiness": "ready",
+          "optiPixelAssetReadiness": "ready"
+        },
+        "supplementFacts": {
+          "servingSize": null,
+          "servingsPerContainer": null,
+          "activeIngredients": [],
+          "ingredientAmounts": [],
+          "otherIngredients": [],
+          "suggestedUse": null,
+          "warnings": null
+        },
+        "sourceEvidence": {
+          "coaPresent": false,
+          "coaUrl": null,
+          "labelEvidencePresent": true,
+          "aiLabelTextEvidencePresent": false,
+          "sourceFactsUsed": ["material:BPA-free"]
+        },
+        "outputTargets": {
+          "shopify": false,
+          "optibay": true,
+          "optiwal": false,
+          "optizon": false,
+          "genericMarketplace": true
+        }
+      }
+    }
+  ]
+}

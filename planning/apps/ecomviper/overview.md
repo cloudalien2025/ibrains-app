@@ -271,3 +271,27 @@ Phase 5 contract source:
 Phase 5.2 contract source:
 
 - `planning/apps/ecomviper/shopify/product-editor-image-selection.md`
+
+## AI Copywriting Agent Contract + Eval Harness (Phase 6.1)
+
+- Phase 6.1 introduces an all-product AI copywriting contract foundation:
+  - typed `ProductCopywritingInput` for every product mode (supplier-backed, Shopify-only, supplement/non-supplement, and missing-data/no-match modes)
+  - strict `ProductCopywritingOutput` validation/schema contract
+  - source-facts + prompt contract for future structured-output model wiring
+  - prepare/evaluate CLI harness for all-product selection (`--all`) and representative regression fixtures
+- Golden fixtures are regression-quality representatives only and do not limit architecture scope to specific SKUs.
+- Phase 6.1 keeps runtime behavior unchanged:
+  - no Product Editor UI changes
+  - no live Generate Intelligence behavior changes
+  - no model calls from product page render
+  - no auto-apply/publish
+  - no supplier writes/import/sync/extraction/OCR in this phase
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+- Future direction:
+  - Phase 6.2 wires Generate Intelligence to this contract/model path
+  - Phase 6.3 adds model-backed agentic-visibility optimization loop
+
+Phase 6.1 contract sources:
+
+- `planning/apps/ecomviper/shopify/ai-copywriting-agent-contract.md`
+- `planning/apps/ecomviper/shopify/generate-intelligence-eval-harness.md`
