@@ -169,3 +169,38 @@ From `npm run ecomviper:copywriting-agent:prepare -- --all --dry-run`:
 - all-product dry-run counts unchanged from corrected baseline (`supplementFactsMissing=16`)
 - full repository `npm test` still has unrelated baseline failures outside this sprint scope
 - production deploy + signed-in browser trace verification pending
+
+## Phase 6.2.2-E Addendum (Compliance False-Block Calibration)
+
+- state: `IMPLEMENTED_ONLY`
+- branch: `sprint-6-2-2-e-hydration-compliance-fix`
+
+ROC948-class false-block root cause:
+
+- compliance eval `invented ingredient highlight` detection compared full highlight strings to raw supplement arrays.
+- matching was not normalized enough for real-world ingredient name variants and dosage formatting.
+- title/supplier-name ingredient evidence was not considered in highlight grounding.
+
+Fixes applied:
+
+- `copywriting-agent-evals.ts`
+  - normalized ingredient name matching
+  - dosage token matching against source-backed amounts
+  - title/supplier-product-name ingredient evidence support
+  - exported highlight repair helper
+- `copywriting-agent-runner.ts`
+  - removes unsupported ingredient/dosage highlights pre-final eval return instead of blocking the entire proposal when remainder is safe
+  - retains hard blocks for prohibited disease/treatment/cure/drug-comparison and fake factual claims
+
+Local verification outcome:
+
+- title-backed + source-backed safe ingredient highlights pass.
+- unsupported ingredient/dosage highlights are removed with compliance warnings.
+- prohibited claim categories still block (`COMPLIANCE_BLOCKED`).
+
+This addendum does not change boundaries:
+
+- review-only behavior preserved
+- no auto-save/publish
+- no model call during page render
+- no supplier writes/import/OCR/.ai extraction/source fetch

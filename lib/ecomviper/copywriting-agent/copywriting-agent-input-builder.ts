@@ -53,6 +53,22 @@ function hasStructuredSupplementFacts(input: {
   );
 }
 
+function summarizeSourceFactState(input: {
+  supplementFacts: ProductCopywritingInput["supplementFacts"];
+  coaPresent: boolean;
+}): string[] {
+  return dedupe([
+    input.supplementFacts.activeIngredients.length > 0 || input.supplementFacts.ingredientAmounts.length > 0
+      ? "supplement_facts:extracted"
+      : "supplement_facts:missing",
+    input.supplementFacts.servingSize ? "serving_size:present" : "serving_size:missing",
+    input.supplementFacts.servingsPerContainer ? "servings_per_container:present" : "servings_per_container:missing",
+    input.supplementFacts.ingredientAmounts.length > 0 ? "ingredient_amounts:present" : "ingredient_amounts:missing",
+    input.supplementFacts.otherIngredients.length > 0 ? "other_ingredients:present" : "other_ingredients:missing",
+    input.coaPresent ? "coa_status:available" : "coa_status:missing",
+  ]);
+}
+
 function inferProductClass(input: { productType: string | null; supplementFacts: { activeIngredients: string[]; servingSize: string | null } }): "supplement" | "non_supplement" | "unknown" {
   const type = (input.productType || "").toLowerCase();
   if (type.includes("supplement") || type.includes("vitamin") || type.includes("gummies")) return "supplement";
@@ -380,47 +396,56 @@ export function buildProductCopywritingInputFromShopifyEditorState(initialState:
     optiPixelAssetReadiness: supplierFactsPanel?.readiness?.optiPixelAssets || null,
   };
 
-  const sourceEvidence: ProductCopywritingBuildContext["sourceEvidence"] = {
-    coaPresent: Boolean(sourceFacts?.assets?.coaUrl || supplierFactsPanel?.assetSummary?.coaPresent || supplier?.coa?.url),
-    coaUrl: sourceFacts?.assets?.coaUrl || supplierFactsPanel?.assetSummary?.coaUrl || supplier?.coa?.url || null,
-    labelEvidencePresent: Boolean(
-      sourceFacts?.assets?.labelTemplateUrl
-      || supplierFactsPanel?.assetSummary?.labelTemplateAiPresent
-      || supplierFactsPanel?.assetSummary?.mockupTemplateTifPresent
-      || supplier?.labelTemplate?.url
-      || supplier?.mockup?.url
-    ),
-    supplementFactsImagePresent: Boolean(
+  const sourceEvidence: ProductCopywritingBuildContext["sourceEvidence"] = (() => {
+    const hasStructuredFacts = hasStructuredSupplementFacts(supplementFacts);
+    const sourceMethod = (supplierFactsPanel?.evidence?.sourceMethod || "").toLowerCase();
+    const hasImageEvidence = Boolean(
       sourceFacts?.assets?.labelTemplateUrl
       || sourceFacts?.assets?.mockupUrl
       || supplierFactsPanel?.assetSummary?.labelTemplateAiPresent
       || supplierFactsPanel?.assetSummary?.mockupTemplateTifPresent
       || supplier?.labelTemplate?.url
       || supplier?.mockup?.url
-    ),
-    aiLabelTextEvidencePresent:
-      Boolean(supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus)
-      && supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus !== "unavailable",
-    aiLabelTextEvidenceStatus: supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus || null,
-    aiLabelTextNeedsReview: Boolean(supplierFactsPanel?.evidence?.needsReview),
-    structuredSupplementFactsPresent: hasStructuredSupplementFacts(supplementFacts),
-    supplementFactsSource:
-      hasStructuredSupplementFacts(supplementFacts)
-        ? "db"
+    );
+    const coaPresent = Boolean(sourceFacts?.assets?.coaUrl || supplierFactsPanel?.assetSummary?.coaPresent || supplier?.coa?.url);
+
+    const supplementFactsSource =
+      hasStructuredFacts
+        ? sourceMethod.includes("artifact")
+          ? "artifact"
+          : sourceMethod.includes("ai")
+            ? "ai_label_text"
+            : "db"
         : supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus && supplierFactsPanel.evidence.aiLabelTextEvidenceStatus !== "unavailable"
           ? "ai_label_text"
-          : (sourceFacts?.assets?.labelTemplateUrl || sourceFacts?.assets?.mockupUrl || supplier?.labelTemplate?.url || supplier?.mockup?.url)
+          : hasImageEvidence
             ? "image_only"
-            : "none",
-    sourceFactsUsed: dedupe([
-      sourceFacts?.supplementFacts?.status ? `supplement_facts:${sourceFacts.supplementFacts.status}` : "",
-      sourceFacts?.amountPerServing?.status ? `amount_per_serving:${sourceFacts.amountPerServing.status}` : "",
-      sourceFacts?.otherIngredients?.status ? `other_ingredients:${sourceFacts.otherIngredients.status}` : "",
-      sourceFacts?.servingSize?.status ? `serving_size:${sourceFacts.servingSize.status}` : "",
-      sourceFacts?.servingsPerContainer?.status ? `servings_per_container:${sourceFacts.servingsPerContainer.status}` : "",
-      sourceFacts?.assets?.coaStatus ? `coa_status:${sourceFacts.assets.coaStatus}` : "",
-    ]),
-  };
+            : "none";
+
+    return {
+      coaPresent,
+      coaUrl: sourceFacts?.assets?.coaUrl || supplierFactsPanel?.assetSummary?.coaUrl || supplier?.coa?.url || null,
+      labelEvidencePresent: Boolean(
+        sourceFacts?.assets?.labelTemplateUrl
+        || supplierFactsPanel?.assetSummary?.labelTemplateAiPresent
+        || supplierFactsPanel?.assetSummary?.mockupTemplateTifPresent
+        || supplier?.labelTemplate?.url
+        || supplier?.mockup?.url
+      ),
+      supplementFactsImagePresent: hasImageEvidence,
+      aiLabelTextEvidencePresent:
+        Boolean(supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus)
+        && supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus !== "unavailable",
+      aiLabelTextEvidenceStatus: supplierFactsPanel?.evidence?.aiLabelTextEvidenceStatus || null,
+      aiLabelTextNeedsReview: Boolean(supplierFactsPanel?.evidence?.needsReview),
+      structuredSupplementFactsPresent: hasStructuredFacts,
+      supplementFactsSource,
+      sourceFactsUsed: summarizeSourceFactState({
+        supplementFacts,
+        coaPresent,
+      }),
+    };
+  })();
 
   return buildProductCopywritingInput({
     channel: "shopify",

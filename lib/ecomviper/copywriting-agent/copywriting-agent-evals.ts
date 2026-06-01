@@ -28,6 +28,39 @@ const PROHIBITED_CLAIM_PATTERNS = [
   /\bpharmaceutical\b/i,
 ];
 
+const INGREDIENT_AMOUNT_PATTERN = /\b\d+(?:\.\d+)?\s?(?:mg|mcg|g|iu|ml)\b/gi;
+const INGREDIENT_SEPARATORS = /[+/,;|]|\band\b|\bwith\b/gi;
+const STOP_WORDS = new Set([
+  "support",
+  "supports",
+  "promotes",
+  "promote",
+  "helps",
+  "help",
+  "healthy",
+  "wellness",
+  "function",
+  "functions",
+  "daily",
+  "natural",
+  "source",
+  "of",
+  "for",
+  "and",
+  "the",
+  "a",
+  "an",
+  "is",
+  "are",
+  "that",
+  "this",
+  "to",
+  "production",
+  "synthesis",
+  "aiding",
+  "contributes",
+]);
+
 function dedupe(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
 }
@@ -61,24 +94,122 @@ function ensureMissingNotice(output: ProductCopywritingOutput, keyword: string):
   return output.missingDataNotices.some((line) => line.toLowerCase().includes(lowerKeyword));
 }
 
-function detectInventedIngredient(input: ProductCopywritingInput, output: ProductCopywritingOutput): string[] {
-  const allowed = dedupe([
+function normalizeIngredientText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[-_]/g, " ")
+    .replace(/\(.*?\)/g, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractHighlightSubject(value: string): string {
+  return value.split(/\s[-:]\s|—/, 1)[0]?.trim() || value.trim();
+}
+
+function extractAmountTokens(value: string): string[] {
+  return (value.match(INGREDIENT_AMOUNT_PATTERN) || [])
+    .map((entry) => entry.toLowerCase().replace(/\s+/g, " ").trim());
+}
+
+function ingredientTokens(value: string): string[] {
+  return normalizeIngredientText(value)
+    .split(/\s+/g)
+    .filter((token) => token.length >= 2 && !STOP_WORDS.has(token));
+}
+
+function extractNameFromAmountLine(value: string): string {
+  const normalized = normalizeIngredientText(value);
+  const amountIndex = normalized.search(/\b\d+(?:\.\d+)?\s?(?:mg|mcg|g|iu|ml)\b/i);
+  if (amountIndex <= 0) return normalized;
+  return normalized.slice(0, amountIndex).trim();
+}
+
+function ingredientMentionsFromTitle(title: string): string[] {
+  const compact = normalizeIngredientText(title);
+  return dedupe(
+    compact
+      .split(INGREDIENT_SEPARATORS)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length >= 3)
+  );
+}
+
+function highlightMatchesAllowedName(allowedNames: string[], highlight: string): boolean {
+  const normalizedHighlight = normalizeIngredientText(extractHighlightSubject(highlight));
+  const highlightTokens = ingredientTokens(normalizedHighlight);
+  if (!highlightTokens.length) return false;
+  return allowedNames.some((name) => {
+    const normalizedName = normalizeIngredientText(name);
+    if (!normalizedName) return false;
+    if (normalizedHighlight.includes(normalizedName) || normalizedName.includes(normalizedHighlight)) return true;
+    const nameTokens = ingredientTokens(normalizedName);
+    if (!nameTokens.length) return false;
+    const overlap = highlightTokens.filter((token) => nameTokens.includes(token));
+    return overlap.length > 0;
+  });
+}
+
+function highlightHasSupportedDosage(allowedAmounts: string[], highlight: string): boolean {
+  const highlightAmounts = extractAmountTokens(highlight);
+  if (!highlightAmounts.length) return true;
+  const normalizedAllowedAmounts = dedupe(allowedAmounts.flatMap((value) => extractAmountTokens(value)));
+  if (!normalizedAllowedAmounts.length) return false;
+  return highlightAmounts.every((amount) => normalizedAllowedAmounts.includes(amount));
+}
+
+function classifyIngredientHighlights(
+  input: ProductCopywritingInput,
+  highlights: string[]
+): { supported: string[]; unsupported: string[] } {
+  const allowedNames = dedupe([
     ...input.supplementFacts.activeIngredients,
-    ...input.supplementFacts.ingredientAmounts,
     ...input.supplementFacts.otherIngredients,
-  ]).map((value) => value.toLowerCase());
+    ...input.supplementFacts.ingredientAmounts.map((entry) => extractNameFromAmountLine(entry)),
+    ...ingredientMentionsFromTitle(input.productIdentity.title),
+    ...(input.supplierContext.supplierProductName ? ingredientMentionsFromTitle(input.supplierContext.supplierProductName) : []),
+  ]);
+  const allowedAmounts = dedupe(input.supplementFacts.ingredientAmounts);
 
-  if (allowed.length === 0) return [];
-
-  const violations: string[] = [];
-  for (const highlight of output.ingredientHighlights) {
-    const normalized = highlight.toLowerCase();
-    const matched = allowed.some((source) => normalized.includes(source) || source.includes(normalized));
-    if (!matched) {
-      violations.push(`invented ingredient highlight: ${highlight}`);
+  const supported: string[] = [];
+  const unsupported: string[] = [];
+  for (const highlight of highlights) {
+    const hasName = highlightMatchesAllowedName(allowedNames, highlight);
+    const hasDosage = highlightHasSupportedDosage(allowedAmounts, highlight);
+    if (hasName && hasDosage) {
+      supported.push(highlight);
+    } else {
+      unsupported.push(highlight);
     }
   }
-  return violations;
+  return { supported, unsupported };
+}
+
+export function removeUnsupportedIngredientHighlights(
+  input: ProductCopywritingInput,
+  output: ProductCopywritingOutput
+): { output: ProductCopywritingOutput; removed: string[] } {
+  const split = classifyIngredientHighlights(input, output.ingredientHighlights);
+  if (split.unsupported.length === 0) {
+    return { output, removed: [] };
+  }
+  return {
+    output: {
+      ...output,
+      ingredientHighlights: split.supported,
+      complianceWarnings: dedupe([
+        ...output.complianceWarnings,
+        "Some ingredient highlights were removed because they were not source-backed.",
+      ]),
+    },
+    removed: split.unsupported,
+  };
+}
+
+function detectInventedIngredient(input: ProductCopywritingInput, output: ProductCopywritingOutput): string[] {
+  const split = classifyIngredientHighlights(input, output.ingredientHighlights);
+  return split.unsupported.map((highlight) => `invented ingredient highlight: ${highlight}`);
 }
 
 function detectFakeFactClaims(input: ProductCopywritingInput, output: ProductCopywritingOutput): string[] {

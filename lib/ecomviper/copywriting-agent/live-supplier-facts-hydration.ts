@@ -30,6 +30,10 @@ interface SupplierFactsHydrationResult {
   supplierFactsReadSource: SupplierFactsReadSource;
   supplierFactsReadFound: boolean;
   supplierFactsReadErrorCode: string | null;
+  readDiagnostics: {
+    db: { attempted: boolean; found: boolean; errorCode: string | null };
+    artifact: { attempted: boolean; found: boolean; errorCode: string | null };
+  };
 }
 
 interface DbFactsRow {
@@ -253,18 +257,19 @@ async function loadArtifactCache(): Promise<ArtifactCache> {
   if (artifactCachePromise) return artifactCachePromise;
   artifactCachePromise = (async () => {
     const latestDir = path.join(process.cwd(), "data/ecomviper/suppliers/rocktomic/latest");
-    const [sourceFacts, assets, aiLabelWrapper] = await Promise.all([
+    const [sourceFacts, assets, aiLabelPayload] = await Promise.all([
       fs.readFile(path.join(latestDir, "sourceFacts.json"), "utf8").then((raw) => JSON.parse(raw) as ArtifactSourceFactRow[]),
       fs.readFile(path.join(latestDir, "assets.json"), "utf8").then((raw) => JSON.parse(raw) as ArtifactAssetsRow[]),
       fs.readFile(path.join(latestDir, "ai-label-text-evidence.json"), "utf8")
-        .then((raw) => JSON.parse(raw) as { records?: ArtifactAiLabelRow[] })
+        .then((raw) => JSON.parse(raw) as { records?: ArtifactAiLabelRow[] } | ArtifactAiLabelRow[])
         .catch(() => ({ records: [] })),
     ]);
+    const aiLabelRows = Array.isArray(aiLabelPayload) ? aiLabelPayload : (aiLabelPayload.records || []);
 
     return {
       sourceFactsBySku: new Map(sourceFacts.map((row) => [normalizeSku(row.sku), row])),
       assetsBySku: new Map(assets.map((row) => [normalizeSku(row.sku), row])),
-      aiLabelBySku: new Map((aiLabelWrapper.records || []).map((row) => [normalizeSku(row.sku), row])),
+      aiLabelBySku: new Map(aiLabelRows.map((row) => [normalizeSku(row.sku), row])),
     };
   })();
   return artifactCachePromise;
@@ -439,12 +444,18 @@ function mergeHydratedFactsIntoPanel(
 export async function hydrateLiveSupplierFactsForCopywriting(
   state: ShopifyProductEditorInitialState
 ): Promise<SupplierFactsHydrationResult> {
+  const readDiagnostics: SupplierFactsHydrationResult["readDiagnostics"] = {
+    db: { attempted: false, found: false, errorCode: null },
+    artifact: { attempted: false, found: false, errorCode: null },
+  };
+
   if (!state.currentShopifyListing) {
     return {
       state,
       supplierFactsReadSource: "none",
       supplierFactsReadFound: false,
       supplierFactsReadErrorCode: null,
+      readDiagnostics,
     };
   }
 
@@ -454,6 +465,14 @@ export async function hydrateLiveSupplierFactsForCopywriting(
       supplierFactsReadSource: panelHasStructuredFacts(state.supplierFactsPanel) ? "db" : "none",
       supplierFactsReadFound: panelHasStructuredFacts(state.supplierFactsPanel),
       supplierFactsReadErrorCode: null,
+      readDiagnostics: {
+        ...readDiagnostics,
+        db: {
+          attempted: panelHasStructuredFacts(state.supplierFactsPanel),
+          found: panelHasStructuredFacts(state.supplierFactsPanel),
+          errorCode: null,
+        },
+      },
     };
   }
 
@@ -464,12 +483,15 @@ export async function hydrateLiveSupplierFactsForCopywriting(
       supplierFactsReadSource: "none",
       supplierFactsReadFound: false,
       supplierFactsReadErrorCode: null,
+      readDiagnostics,
     };
   }
 
   try {
+    readDiagnostics.db.attempted = true;
     const dbPayload = await readDbHydratedFactsBySkus(skuCandidates);
     if (dbPayload) {
+      readDiagnostics.db.found = true;
       return {
         state: {
           ...state,
@@ -478,12 +500,16 @@ export async function hydrateLiveSupplierFactsForCopywriting(
         supplierFactsReadSource: "db",
         supplierFactsReadFound: true,
         supplierFactsReadErrorCode: null,
+        readDiagnostics,
       };
     }
   } catch {
+    readDiagnostics.db.errorCode = "DB_READ_FAILED";
     // Continue to artifact fallback and keep a safe read error code.
+    readDiagnostics.artifact.attempted = true;
     const artifactPayload = await readArtifactHydratedFactsBySkus(skuCandidates).catch(() => null);
     if (artifactPayload) {
+      readDiagnostics.artifact.found = true;
       return {
         state: {
           ...state,
@@ -492,6 +518,7 @@ export async function hydrateLiveSupplierFactsForCopywriting(
         supplierFactsReadSource: "artifact",
         supplierFactsReadFound: true,
         supplierFactsReadErrorCode: "DB_READ_FAILED",
+        readDiagnostics,
       };
     }
     return {
@@ -499,11 +526,14 @@ export async function hydrateLiveSupplierFactsForCopywriting(
       supplierFactsReadSource: "failed",
       supplierFactsReadFound: false,
       supplierFactsReadErrorCode: "DB_READ_FAILED",
+      readDiagnostics,
     };
   }
 
+  readDiagnostics.artifact.attempted = true;
   const artifactPayload = await readArtifactHydratedFactsBySkus(skuCandidates).catch(() => null);
   if (artifactPayload) {
+    readDiagnostics.artifact.found = true;
     return {
       state: {
         ...state,
@@ -512,6 +542,7 @@ export async function hydrateLiveSupplierFactsForCopywriting(
       supplierFactsReadSource: "artifact",
       supplierFactsReadFound: true,
       supplierFactsReadErrorCode: null,
+      readDiagnostics,
     };
   }
 
@@ -520,6 +551,7 @@ export async function hydrateLiveSupplierFactsForCopywriting(
     supplierFactsReadSource: "none",
     supplierFactsReadFound: false,
     supplierFactsReadErrorCode: null,
+    readDiagnostics,
   };
 }
 

@@ -4,18 +4,22 @@ import { hydrateLiveSupplierFactsForCopywriting } from "../../lib/ecomviper/copy
 import type { ShopifyProductEditorInitialState } from "../../lib/ecomviper/shopify/shopify-product-editor-state";
 
 interface CliOptions {
-  sku: string;
+  skus: string[];
 }
 
 function parseArgs(argv: string[]): CliOptions {
   let sku = "ROC123";
+  let compareSku: string | null = null;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--sku" && argv[i + 1]) {
       sku = argv[i + 1].trim();
       i += 1;
+    } else if (argv[i] === "--compare-sku" && argv[i + 1]) {
+      compareSku = argv[i + 1].trim();
+      i += 1;
     }
   }
-  return { sku };
+  return { skus: compareSku ? [sku, compareSku] : [sku] };
 }
 
 function normalizeSku(value: string): string {
@@ -180,10 +184,40 @@ function buildDegradedLiveStateFromInput(input: NonNullable<Awaited<ReturnType<t
   };
 }
 
-function summarize(input: ReturnType<typeof buildProductCopywritingInputFromShopifyEditorState>) {
+function imageOnlyReason(input: NonNullable<ReturnType<typeof buildProductCopywritingInputFromShopifyEditorState>>): string | null {
+  if (input.sourceEvidence.supplementFactsSource !== "image_only") return null;
+  if (!input.sourceEvidence.supplementFactsImagePresent) return "image_only_without_image_evidence";
+  if (input.sourceEvidence.structuredSupplementFactsPresent) return "image_only_conflict_structured_present";
+  if (input.sourceEvidence.aiLabelTextEvidencePresent) return "image_only_text_evidence_present_but_unstructured";
+  return "structured_supplement_facts_not_found";
+}
+
+function summarize(
+  input: ReturnType<typeof buildProductCopywritingInputFromShopifyEditorState>,
+  hydration: Awaited<ReturnType<typeof hydrateLiveSupplierFactsForCopywriting>> | null
+) {
   if (!input) return null;
+  const imageReason = imageOnlyReason(input);
   return {
     supplierSku: input.supplierContext.supplierSku,
+    productHandle: input.productIdentity.handle,
+    productTitle: input.productIdentity.title,
+    dbReadStatus: hydration
+      ? {
+          attempted: hydration.readDiagnostics.db.attempted,
+          found: hydration.readDiagnostics.db.found,
+          errorCode: hydration.readDiagnostics.db.errorCode,
+        }
+      : null,
+    artifactReadStatus: hydration
+      ? {
+          attempted: hydration.readDiagnostics.artifact.attempted,
+          found: hydration.readDiagnostics.artifact.found,
+          errorCode: hydration.readDiagnostics.artifact.errorCode,
+        }
+      : null,
+    aiLabelTextStatus: input.sourceEvidence.aiLabelTextEvidenceStatus || "unavailable",
+    factsImageStatus: input.sourceEvidence.supplementFactsImagePresent ? "present" : "absent",
     supplementFactsSource: input.sourceEvidence.supplementFactsSource,
     structuredSupplementFactsPresent: input.sourceEvidence.structuredSupplementFactsPresent,
     counts: {
@@ -191,34 +225,45 @@ function summarize(input: ReturnType<typeof buildProductCopywritingInputFromShop
       ingredientAmounts: input.supplementFacts.ingredientAmounts.length,
       otherIngredients: input.supplementFacts.otherIngredients.length,
     },
+    servingSizePresent: Boolean(input.supplementFacts.servingSize),
+    servingsPerContainerPresent: Boolean(input.supplementFacts.servingsPerContainer),
     missingData: input.missingData,
     sourceFactsUsed: input.sourceEvidence.sourceFactsUsed,
+    imageOnlyReason: imageReason,
   };
 }
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const records = await loadAllRocktomicProductInputs();
-  const selected = applySelectionFilters(records, { sku: options.sku, handle: null, limit: 1 })[0];
-  if (!selected) {
-    throw new Error(`SKU ${options.sku} not found in all-product source data.`);
-  }
+  const reports = await Promise.all(
+    options.skus.map(async (sku) => {
+      const selected = applySelectionFilters(records, { sku, handle: null, limit: 1 })[0];
+      if (!selected) {
+        throw new Error(`SKU ${sku} not found in all-product source data.`);
+      }
 
-  const offlineSummary = summarize(selected.input);
-  const degradedState = buildDegradedLiveStateFromInput(selected.input);
-  const hydration = await hydrateLiveSupplierFactsForCopywriting(degradedState);
-  const liveSummary = summarize(buildProductCopywritingInputFromShopifyEditorState(hydration.state));
+      const offlineSummary = summarize(selected.input, null);
+      const degradedState = buildDegradedLiveStateFromInput(selected.input);
+      const hydration = await hydrateLiveSupplierFactsForCopywriting(degradedState);
+      const liveSummary = summarize(buildProductCopywritingInputFromShopifyEditorState(hydration.state), hydration);
 
-  console.log(JSON.stringify({
-    sku: normalizeSku(options.sku),
-    offlinePreparePath: offlineSummary,
-    liveRouteBuilderPath: liveSummary,
-    hydration: {
-      supplierFactsReadSource: hydration.supplierFactsReadSource,
-      supplierFactsReadFound: hydration.supplierFactsReadFound,
-      supplierFactsReadErrorCode: hydration.supplierFactsReadErrorCode,
-    },
-  }, null, 2));
+      return {
+        sku: normalizeSku(sku),
+        offlinePreparePath: offlineSummary,
+        liveRouteBuilderPath: liveSummary,
+        hydration: {
+          supplierFactsReadSource: hydration.supplierFactsReadSource,
+          supplierFactsReadFound: hydration.supplierFactsReadFound,
+          supplierFactsReadErrorCode: hydration.supplierFactsReadErrorCode,
+          dbReadStatus: hydration.readDiagnostics.db,
+          artifactReadStatus: hydration.readDiagnostics.artifact,
+        },
+      };
+    })
+  );
+
+  console.log(JSON.stringify(reports.length === 1 ? reports[0] : { compare: reports }, null, 2));
 }
 
 void main().catch((error) => {

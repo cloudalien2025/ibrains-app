@@ -245,6 +245,9 @@ describe("ecomviper copywriting agent input builder", () => {
     expect(input?.supplementFacts.ingredientAmounts).toContain("Magnesium 30mg");
     expect(input?.supplementFacts.servingSize).toBe("1 capsule");
     expect(input?.sourceEvidence.coaPresent).toBe(true);
+    expect(input?.sourceEvidence.sourceFactsUsed).toContain("supplement_facts:extracted");
+    expect(input?.sourceEvidence.sourceFactsUsed).toContain("ingredient_amounts:present");
+    expect(input?.sourceEvidence.sourceFactsUsed).toContain("serving_size:present");
     expect(input?.missingData.supplementFactsMissing).toBe(false);
     expect(input?.missingData.ingredientAmountsMissing).toBe(false);
   });
