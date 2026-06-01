@@ -2988,3 +2988,63 @@ Recommended next phase:
   - no Generate Intelligence binding changes.
   - no Product Editor layout redesign/polish changes.
   - no supplier write/import/sync/extraction/OCR/AI-label behavior added.
+
+## Sprint Closure Update: Phase 5.1 Duplicate Shopify Product Route Removal
+
+- Sprint/branch: `sprint-5-1-remove-duplicate-shopify-product-route`
+- MR:
+  - `!293`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/293`
+  - source commit SHA: `f0d9fcdd8790f145b371f2f87e003566728c009c`
+  - merge commit SHA: `ab244f876dccc5b25b695b29fe867180bf7506dd`
+- Pipeline status:
+  - MR pipeline `2565898454`: success
+  - branch pipeline `2565896356`: success
+  - main/deploy pipeline `2565901191`: success
+- Deployed release verification:
+  - `/api/meta/release`:
+    - `git_sha=ab244f876dccc5b25b695b29fe867180bf7506dd`
+    - `build_id=2565901191`
+    - `deployed_at=2026-06-01T00:45:05Z`
+    - `release_metadata_complete=true`
+  - `/api/health`: `200` with `ok=true`
+- Signed-out checks:
+  - `/admin`: `307` -> `/sign-in?redirect_url=%2Fadmin`
+  - `/admin/ecomviper`: `307` -> `/sign-in?redirect_url=%2Fadmin%2Fecomviper`
+  - `/admin/ecomviper/suppliers/rocktomic/audit`: `307` -> `/sign-in?redirect_url=%2Fadmin%2Fecomviper%2Fsuppliers%2Frocktomic%2Faudit`
+  - `/ecomviper/products/opa-nitric-oxide-gummies-l-arginine-citrulline`: `307` -> `/sign-in?redirect_url=%2Fecomviper%2Fproducts%2Fopa-nitric-oxide-gummies-l-arginine-citrulline`
+  - `/ecomviper/shopify/products/opa-nitric-oxide-gummies-l-arginine-citrulline`: `307` -> `/sign-in?redirect_url=%2Fecomviper%2Fshopify%2Fproducts%2Fopa-nitric-oxide-gummies-l-arginine-citrulline`
+- Runtime/QA notes:
+  - signed-in QA for canonical product pages was not executed in this CLI runner (no authenticated browser session).
+  - duplicate merchant-facing route implementation files are removed from repository.
+- Focused checks:
+  - passed:
+    - `tests/ecomviper_shopify_products_table_navigation.test.tsx`
+    - `tests/ecomviper_product_editor_route_contract.test.ts`
+    - `tests/ecomviper_route_render_sync_safety.test.ts`
+    - `tests/ecomviper_product_editor_layout.test.tsx`
+    - `tests/ecomviper_product_editor_source_mapping.test.tsx`
+    - `tests/ecommerce_supplier_facts_read.test.ts`
+    - `tests/ecommerce_supplier_product_match.test.ts`
+  - `npm run build`: pass
+  - `git diff --check`: pass
+  - `npm run ecommerce:check-db`: fail in runner (missing `ECOMMERCE_DATABASE_URL`)
+  - `npm run ecommerce:verify-rocktomic-import`: fail in runner (missing `ECOMMERCE_DATABASE_URL`)
+  - `npm test`: fail on unrelated baseline suites; no new Phase 5.1 failures in focused coverage.
+- Unrelated baseline `npm test` failures observed:
+  1. `tests/casahud_ai_channel_engine.test.ts`
+  2. `tests/ecomviper_walmart_products_persistence.test.ts`
+  3. `tests/frontdoor_env_copy_contract.test.ts`
+  4. `tests/homepage_layout_contract.test.ts`
+  5. `tests/siteforge_command_center_shell.test.tsx`
+  6. `tests/studio_casahud_media_planning_engine.test.ts`
+  7. `tests/studio_casahud_youtube_package_engine.test.ts`
+  8. `tests/walmart/compliance.test.ts`
+- Branch cleanup:
+  - remote source branch deletion: complete (merge removed source branch)
+  - local source branch deletion: complete (`git branch -d sprint-5-1-remove-duplicate-shopify-product-route`)
+- Final local state after merge cleanup:
+  - checked out `main`
+  - fast-forwarded to merge commit `ab244f876dccc5b25b695b29fe867180bf7506dd`
+  - clean working tree confirmed
+- Recommended next sprint:
+  - complete authenticated signed-in QA pass for canonical Product Editor routes (at least two products) and then resume Shopify Sprint 011 stabilization planning.
