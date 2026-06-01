@@ -58,8 +58,8 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix: In progress (`sprint-6-2-2-e-hydration-compliance-fix`, parity diagnostics expansion + ROC123/ROC948 class hydration/compliance hardening).
 - Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation: Completed and merged (`sprint-6-3-firecrawl-supplier-intelligence-extractor`, Firecrawl-backed supplier extraction foundation + normalized package schema/provenance/validation and ROC948 fixture proof; MR `!308`, pipeline `2568207604` success).
 - Shopify Phase 6.3.1 Rocktomic Live Source Parser (Firecrawl cache + PyMuPDF + CSV foundation): Completed and merged (`sprint-6-3-1-rocktomic-live-source-parser`, MR `!310`, pipeline `2568493491` success).
-- Shopify Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction: In progress (`sprint-6-3-2-rocktomic-supplement-facts-panel-extraction`, local implementation complete; MR/pipeline/merge/deploy pending).
-- Current recommended sprint: `Shopify Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction`.
+- Shopify Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction: Completed and merged (`sprint-6-3-2-rocktomic-supplement-facts-panel-extraction`, MR `!312`, pipeline `2568627769` success, production release SHA verified).
+- Current recommended sprint: `Shopify Phase 6.3.3 ROC panel-quality promotion calibration`.
 
 ## Sprint Checkpoint: Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction (Local Branch)
 
@@ -98,6 +98,29 @@ Last updated: 2026-06-01 (UTC)
   - no model call during page render
   - no DB writes/imports/migrations
   - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
+## Sprint Closure Update: Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction
+
+- Sprint/branch: `sprint-6-3-2-rocktomic-supplement-facts-panel-extraction`
+- MR:
+  - `!312`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/312`
+  - source commit SHA: `d1902f38bb80917f41f5d3e3ffde03896c431474`
+  - merge commit SHA: `1b7827c6a8dcff49fc515b7a221e6891e4c9cda4`
+  - MR pipeline `2568627769`: success
+- Branch cleanup:
+  - remote source branch deletion: complete (`--remove-source-branch` on merge)
+  - local source branch deletion: complete
+  - local repository reset: clean `main` synced to `origin/main`
+- Production verification:
+  - `/api/meta/release` shows:
+    - `git_sha=1b7827c6a8dcff49fc515b7a221e6891e4c9cda4`
+    - `build_timestamp=2026-06-01T22:45:10+00:00`
+  - `/api/health`: `200` with `ok=true`
+- Scope result:
+  - deterministic PDF acquisition/cache metadata + expanded PyMuPDF candidate evidence + panel render artifacts
+  - deterministic panel parser + strict structured gating
+  - optional OpenAI vision fallback contract is explicit, gated, and cached
+  - ROC948 remains `needs_review` in current cache evidence path with explicit extraction failure reasons and candidate artifacts (no fabricated structured facts)
 
 ## Sprint Checkpoint: Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation (Local Branch)
 
