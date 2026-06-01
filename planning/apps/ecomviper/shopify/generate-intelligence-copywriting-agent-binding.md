@@ -75,6 +75,25 @@ Phase 6.2 does not introduce:
 - action route: `app/api/ecomviper/pdp-intelligence/route.ts`
 - Product Editor client binding: `app/ecomviper/products/[productId-or-handle]/product-editor-client.tsx`
 
+## Phase 6.2.1 Production Hotfix Addendum
+
+- Signed-in production Generate Intelligence hotfix is implemented without expanding feature scope.
+- PDP intelligence API path must not rely on localhost HTTPS self-proxy behavior.
+  - Product Editor client call stays relative: `/api/ecomviper/pdp-intelligence`
+  - middleware excludes this path from Clerk proxy-context handling to prevent `https://localhost:3001` TLS proxy failures.
+- Plain user-safe failure messages are required:
+  - `AI generation is unavailable right now.`
+  - `AI generation timed out. Try again.`
+  - `Generated response could not be validated.`
+- Failed latest-attempt UX contract:
+  - latest failure message is shown as latest attempt status
+  - prior successful proposal is labeled as previous output when retained
+  - no stale content shown as current successful output
+- Runtime env boundary:
+  - server runtime `OPENAI_API_KEY` is valid fallback for explicit Generate action calls
+  - no client-side secret exposure
+  - no model call during page render
+
 ## Future Phases
 
 - Phase 6.3 may add model-backed agentic visibility scoring/improvement loop.

@@ -298,7 +298,8 @@ describe("ecomviper product editor generate-intelligence review mode", () => {
     });
 
     expect(fetchSpy).toHaveBeenCalled();
-    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/ecomviper/pdp-intelligence");
     expect(String(init.body)).toContain('"action":"generate"');
 
     const reviewPanel = container.querySelector('[data-testid="ecomviper-copywriting-review-panel"]');
@@ -314,5 +315,117 @@ describe("ecomviper product editor generate-intelligence review mode", () => {
       (button) => button.textContent?.trim()
     );
     expect(actions).toEqual(["Generate Intelligence", "Save Changes", "Publish"]);
+  });
+
+  it("shows latest failure while preserving prior proposal as previous output", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            action: "generate",
+            copywriting: {
+              status: "success",
+              safeMessage: "Generated proposal is ready for review.",
+              missingDataNotices: [],
+              complianceWarnings: [],
+              output: {
+                optimizedTitle: "Proposal V1",
+                listingSubtitle: "Daily support",
+                shortDescription: "Short desc",
+                fullDescription: "Full desc",
+                benefitBullets: ["Bullet 1"],
+                ingredientHighlights: [],
+                usageSummary: "Use daily",
+                faqSuggestions: [{ question: "How to use?", answer: "Use daily" }],
+                imageAltTextSuggestions: [{ imageId: "img-1", altText: "Front bottle" }],
+                metaTitle: "Meta title",
+                metaDescription: "Meta description",
+                agenticVisibilitySignals: {
+                  primaryIntents: ["intent"],
+                  comparisonHooks: ["hook"],
+                  trustSignals: ["trust"],
+                  faqCoverage: ["faq"],
+                },
+                complianceWarnings: [],
+                missingDataNotices: [],
+                sourceFactsUsed: [],
+                claimsRejected: [],
+                qualityScores: {
+                  schemaValidity: 100,
+                  factualGrounding: 100,
+                  supplementCompliance: 100,
+                  agenticVisibility: 100,
+                  conversionQuality: 100,
+                  missingDataBehavior: 100,
+                  brandVoice: 100,
+                  sourceUseTransparency: 100,
+                },
+                channelVariants: {
+                  shopify: "shopify",
+                  optibay: null,
+                  optiwal: null,
+                  optizon: null,
+                  genericMarketplace: null,
+                },
+                generationMetadata: {
+                  contractVersion: "phase_6_1",
+                  generatedAt: "2026-06-01T00:00:00.000Z",
+                  sourceMode: "manual",
+                  model: null,
+                },
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            action: "generate",
+            copywriting: {
+              status: "model_error",
+              safeMessage: "AI generation is unavailable right now.",
+              missingDataNotices: [],
+              complianceWarnings: [],
+              output: null,
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      );
+
+    await act(async () => {
+      root.render(<EcomViperProductEditorClient initialState={buildState()} />);
+    });
+
+    const generateButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Generate Intelligence"
+    );
+    expect(generateButton).toBeDefined();
+
+    await act(async () => {
+      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Generated Proposal (Review Only)");
+    expect(container.textContent).toContain("Proposal V1");
+
+    await act(async () => {
+      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[data-testid="ecomviper-generate-latest-error"]')?.textContent).toContain(
+      "AI generation is unavailable right now."
+    );
+    const reviewPanel = container.querySelector('[data-testid="ecomviper-copywriting-review-panel"]');
+    expect(reviewPanel?.textContent).toContain("Previous Generated Proposal (Review Only)");
+    expect(reviewPanel?.textContent).toContain("Latest generation attempt failed. Showing previous proposal.");
+    expect(reviewPanel?.textContent).toContain("Proposal V1");
+    expect(container.textContent).not.toContain("PDP intelligence generate failed.");
   });
 });

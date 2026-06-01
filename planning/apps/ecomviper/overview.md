@@ -258,6 +258,19 @@ Phase 5 contract source:
 - On product open, Product Gallery now defaults to the best front/primary/featured image using deterministic global selection logic.
 - Selection behavior is generic for all products/SKUs:
   - no SKU/handle hardcoding
+
+## Generate Intelligence Production Hotfix (Phase 6.2.1)
+
+- Phase 6.2.1 is a narrow signed-in production hotfix for Generate Intelligence reliability and messaging.
+- Root issue includes incorrect localhost HTTPS proxy behavior on PDP intelligence API path.
+- Canonical Generate Intelligence path remains explicit action-only:
+  - browser/client request: relative `/api/ecomviper/pdp-intelligence`
+- Hotfix preserves Phase 6.2 guardrails:
+  - review-only proposal
+  - no auto-save
+  - no auto-publish
+  - no model call during Product Editor page render
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
   - no product-specific branch logic
 - Thumbnail interaction remains unchanged:
   - merchants can still click any thumbnail to switch the main image

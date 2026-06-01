@@ -194,7 +194,7 @@ export async function runProductCopywritingAgent(input: {
         missingDataNotices: requiredNotices,
         complianceWarnings: [],
         errorCode: "OUTPUT_SCHEMA_MISMATCH",
-        safeMessage: "Generated copy could not be validated.",
+        safeMessage: "Generated response could not be validated.",
         generationMetadata: {
           model: generated.model || model,
           generatedAt: now,
@@ -236,14 +236,16 @@ export async function runProductCopywritingAgent(input: {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    const timeout = error instanceof DOMException && error.name === "AbortError";
+    const timeout =
+      (error instanceof DOMException && error.name === "AbortError")
+      || /timeout|timed out/i.test(message);
     return {
       status: "model_error",
       output: null,
       missingDataNotices: requiredNotices,
       complianceWarnings: [],
       errorCode: timeout ? "MODEL_TIMEOUT" : "MODEL_ERROR",
-      safeMessage: timeout ? "AI generation timed out. Please try again." : "AI generation failed. Please try again.",
+      safeMessage: timeout ? "AI generation timed out. Try again." : "AI generation is unavailable right now.",
       generationMetadata: {
         model,
         generatedAt: now,

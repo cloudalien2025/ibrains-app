@@ -52,7 +52,28 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 5.2 Product Editor Default Front Image: Completed and merged (`sprint-5-2-product-editor-default-front-image`, canonical Product Editor defaults main gallery image to best front/primary/featured candidate for all products).
 - Shopify Phase 6.1 AI Copywriting Agent Contract + Eval Harness: Completed and merged (`sprint-6-1-ai-copywriting-agent-contract-evals`, all-product contract/schema/prompt/eval harness foundation with no live Product Editor or Generate Intelligence behavior change).
 - Shopify Phase 6.2 Generate Intelligence Copywriting Agent Binding: Completed and merged (`sprint-6-2-generate-intelligence-copywriting-agent`, review-only Generate Intelligence model binding using all-product copywriting contract).
-- Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
+- Shopify Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix: In progress (`sprint-6-2-1-generate-intelligence-prod-hotfix`, fix signed-in Generate Intelligence production failure caused by incorrect localhost HTTPS proxy behavior + safe error mapping/UI stale-state handling).
+- Current recommended sprint: `Shopify Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix`.
+
+## Sprint Checkpoint: Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix (Local Branch)
+
+- Branch: `sprint-6-2-1-generate-intelligence-prod-hotfix`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks in progress; MR/pipeline/deploy verification pending.
+- Root issue under active fix:
+  - signed-in Generate Intelligence requests could hit middleware/proxy path that attempted `https://localhost:3001/api/ecomviper/pdp-intelligence`, causing TLS failure (`wrong version number`) against local HTTP service.
+- Implemented hotfix scope on branch:
+  - PDP intelligence API path removed from Clerk proxy-context requirement in `proxy.ts` to avoid localhost HTTPS self-proxy behavior.
+  - Product Editor Generate Intelligence client path remains relative (`/api/ecomviper/pdp-intelligence`) with URL-contract test coverage.
+  - runtime key resolution now supports server-side `OPENAI_API_KEY` fallback when user-scoped stored credential is unavailable.
+  - plain user-safe message mapping tightened for unavailable/timeout/validation/model-error paths.
+  - Product Editor latest-failure behavior now labels previous proposal explicitly after a failed attempt instead of presenting stale output as current.
+- Boundary confirmation:
+  - review-only proposal preserved
+  - no auto-save/publish changes
+  - no model call during Product Editor render
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+  - no supplier writes/import/sync/extraction/OCR changes
 
 ## Sprint Closure Update: Phase 6.2 Generate Intelligence Copywriting Agent Binding
 

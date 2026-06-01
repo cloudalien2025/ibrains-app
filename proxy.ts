@@ -145,10 +145,7 @@ function isEcomviperApiRoute(req: NextRequest): boolean {
 
 function requiresClerkApiContext(req: NextRequest): boolean {
   const pathname = req.nextUrl.pathname;
-  return (
-    pathname.startsWith("/api/ecomviper/settings/") ||
-    pathname === "/api/ecomviper/pdp-intelligence"
-  );
+  return pathname.startsWith("/api/ecomviper/settings/");
 }
 
 function isBrainsApiRoute(req: NextRequest): boolean {

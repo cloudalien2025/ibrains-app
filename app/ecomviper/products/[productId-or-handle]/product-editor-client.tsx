@@ -268,6 +268,8 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
   const [activeTab, setActiveTab] = useState<EditorTab>("overview");
   const [publishStatus] = useState<AsyncStatus>("idle");
   const [copywritingReview, setCopywritingReview] = useState<CopywritingReviewState | null>(null);
+  const [reviewPanelMode, setReviewPanelMode] = useState<"current" | "previous">("current");
+  const [latestGenerateError, setLatestGenerateError] = useState<string | null>(null);
 
   const productReference = initialState.productReference || product.handle || product.productId;
   const selectedMembershipTier = sourceFacts?.selectedMembershipTier ?? supplierProduct?.pricing?.membershipTier ?? null;
@@ -365,10 +367,15 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     });
     const body = (await response.json().catch(() => ({}))) as PdpIntelligenceApiResponse;
     if (!response.ok || !body.ok) {
-      throw new Error(body.error?.message || body.message || `PDP intelligence ${action} failed.`);
+      throw new Error(
+        body.copywriting?.safeMessage
+        || body.error?.message
+        || body.message
+        || (action === "generate" ? "AI generation is unavailable right now." : "Unable to save PDP intelligence right now.")
+      );
     }
     if (action === "save" && !body.intelligence) {
-      throw new Error(body.error?.message || body.message || "PDP intelligence save failed.");
+      throw new Error(body.error?.message || body.message || "Unable to save PDP intelligence right now.");
     }
     return body;
   }
@@ -376,30 +383,49 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
   async function handleGenerate() {
     setGenerationStatus("loading");
     setStatusMessage(null);
+    setLatestGenerateError(null);
     try {
       const body = await postAction("generate");
-      if (body.intelligence) {
-        setRecord(sanitizeShopifyPdpIntelligenceRecord(body.intelligence as ShopifyPdpIntelligenceRecord, baseRecord));
-      }
-      if (body.copywriting) {
-        setCopywritingReview({
-          status: body.copywriting.status || "model_error",
-          output: body.copywriting.output || null,
-          missingDataNotices: body.copywriting.missingDataNotices || [],
-          complianceWarnings: body.copywriting.complianceWarnings || [],
-          safeMessage: body.copywriting.safeMessage || body.message || "Generated proposal is ready for review.",
-        });
-      }
-      setGenerationStatus("success");
-      setStatusMessage(
+      const attemptStatus = body.copywriting?.status || "model_error";
+      const attemptMessage =
         body.copywriting?.safeMessage
-          || (body.generationUnavailable
-            ? "AI generation is unavailable right now."
-            : "Generated proposal is ready for review.")
-      );
-    } catch (error) {
+        || body.message
+        || (attemptStatus === "validation_error"
+          ? "Generated response could not be validated."
+          : "AI generation is unavailable right now.");
+      const isSuccessfulAttempt = attemptStatus === "success" && Boolean(body.copywriting?.output);
+
+      if (isSuccessfulAttempt) {
+        if (body.intelligence) {
+          setRecord(sanitizeShopifyPdpIntelligenceRecord(body.intelligence as ShopifyPdpIntelligenceRecord, baseRecord));
+        }
+        setCopywritingReview({
+          status: attemptStatus,
+          output: body.copywriting?.output || null,
+          missingDataNotices: body.copywriting?.missingDataNotices || [],
+          complianceWarnings: body.copywriting?.complianceWarnings || [],
+          safeMessage: attemptMessage,
+        });
+        setReviewPanelMode("current");
+        setGenerationStatus("success");
+        setStatusMessage(attemptMessage);
+        return;
+      }
+
       setGenerationStatus("error");
-      setStatusMessage(error instanceof Error ? error.message : "PDP intelligence generation failed.");
+      setLatestGenerateError(attemptMessage);
+      setStatusMessage(attemptMessage);
+      if (copywritingReview) {
+        setReviewPanelMode("previous");
+      }
+    } catch (error) {
+      const safeMessage = error instanceof Error ? error.message : "AI generation is unavailable right now.";
+      setGenerationStatus("error");
+      setLatestGenerateError(safeMessage);
+      setStatusMessage(safeMessage);
+      if (copywritingReview) {
+        setReviewPanelMode("previous");
+      }
     }
   }
 
@@ -549,10 +575,20 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
             Source data has changed since this intelligence was generated. Regenerate to use latest source facts.
           </p>
         ) : null}
+        {latestGenerateError ? (
+          <p className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-900" data-testid="ecomviper-generate-latest-error">
+            {latestGenerateError}
+          </p>
+        ) : null}
         {statusMessage ? <p className="mb-2 text-sm text-[#334155]">{statusMessage}</p> : null}
         {copywritingReview ? (
           <article className="mb-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3" data-testid="ecomviper-copywriting-review-panel">
-            <h2 className="text-sm font-semibold text-[#0F172A]">Generated Proposal (Review Only)</h2>
+            <h2 className="text-sm font-semibold text-[#0F172A]">
+              {reviewPanelMode === "previous" ? "Previous Generated Proposal (Review Only)" : "Generated Proposal (Review Only)"}
+            </h2>
+            {reviewPanelMode === "previous" ? (
+              <p className="mt-1 text-xs text-[#475569]">Latest generation attempt failed. Showing previous proposal.</p>
+            ) : null}
             <p className="mt-1 text-xs text-[#475569]">{copywritingReview.safeMessage}</p>
             {copywritingReview.missingDataNotices.length ? (
               <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
