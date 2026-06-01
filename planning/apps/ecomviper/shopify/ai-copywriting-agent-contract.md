@@ -121,3 +121,17 @@ Canonical Product Editor route remains:
   - no auto-save
   - no auto-publish
   - no supplier writes/import/sync/extraction/OCR side effects
+
+## Phase 6.2.1 Production Hotfix Notes
+
+- Runtime OpenAI credential resolution for explicit Generate calls supports:
+  - persisted user-scoped Shopify OpenAI credential when configured
+  - fallback server runtime `OPENAI_API_KEY`
+- Missing key and model/runtime failures return plain user-safe messages only:
+  - `AI generation is unavailable right now.`
+  - `AI generation timed out. Try again.`
+  - `Generated response could not be validated.`
+- Contract boundaries remain unchanged:
+  - no auto-save/publish
+  - no model call during Product Editor render
+  - no duplicate route restoration

@@ -120,6 +120,7 @@ describe("ecomviper copywriting agent runner", () => {
 
     expect(result.status).toBe("validation_error");
     expect(result.errorCode).toBe("OUTPUT_SCHEMA_MISMATCH");
+    expect(result.safeMessage).toBe("Generated response could not be validated.");
   });
 
   it("blocks invented ingredient claims", async () => {
@@ -175,6 +176,42 @@ describe("ecomviper copywriting agent runner", () => {
     });
 
     expect(result.status).toBe("unavailable");
+    expect(result.safeMessage).toBe("AI generation is unavailable right now.");
+  });
+
+  it("maps model timeout errors to plain timeout message", async () => {
+    const modelClient: ProductCopywritingModelClient = {
+      async generateStructuredOutput() {
+        throw new Error("request timed out");
+      },
+    };
+
+    const result = await runProductCopywritingAgent({
+      copywritingInput: baseInput(),
+      openAiApiKey: "sk-test",
+      modelClient,
+    });
+
+    expect(result.status).toBe("model_error");
+    expect(result.errorCode).toBe("MODEL_TIMEOUT");
+    expect(result.safeMessage).toBe("AI generation timed out. Try again.");
+  });
+
+  it("maps unexpected model failures to unavailable message", async () => {
+    const modelClient: ProductCopywritingModelClient = {
+      async generateStructuredOutput() {
+        throw new Error("openai_http_500");
+      },
+    };
+
+    const result = await runProductCopywritingAgent({
+      copywritingInput: baseInput(),
+      openAiApiKey: "sk-test",
+      modelClient,
+    });
+
+    expect(result.status).toBe("model_error");
+    expect(result.errorCode).toBe("MODEL_ERROR");
     expect(result.safeMessage).toBe("AI generation is unavailable right now.");
   });
 

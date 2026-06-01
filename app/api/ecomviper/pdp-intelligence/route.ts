@@ -37,7 +37,7 @@ function asObject(value: unknown): Record<string, unknown> {
 }
 
 function asErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unexpected PDP intelligence error.";
+  return error instanceof Error ? error.message : "AI generation is unavailable right now.";
 }
 
 function toArray(value: string[] | null | undefined): string[] {
@@ -168,7 +168,7 @@ export async function GET(req: NextRequest) {
       intelligence: record,
     });
   } catch (error) {
-    return fail(500, asErrorMessage(error));
+    return fail(500, "Unable to load PDP intelligence right now.");
   }
 }
 
@@ -305,6 +305,10 @@ export async function POST(req: NextRequest) {
           : runResult.safeMessage,
     });
   } catch (error) {
-    return fail(500, asErrorMessage(error));
+    const lowered = asErrorMessage(error).toLowerCase();
+    if (lowered.includes("timeout") || lowered.includes("timed out")) {
+      return fail(500, "AI generation timed out. Try again.", "MODEL_TIMEOUT");
+    }
+    return fail(500, "AI generation is unavailable right now.", "MODEL_ERROR");
   }
 }

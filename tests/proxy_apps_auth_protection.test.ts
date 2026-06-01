@@ -178,6 +178,25 @@ describe("proxy app/auth protection", () => {
     expect(state.clerkProxyCalls).toBe(1);
   });
 
+  it("keeps authenticated /api/ecomviper/pdp-intelligence out of Clerk proxy to avoid localhost TLS rewrites", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const response = await handler(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/pdp-intelligence", {
+        method: "POST",
+        headers: {
+          cookie: `__session=${VALID_SESSION_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ action: "generate", productReference: "test-product" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(state.clerkProxyCalls).toBe(0);
+  });
+
   it("allows internal-token sync requests without requiring a session cookie", async () => {
     process.env.ECOMVIPER_SYNC_INTERNAL_TOKEN = "sync_internal_test_token";
     const mod = await import("@/proxy");

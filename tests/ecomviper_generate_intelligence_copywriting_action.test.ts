@@ -398,6 +398,51 @@ describe("ecomviper generate intelligence copywriting action", () => {
     expect(payload.intelligence?.generation_status).toBe("generation_unavailable");
   });
 
+  it("returns plain timeout message when model request times out", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("request timed out"));
+
+    const { POST } = await import("@/app/api/ecomviper/pdp-intelligence/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/pdp-intelligence", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "generate", productReference: "test-supplement" }),
+      })
+    );
+
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(payload.copywriting?.status).toBe("model_error");
+    expect(payload.copywriting?.safeMessage).toBe("AI generation timed out. Try again.");
+    expect(JSON.stringify(payload)).not.toContain("PDP intelligence generate failed.");
+  });
+
+  it("returns validation-safe message for invalid structured output", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          model: "gpt-4.1-mini",
+          choices: [{ message: { content: JSON.stringify({ optimizedTitle: 123 }) } }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+
+    const { POST } = await import("@/app/api/ecomviper/pdp-intelligence/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/pdp-intelligence", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "generate", productReference: "test-supplement" }),
+      })
+    );
+
+    const payload = await response.json();
+    expect(payload.copywriting?.status).toBe("validation_error");
+    expect(payload.copywriting?.safeMessage).toBe("Generated response could not be validated.");
+    expect(JSON.stringify(payload)).not.toContain("stack");
+  });
+
   it("adds plain COA/Pricing notices without blocking generation and keeps ingredient copy when facts exist", async () => {
     const missingDataState = stateFixture({
       sourceFacts: {

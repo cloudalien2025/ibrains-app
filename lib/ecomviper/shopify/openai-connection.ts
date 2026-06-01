@@ -95,6 +95,11 @@ function asIsoTimestamp(value: unknown): string | null {
   return new Date(parsed).toISOString();
 }
 
+function resolveRuntimeOpenAiApiKey(): string | null {
+  const runtime = process.env.OPENAI_API_KEY?.trim();
+  return runtime ? runtime : null;
+}
+
 function parseConfig(value: unknown): CredentialConfig {
   const record = asRecord(value);
   return {
@@ -351,10 +356,10 @@ export async function deleteShopifyOpenAiConnectionForUser(userId: string): Prom
 export async function getShopifyOpenAiApiKeyForUser(userId: string): Promise<string | null> {
   const credentialUserId = normalizeCredentialUserId(userId);
   const saveSupported = await isShopifyOpenAiStoreAvailable();
-  if (!saveSupported) return null;
+  if (!saveSupported) return resolveRuntimeOpenAiApiKey();
 
   const row = await readCredential(userId);
-  if (!row?.secret_ciphertext) return null;
+  if (!row?.secret_ciphertext) return resolveRuntimeOpenAiApiKey();
 
   try {
     return decryptSecret(row.secret_ciphertext, `${credentialUserId}:${CREDENTIAL_SCOPE}`);
