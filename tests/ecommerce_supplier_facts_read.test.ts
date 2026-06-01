@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShopifyProductRecord } from "@/lib/ecomviper/shopify/shopify-types";
+import {
+  buildRocktomicSupplierIntelligence,
+  loadRocktomicSourceManifest,
+} from "@/lib/ecomviper/suppliers/rocktomic/firecrawl-supplier-intelligence";
+import { toSupplierFactsReadModelProjection } from "@/lib/ecomviper/suppliers/rocktomic/supplier-intelligence-read-model";
 
 const mocks = vi.hoisted(() => ({
   queryEcommerce: vi.fn(),
@@ -199,5 +204,24 @@ describe("supplier facts read model", () => {
 
     expect(result.status).toBe("unavailable");
     expect(result.message).toContain("unavailable");
+  });
+
+  it("maps normalized fixture package to read-model compatibility shape", async () => {
+    const manifest = await loadRocktomicSourceManifest("data/ecomviper/suppliers/rocktomic/sources.json");
+    const built = await buildRocktomicSupplierIntelligence({
+      manifest,
+      skuFilter: ["ROC948"],
+      useFixtures: true,
+      useFirecrawl: false,
+      useCache: true,
+    });
+
+    const projection = toSupplierFactsReadModelProjection(built.package.records[0]);
+    expect(projection.supplementFacts.activeIngredients.length).toBeGreaterThan(0);
+    expect(projection.supplementFacts.active_ingredients.length).toBeGreaterThan(0);
+    expect(projection.supplementFacts.amountPerServing.length).toBeGreaterThan(0);
+    expect(projection.supplementFacts.amount_per_serving.length).toBeGreaterThan(0);
+    expect(projection.sourceFactsUsed.every((entry) => entry.status !== "missing")).toBe(true);
+    expect(projection.sourceFactsUsed.map((entry) => entry.status).includes("image_text_only")).toBe(false);
   });
 });

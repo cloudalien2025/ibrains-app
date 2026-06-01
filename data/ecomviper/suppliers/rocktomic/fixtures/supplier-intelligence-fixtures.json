@@ -1,0 +1,446 @@
+[
+  {
+    "supplierId": "rocktomic",
+    "supplierName": "Rocktomic",
+    "sku": "ROC948",
+    "productName": "Premium Nitric Oxide Gummies",
+    "productType": "supplement",
+    "brand": "Rocktomic",
+    "labelSize": "2.25 x 6.75 in",
+    "containerSize": "4.69 x 2.72 in",
+    "productWeight": "8 oz",
+    "servingSize": "2 Gummies",
+    "servingsPerContainer": 30,
+    "nutrientFacts": [
+      {
+        "name": "Calories",
+        "amount": 25,
+        "dailyValue": null,
+        "unit": "kcal",
+        "rawText": "Calories 25",
+        "provenance": [
+          {
+            "sourceType": "catalog_pdf",
+            "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+            "pageNumber": 120,
+            "extractedAt": "2026-06-01T00:00:00.000Z",
+            "extractor": "fixture_roc948_catalog",
+            "rawSnippet": "Calories 25",
+            "confidence": 0.99
+          }
+        ]
+      },
+      {
+        "name": "Total Carbohydrates",
+        "amount": 6,
+        "dailyValue": null,
+        "unit": "g",
+        "rawText": "Total Carbohydrates 6g",
+        "provenance": [
+          {
+            "sourceType": "catalog_pdf",
+            "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+            "pageNumber": 120,
+            "extractedAt": "2026-06-01T00:00:00.000Z",
+            "extractor": "fixture_roc948_catalog",
+            "rawSnippet": "Total Carbohydrates 6g",
+            "confidence": 0.99
+          }
+        ]
+      },
+      {
+        "name": "Total Sugars",
+        "amount": 5,
+        "dailyValue": null,
+        "unit": "g",
+        "rawText": "Total Sugars 5g (Includes 5g Added Sugars)",
+        "provenance": [
+          {
+            "sourceType": "catalog_pdf",
+            "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+            "pageNumber": 120,
+            "extractedAt": "2026-06-01T00:00:00.000Z",
+            "extractor": "fixture_roc948_catalog",
+            "rawSnippet": "Total Sugars 5g Includes 5g Added Sugars",
+            "confidence": 0.99
+          }
+        ]
+      },
+      {
+        "name": "Sodium",
+        "amount": 7,
+        "dailyValue": null,
+        "unit": "mg",
+        "rawText": "Sodium 7mg",
+        "provenance": [
+          {
+            "sourceType": "catalog_pdf",
+            "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+            "pageNumber": 120,
+            "extractedAt": "2026-06-01T00:00:00.000Z",
+            "extractor": "fixture_roc948_catalog",
+            "rawSnippet": "Sodium 7mg",
+            "confidence": 0.99
+          }
+        ]
+      },
+      {
+        "name": "Vitamin C",
+        "amount": 30,
+        "dailyValue": null,
+        "unit": "mg",
+        "rawText": "Vitamin C 30mg",
+        "provenance": [
+          {
+            "sourceType": "catalog_pdf",
+            "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+            "pageNumber": 120,
+            "extractedAt": "2026-06-01T00:00:00.000Z",
+            "extractor": "fixture_roc948_catalog",
+            "rawSnippet": "Vitamin C 30mg",
+            "confidence": 0.99
+          }
+        ]
+      },
+      {
+        "name": "Niacin",
+        "amount": 10,
+        "dailyValue": null,
+        "unit": "mg",
+        "rawText": "Niacin 10mg",
+        "provenance": [
+          {
+            "sourceType": "catalog_pdf",
+            "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+            "pageNumber": 120,
+            "extractedAt": "2026-06-01T00:00:00.000Z",
+            "extractor": "fixture_roc948_catalog",
+            "rawSnippet": "Niacin 10mg",
+            "confidence": 0.99
+          }
+        ]
+      },
+      {
+        "name": "Vitamin B12",
+        "amount": 100,
+        "dailyValue": null,
+        "unit": "mcg",
+        "rawText": "Vitamin B12 100mcg",
+        "provenance": [
+          {
+            "sourceType": "catalog_pdf",
+            "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+            "pageNumber": 120,
+            "extractedAt": "2026-06-01T00:00:00.000Z",
+            "extractor": "fixture_roc948_catalog",
+            "rawSnippet": "Vitamin B12 100mcg",
+            "confidence": 0.99
+          }
+        ]
+      }
+    ],
+    "activeIngredients": [
+      {
+        "name": "Beet Root Powder Extract",
+        "amount": 100,
+        "unit": "mg",
+        "standardization": null,
+        "rawText": "Beet Root Powder Extract 100mg",
+        "provenance": [
+          {
+            "sourceType": "catalog_pdf",
+            "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+            "pageNumber": 120,
+            "extractedAt": "2026-06-01T00:00:00.000Z",
+            "extractor": "fixture_roc948_catalog",
+            "rawSnippet": "Beet Root Powder Extract 100mg",
+            "confidence": 0.99
+          }
+        ]
+      },
+      {
+        "name": "Grape Seed Extract",
+        "amount": 50,
+        "unit": "mg",
+        "standardization": null,
+        "rawText": "Grape Seed Extract 50mg",
+        "provenance": [
+          {
+            "sourceType": "catalog_pdf",
+            "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+            "pageNumber": 120,
+            "extractedAt": "2026-06-01T00:00:00.000Z",
+            "extractor": "fixture_roc948_catalog",
+            "rawSnippet": "Grape Seed Extract 50mg",
+            "confidence": 0.99
+          }
+        ]
+      },
+      {
+        "name": "L-Arginine",
+        "amount": 25,
+        "unit": "mg",
+        "standardization": null,
+        "rawText": "L-Arginine 25mg",
+        "provenance": [
+          {
+            "sourceType": "catalog_pdf",
+            "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+            "pageNumber": 120,
+            "extractedAt": "2026-06-01T00:00:00.000Z",
+            "extractor": "fixture_roc948_catalog",
+            "rawSnippet": "L-Arginine 25mg",
+            "confidence": 0.99
+          }
+        ]
+      },
+      {
+        "name": "L-Citrulline",
+        "amount": 25,
+        "unit": "mg",
+        "standardization": null,
+        "rawText": "L-Citrulline 25mg",
+        "provenance": [
+          {
+            "sourceType": "catalog_pdf",
+            "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+            "pageNumber": 120,
+            "extractedAt": "2026-06-01T00:00:00.000Z",
+            "extractor": "fixture_roc948_catalog",
+            "rawSnippet": "L-Citrulline 25mg",
+            "confidence": 0.99
+          }
+        ]
+      }
+    ],
+    "otherIngredients": [
+      "Pectin",
+      "Citric Acid"
+    ],
+    "suggestedUse": "Take 2 gummies daily.",
+    "warnings": "Keep out of reach of children.",
+    "dietaryAttributes": [
+      "Dietary Supplement"
+    ],
+    "certifications": [
+      "GMP",
+      "Lab Tested"
+    ],
+    "manufacturingClaims": [
+      "Made in USA"
+    ],
+    "coaUrl": "https://rocktomicplatform.blob.core.windows.net/roc948/coa.pdf",
+    "labelTemplateUrl": "https://rocktomicplatform.blob.core.windows.net/roc948/ROC948.ai",
+    "mockupUrl": "https://rocktomicplatform.blob.core.windows.net/roc948/ROC948.tif",
+    "imageUrls": [
+      "https://rocktomicplatform.blob.core.windows.net/roc948/hero.png"
+    ],
+    "pricing": {
+      "wholesaleCost": 10.49,
+      "msrp": 29.99,
+      "currency": "USD",
+      "sourceStatus": "structured",
+      "provenance": [
+        {
+          "sourceType": "pricing_sheet",
+          "sourceUrl": "https://docs.google.com/spreadsheets/d/15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU",
+          "pageNumber": null,
+          "extractedAt": "2026-06-01T00:00:00.000Z",
+          "extractor": "fixture_pricing_sheet",
+          "rawSnippet": "ROC948 wholesale 10.49 msrp 29.99",
+          "confidence": 0.97
+        }
+      ]
+    },
+    "inventory": {
+      "status": "in_stock",
+      "quantityText": "IN STOCK",
+      "sourceStatus": "structured",
+      "provenance": [
+        {
+          "sourceType": "inventory_sheet",
+          "sourceUrl": "https://docs.google.com/spreadsheets/d/1oOjqXsaCAjSOkA1lXrasNtUVtrsxvyxcFcolD8n6YXY",
+          "pageNumber": null,
+          "extractedAt": "2026-06-01T00:00:00.000Z",
+          "extractor": "fixture_inventory_sheet",
+          "rawSnippet": "ROC948 IN STOCK",
+          "confidence": 0.97
+        }
+      ]
+    },
+    "shippingPolicy": {
+      "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Order-Refund-Policy-Template.docx",
+      "summary": "Standard supplier shipping policy applies.",
+      "provenance": [
+        {
+          "sourceType": "policy_page",
+          "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Order-Refund-Policy-Template.docx",
+          "pageNumber": null,
+          "extractedAt": "2026-06-01T00:00:00.000Z",
+          "extractor": "fixture_policy_doc",
+          "rawSnippet": "Order and refund policy template",
+          "confidence": 0.8
+        }
+      ]
+    },
+    "returnPolicy": {
+      "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Order-Refund-Policy-Template.docx",
+      "summary": "Returns accepted per supplier policy.",
+      "provenance": [
+        {
+          "sourceType": "policy_page",
+          "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Order-Refund-Policy-Template.docx",
+          "pageNumber": null,
+          "extractedAt": "2026-06-01T00:00:00.000Z",
+          "extractor": "fixture_policy_doc",
+          "rawSnippet": "Returns accepted per policy",
+          "confidence": 0.8
+        }
+      ]
+    },
+    "sourceStatus": "structured",
+    "missingFields": [],
+    "confidence": 0.96,
+    "provenance": [
+      {
+        "sourceType": "catalog_pdf",
+        "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+        "pageNumber": 120,
+        "extractedAt": "2026-06-01T00:00:00.000Z",
+        "extractor": "fixture_roc948_catalog",
+        "rawSnippet": "ROC948 Premium Nitric Oxide Gummies",
+        "confidence": 0.99
+      },
+      {
+        "sourceType": "label_template",
+        "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/roc948/ROC948.ai",
+        "pageNumber": null,
+        "extractedAt": "2026-06-01T00:00:00.000Z",
+        "extractor": "fixture_template_page",
+        "rawSnippet": "ROC948 template link",
+        "confidence": 0.95
+      },
+      {
+        "sourceType": "coa",
+        "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/roc948/coa.pdf",
+        "pageNumber": null,
+        "extractedAt": "2026-06-01T00:00:00.000Z",
+        "extractor": "fixture_catalog_link",
+        "rawSnippet": "COA link present",
+        "confidence": 0.93
+      }
+    ]
+  },
+  {
+    "supplierId": "rocktomic",
+    "supplierName": "Rocktomic",
+    "sku": "ROC123",
+    "productName": "Oxy Burn Thermogenic Support",
+    "productType": "supplement",
+    "brand": "Rocktomic",
+    "labelSize": null,
+    "containerSize": null,
+    "productWeight": null,
+    "servingSize": null,
+    "servingsPerContainer": null,
+    "nutrientFacts": [],
+    "activeIngredients": [],
+    "otherIngredients": [],
+    "suggestedUse": null,
+    "warnings": null,
+    "dietaryAttributes": [],
+    "certifications": [],
+    "manufacturingClaims": [],
+    "coaUrl": null,
+    "labelTemplateUrl": null,
+    "mockupUrl": null,
+    "imageUrls": [],
+    "pricing": {
+      "wholesaleCost": null,
+      "msrp": null,
+      "currency": "USD",
+      "sourceStatus": "missing",
+      "provenance": [
+        {
+          "sourceType": "manual_fixture",
+          "sourceUrl": "fixture://roc123",
+          "pageNumber": null,
+          "extractedAt": "2026-06-01T00:00:00.000Z",
+          "extractor": "fixture",
+          "rawSnippet": "No structured pricing yet",
+          "confidence": 0.7
+        }
+      ]
+    },
+    "inventory": {
+      "status": null,
+      "quantityText": null,
+      "sourceStatus": "missing",
+      "provenance": [
+        {
+          "sourceType": "manual_fixture",
+          "sourceUrl": "fixture://roc123",
+          "pageNumber": null,
+          "extractedAt": "2026-06-01T00:00:00.000Z",
+          "extractor": "fixture",
+          "rawSnippet": "No structured inventory yet",
+          "confidence": 0.7
+        }
+      ]
+    },
+    "shippingPolicy": {
+      "sourceUrl": null,
+      "summary": null,
+      "provenance": [
+        {
+          "sourceType": "manual_fixture",
+          "sourceUrl": "fixture://roc123",
+          "pageNumber": null,
+          "extractedAt": "2026-06-01T00:00:00.000Z",
+          "extractor": "fixture",
+          "rawSnippet": "Policy not mapped",
+          "confidence": 0.6
+        }
+      ]
+    },
+    "returnPolicy": {
+      "sourceUrl": null,
+      "summary": null,
+      "provenance": [
+        {
+          "sourceType": "manual_fixture",
+          "sourceUrl": "fixture://roc123",
+          "pageNumber": null,
+          "extractedAt": "2026-06-01T00:00:00.000Z",
+          "extractor": "fixture",
+          "rawSnippet": "Policy not mapped",
+          "confidence": 0.6
+        }
+      ]
+    },
+    "sourceStatus": "image_text_only",
+    "missingFields": [
+      "servingSize",
+      "servingsPerContainer",
+      "activeIngredients",
+      "nutrientFacts",
+      "coaUrl",
+      "labelTemplateUrl",
+      "mockupUrl",
+      "pricing.wholesaleCost",
+      "inventory.status"
+    ],
+    "confidence": 0.62,
+    "provenance": [
+      {
+        "sourceType": "catalog_pdf",
+        "sourceUrl": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf",
+        "pageNumber": 97,
+        "extractedAt": "2026-06-01T00:00:00.000Z",
+        "extractor": "fixture_roc123_catalog",
+        "rawSnippet": "ROC123 image/text panel only",
+        "confidence": 0.55
+      }
+    ]
+  }
+]
