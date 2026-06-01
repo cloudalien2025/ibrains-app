@@ -309,6 +309,22 @@ Runtime safety remains unchanged:
 - no supplier DB write/import/migration side effects
 - no model/vision call in parser path
 
+## Phase 6.3.2 Panel Extraction Controls (IMPLEMENTED_ONLY)
+
+Supplier intelligence CLI now supports explicit panel-evidence workflows without changing route/runtime behavior:
+
+- `--render-pdf-pages`: render candidate catalog pages for review
+- `--extract-panels`: run deterministic supplement-facts parsing from candidate page text
+- `--use-openai-vision`: optional fallback only when explicitly requested and env-enabled
+- `--write-candidates` / `--candidate-dir`: write debug artifacts + metadata in safe candidate directories
+
+Architecture guarantees preserved:
+
+- no source extraction during Product Editor page render
+- no default OpenAI vision path in tests or route render
+- no DB writes/imports/migrations in this phase
+- extraction remains CLI/operator lane only
+
 ## Product Editor Shared DB Read Binding (Phase 5)
 
 Phase 5 adds read-only supplier facts visibility in Shopify Product Editor from shared ecommerce DB rows.

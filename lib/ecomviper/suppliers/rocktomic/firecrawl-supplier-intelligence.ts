@@ -7,8 +7,15 @@ import {
 } from "@/lib/ecomviper/suppliers/rocktomic/firecrawl-catalog-markdown-parser";
 import {
   extractPdfEvidence,
-  resolveCatalogPdfPath,
+  resolveOrAcquireCatalogPdfPath,
 } from "@/lib/ecomviper/suppliers/rocktomic/pdf-evidence";
+import {
+  extractSupplementFactsViaOpenAiVision,
+} from "@/lib/ecomviper/suppliers/rocktomic/openai-vision-supplement-facts";
+import {
+  extractSupplementFactsDeterministic,
+  isStructuredSupplementFactsValid,
+} from "@/lib/ecomviper/suppliers/rocktomic/supplement-facts-panel";
 import {
   calculateRecordSourceStatus,
   ensureUniqueMissingFields,
@@ -56,6 +63,12 @@ export interface BuildSupplierIntelligenceOptions {
   useFixtures: boolean;
   useFirecrawl: boolean;
   useCache: boolean;
+  extractPanels?: boolean;
+  renderPdfPages?: boolean;
+  useOpenAiVision?: boolean;
+  writeCandidates?: boolean;
+  candidateDir?: string | null;
+  debugPanel?: boolean;
 }
 
 export interface BuildSupplierIntelligenceResult {
@@ -67,6 +80,7 @@ export interface BuildSupplierIntelligenceResult {
   firecrawlSource: "live" | "cache" | "fixture" | "not_applicable";
   reason?: "ok" | "sku_not_found" | "parser_no_record_boundary" | "source_unavailable";
   logs: string[];
+  candidateArtifacts?: Array<{ sku: string; renderedImagePath: string | null; panelImagePath: string | null; pageNumber: number | null }>;
 }
 
 interface FixtureRecord extends NormalizedSupplierIntelligenceRecord {}
@@ -284,6 +298,7 @@ async function buildFromFirecrawl(options: BuildSupplierIntelligenceOptions): Pr
               amount: parsed.amount,
               unit: parsed.unit,
               standardization: null,
+              confidence: 0.84,
               provenance: [sharedProvenance],
             };
           })
@@ -301,6 +316,7 @@ async function buildFromFirecrawl(options: BuildSupplierIntelligenceOptions): Pr
               amount: parsed.amount,
               dailyValue: null,
               unit: parsed.unit,
+              confidence: 0.84,
               provenance: [sharedProvenance],
             };
           })
@@ -387,13 +403,33 @@ async function buildFromFirecrawl(options: BuildSupplierIntelligenceOptions): Pr
     };
   });
 
-  const pdfPath = await resolveCatalogPdfPath();
-  if (pdfPath && normalizedRecords.length > 0) {
+  const writeCandidateArtifacts = Boolean(options.writeCandidates && options.candidateDir);
+  const panelRenderDirRoot = options.candidateDir
+    ? path.join(options.candidateDir, "panel-candidates")
+    : path.join(process.cwd(), "artifacts/ecomviper/suppliers/rocktomic/panel-candidates");
+  const canDownloadPdfLive = process.env.NODE_ENV !== "test";
+  const pdfResolution = await resolveOrAcquireCatalogPdfPath({
+    sourceUrl: catalog.url,
+    allowLiveDownload: canDownloadPdfLive,
+  });
+  const candidateArtifacts: Array<{ sku: string; renderedImagePath: string | null; panelImagePath: string | null; pageNumber: number | null }> = [];
+
+  if (pdfResolution.pdfPath && normalizedRecords.length > 0) {
+    const pdfPath = pdfResolution.pdfPath;
     const enriched = await Promise.all(
       normalizedRecords.map(async (record) => {
+        const renderDir = path.join(panelRenderDirRoot, record.sku);
+        if (writeCandidateArtifacts) {
+          await fs.mkdir(renderDir, { recursive: true });
+        }
         const evidence = await extractPdfEvidence({
           pdfPath,
           query: record.sku || String(record.productName || ""),
+          sku: record.sku,
+          productName: record.productName,
+          renderPages: Boolean(options.renderPdfPages || options.extractPanels || options.useOpenAiVision),
+          cropPanel: Boolean(options.extractPanels || options.useOpenAiVision),
+          renderDir: writeCandidateArtifacts ? renderDir : null,
         });
         if (!evidence.found) {
           return {
@@ -406,18 +442,20 @@ async function buildFromFirecrawl(options: BuildSupplierIntelligenceOptions): Pr
           };
         }
 
-        const snippet = evidence.textSnippets[0]?.text || `PyMuPDF evidence for ${record.sku}`;
+        const firstCandidate = evidence.candidatePages[0] || null;
+        const snippet = firstCandidate?.text || evidence.textSnippets[0]?.text || `PyMuPDF evidence for ${record.sku}`;
         const evidenceProvenance = createProvenance({
           sourceType: "catalog_pdf",
           sourceUrl: catalog.url,
-          pageNumber: evidence.pageNumbers[0] ?? null,
+          pageNumber: firstCandidate?.pageNumber ?? evidence.pageNumbers[0] ?? null,
           rawSnippet: snippet,
           confidence: 0.84,
         });
-        const coaLink = evidence.links.find((entry) => /coa|analysis|certificate/i.test(entry.uri))?.uri || null;
-        const templateLink = evidence.links.find((entry) => /templates\\.html|\\.ai(?:\\?|$)|\\.tif(?:\\?|$)/i.test(entry.uri))?.uri || null;
+        const linkPool = firstCandidate?.links || evidence.links.map((entry) => entry.uri);
+        const coaLink = linkPool.find((entry) => /coa|analysis|certificate/i.test(entry)) || null;
+        const templateLink = linkPool.find((entry) => /templates\\.html|\\.ai(?:\\?|$)|\\.tif(?:\\?|$)/i.test(entry)) || null;
 
-        return {
+        let nextRecord: NormalizedSupplierIntelligenceRecord = {
           ...record,
           coaUrl: record.coaUrl || coaLink,
           labelTemplateUrl: record.labelTemplateUrl || templateLink,
@@ -428,6 +466,112 @@ async function buildFromFirecrawl(options: BuildSupplierIntelligenceOptions): Pr
           ]),
           provenance: [...record.provenance, evidenceProvenance],
         };
+
+        const deterministic = extractSupplementFactsDeterministic({
+          text: snippet,
+          provenance: [evidenceProvenance],
+          extractionMethod: "deterministic_pdf_text",
+        });
+
+        const deterministicValid = isStructuredSupplementFactsValid({
+          sku: nextRecord.sku,
+          productName: nextRecord.productName,
+          servingSize: deterministic.servingSize,
+          servingsPerContainer: deterministic.servingsPerContainer,
+          nutrientFacts: deterministic.nutrientFacts,
+          activeIngredients: deterministic.activeIngredients,
+        });
+
+        if (deterministicValid.valid && deterministic.confidence >= 0.8) {
+          nextRecord = {
+            ...nextRecord,
+            servingSize: deterministic.servingSize,
+            servingsPerContainer: deterministic.servingsPerContainer,
+            nutrientFacts: deterministic.nutrientFacts,
+            activeIngredients: deterministic.activeIngredients,
+            otherIngredients: deterministic.otherIngredients,
+            missingFields: ensureUniqueMissingFields([
+              ...nextRecord.missingFields.filter((field) =>
+                field !== "servingSize"
+                && field !== "servingsPerContainer"
+                && field !== "nutrientFacts"
+                && field !== "activeIngredients"
+                && field !== "otherIngredients"
+              ),
+              ...deterministic.missingFields.filter((field) => !["nutrientFacts", "activeIngredients"].includes(field)),
+            ]),
+            extractionWarnings: ensureUniqueMissingFields([
+              ...(nextRecord.extractionWarnings || []),
+              ...deterministic.warnings,
+            ]),
+            confidence: Math.max(nextRecord.confidence, deterministic.confidence),
+          };
+        } else {
+          nextRecord = {
+            ...nextRecord,
+            sourceStatus: "needs_review",
+            extractionWarnings: ensureUniqueMissingFields([
+              ...(nextRecord.extractionWarnings || []),
+              ...deterministic.warnings,
+              ...deterministicValid.errors.map((entry) => `panel_validation_${entry}`),
+            ]),
+            missingFields: ensureUniqueMissingFields([
+              ...nextRecord.missingFields,
+              ...deterministic.missingFields,
+            ]),
+          };
+        }
+
+        if (options.useOpenAiVision) {
+            const vision = await extractSupplementFactsViaOpenAiVision({
+              enabledByCli: true,
+              imagePath: firstCandidate?.panelImagePath || firstCandidate?.renderedImagePath || null,
+              sku: nextRecord.sku,
+              productName: nextRecord.productName,
+              provenance: [evidenceProvenance],
+            });
+            if (vision.status === "success" && vision.extraction) {
+              nextRecord = {
+                ...nextRecord,
+                servingSize: vision.extraction.servingSize,
+                servingsPerContainer: vision.extraction.servingsPerContainer,
+                nutrientFacts: vision.extraction.nutrientFacts,
+                activeIngredients: vision.extraction.activeIngredients,
+                otherIngredients: vision.extraction.otherIngredients,
+                missingFields: ensureUniqueMissingFields(
+                  nextRecord.missingFields.filter((field) =>
+                    field !== "servingSize"
+                    && field !== "servingsPerContainer"
+                    && field !== "nutrientFacts"
+                    && field !== "activeIngredients"
+                  )
+                ),
+                extractionWarnings: ensureUniqueMissingFields([
+                  ...(nextRecord.extractionWarnings || []),
+                  ...vision.extraction.warnings,
+                ]),
+                confidence: Math.max(nextRecord.confidence, vision.extraction.confidence),
+              };
+            } else if (vision.status !== "skipped") {
+              nextRecord = {
+                ...nextRecord,
+                sourceStatus: "needs_review",
+                extractionWarnings: ensureUniqueMissingFields([
+                  ...(nextRecord.extractionWarnings || []),
+                  `vision_${vision.reason}`,
+                ]),
+              };
+            }
+        }
+
+        candidateArtifacts.push({
+          sku: record.sku,
+          renderedImagePath: firstCandidate?.renderedImagePath || null,
+          panelImagePath: firstCandidate?.panelImagePath || null,
+          pageNumber: firstCandidate?.pageNumber || null,
+        });
+
+        return nextRecord;
       })
     );
     normalizedRecords = enriched.map((record) => {
@@ -441,7 +585,11 @@ async function buildFromFirecrawl(options: BuildSupplierIntelligenceOptions): Pr
   } else if (normalizedRecords.length > 0) {
     normalizedRecords = normalizedRecords.map((record) => ({
       ...record,
-      extractionWarnings: ensureUniqueMissingFields([...(record.extractionWarnings || []), "pdf_source_unavailable"]),
+      extractionWarnings: ensureUniqueMissingFields([
+        ...(record.extractionWarnings || []),
+        ...pdfResolution.errors.map((entry) => `pdf_source_${entry}`),
+        ...(pdfResolution.warnings.length > 0 ? pdfResolution.warnings : ["pdf_source_unavailable"]),
+      ]),
     }));
   }
 
@@ -490,11 +638,14 @@ async function buildFromFirecrawl(options: BuildSupplierIntelligenceOptions): Pr
     reason: normalizedRecords.length > 0 ? "ok" : markdownParse.reason,
     logs: [
       `firecrawl_source=${scrape.source}`,
+      `pdf_source=${pdfResolution.acquisitionSource}`,
+      ...(pdfResolution.sourceHash ? [`pdf_source_hash=${pdfResolution.sourceHash}`] : []),
       `records_extracted=${normalizedRecords.length}`,
       `json_records_extracted=${jsonRecords.length}`,
       `markdown_records_extracted=${markdownParse.records.length}`,
       ...(markdownParse.warnings || []).map((entry) => `warning:${entry}`),
     ],
+    candidateArtifacts,
   };
 }
 

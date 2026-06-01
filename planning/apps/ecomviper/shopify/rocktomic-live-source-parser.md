@@ -118,3 +118,20 @@ Validation summary now includes:
 - no DB writes/imports/migrations
 - no OCR/vision default extraction path
 - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
+## Phase 6.3.2 Addendum (Panel Extraction Layer)
+
+Phase 6.3.2 extends this parser baseline with page-level panel extraction support:
+
+- deterministic catalog PDF acquisition/cache helper
+- PyMuPDF candidate page JSON enriched with:
+  - `pdfPageIndex`
+  - `catalogPageLabel`
+  - page render path/panel crop path when enabled
+- strict deterministic supplement-facts parsing + validation gate before `structured` promotion
+- optional OpenAI vision fallback remains explicit (`--use-openai-vision`) and env-gated
+
+Current ROC948 cache behavior after addendum remains safe:
+- record is preserved (`records_extracted=1`)
+- candidate page evidence/artifacts are produced
+- `sourceStatus=needs_review` is retained when panel facts cannot be confidently proven from evidence

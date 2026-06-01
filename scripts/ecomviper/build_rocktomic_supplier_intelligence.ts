@@ -21,6 +21,12 @@ interface CliOptions {
   reportOnly: boolean;
   verbose: boolean;
   debugSnippet: boolean;
+  extractPanels: boolean;
+  renderPdfPages: boolean;
+  useOpenAiVision: boolean;
+  writeCandidates: boolean;
+  candidateDir: string | null;
+  debugPanel: boolean;
 }
 
 const ROOT_DIR = process.cwd();
@@ -50,6 +56,12 @@ function parseCli(argv: string[]): CliOptions {
     reportOnly: has("--report-only"),
     verbose: has("--verbose"),
     debugSnippet: has("--debug-snippet"),
+    extractPanels: has("--extract-panels"),
+    renderPdfPages: has("--render-pdf-pages"),
+    useOpenAiVision: has("--use-openai-vision"),
+    writeCandidates: has("--write-candidates"),
+    candidateDir: valueAfter("--candidate-dir"),
+    debugPanel: has("--debug-panel"),
   };
 }
 
@@ -67,6 +79,12 @@ function usage(): string {
     "  --report-only",
     "  --verbose",
     "  --debug-snippet",
+    "  --extract-panels",
+    "  --render-pdf-pages",
+    "  --use-openai-vision",
+    "  --write-candidates",
+    "  --candidate-dir <path>",
+    "  --debug-panel",
   ].join("\n");
 }
 
@@ -85,6 +103,17 @@ function print(line: string): void {
   process.stdout.write(`${line}\n`);
 }
 
+function resolveSafeCandidateDir(rootDir: string, requestedPath: string | null, timestamp: string): string {
+  const fallback = path.join(rootDir, "artifacts/ecomviper/suppliers/rocktomic/candidates", timestamp);
+  if (!requestedPath) return fallback;
+  const resolved = path.resolve(rootDir, requestedPath);
+  const relative = path.relative(rootDir, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("candidate-dir must resolve inside repository root.");
+  }
+  return resolved;
+}
+
 async function main(): Promise<void> {
   const options = parseCli(process.argv.slice(2));
 
@@ -98,6 +127,11 @@ async function main(): Promise<void> {
 
   const manifest = await loadRocktomicSourceManifest(SOURCES_PATH);
 
+  const effectiveExtractPanels = options.extractPanels || options.useOpenAiVision;
+  const writeCandidateArtifacts = options.writeCandidates || options.debugPanel || options.renderPdfPages || effectiveExtractPanels;
+  const runId = timestampId();
+  const resolvedCandidateDir = resolveSafeCandidateDir(ROOT_DIR, options.candidateDir, runId);
+
   const skuFilter = options.all ? null : [options.sku as string];
   const result = await buildRocktomicSupplierIntelligence({
     manifest,
@@ -105,6 +139,12 @@ async function main(): Promise<void> {
     useFixtures: options.fixtures || !options.useFirecrawl,
     useFirecrawl: options.useFirecrawl,
     useCache: options.useCache,
+    extractPanels: effectiveExtractPanels,
+    renderPdfPages: options.renderPdfPages,
+    useOpenAiVision: options.useOpenAiVision,
+    writeCandidates: writeCandidateArtifacts,
+    candidateDir: resolvedCandidateDir,
+    debugPanel: options.debugPanel,
   });
 
   const validation = validateSupplierIntelligencePackage(result.package);
@@ -118,6 +158,9 @@ async function main(): Promise<void> {
       cache: options.useCache,
       writePackage: options.writePackage,
       reportOnly: options.reportOnly,
+      extractPanels: effectiveExtractPanels,
+      renderPdfPages: options.renderPdfPages,
+      useOpenAiVision: options.useOpenAiVision,
     },
     sourceOrigin: result.sourceOrigin,
     firecrawlSource: result.firecrawlSource,
@@ -134,6 +177,7 @@ async function main(): Promise<void> {
     provenanceMissingCount: validation.provenanceMissingCount,
     linkExtractionMissingCount: validation.linkExtractionMissingCount,
     supplementFactsIncompleteCount: validation.supplementFactsIncompleteCount,
+    candidatePages: result.candidateArtifacts?.length || 0,
     logs: result.logs,
   };
 
@@ -148,6 +192,7 @@ async function main(): Promise<void> {
     print(`sku=${record.sku}`);
     print(`productName=${record.productName || "unknown"}`);
     print(`sourceStatus=${record.sourceStatus}`);
+    print(`supplementFactsExtractionMethod=${(record.extractionWarnings || []).some((entry) => entry.startsWith("vision_")) ? "openai_vision" : "deterministic_pdf_text_or_markdown"}`);
     print(`missingFields=${record.missingFields.join("|") || "none"}`);
     print(`extractionWarnings=${(record.extractionWarnings || []).join("|") || "none"}`);
     print(
@@ -158,11 +203,27 @@ async function main(): Promise<void> {
         `debug_snippet=${record.provenance.map((entry) => entry.rawSnippet).filter(Boolean).slice(0, 1).join(" ").slice(0, 900)}`
       );
     }
+    const artifact = result.candidateArtifacts?.find((entry) => entry.sku === record.sku);
+    if (artifact) {
+      print(`candidatePages=${artifact.pageNumber != null ? 1 : 0}`);
+      print(`renderedImagePath=${artifact.renderedImagePath || "none"}`);
+      print(`panelImagePath=${artifact.panelImagePath || "none"}`);
+    }
   }
   if (options.verbose) {
     print(`validation: ${JSON.stringify(validation)}`);
   }
   print(`summary: ${JSON.stringify(summary)}`);
+
+  if (writeCandidateArtifacts && result.candidateArtifacts && result.candidateArtifacts.length > 0) {
+    await fs.mkdir(resolvedCandidateDir, { recursive: true });
+    await writeJson(path.join(resolvedCandidateDir, "candidate-metadata.json"), {
+      generatedAt: new Date().toISOString(),
+      selectedSku: options.sku,
+      artifacts: result.candidateArtifacts,
+    });
+    print(`candidate_artifacts=${resolvedCandidateDir}`);
+  }
 
   const shouldWrite = !options.dryRun && !options.noWrite && (options.writePackage || !options.reportOnly);
   if (!shouldWrite) {

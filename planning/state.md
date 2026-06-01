@@ -58,7 +58,46 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix: In progress (`sprint-6-2-2-e-hydration-compliance-fix`, parity diagnostics expansion + ROC123/ROC948 class hydration/compliance hardening).
 - Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation: Completed and merged (`sprint-6-3-firecrawl-supplier-intelligence-extractor`, Firecrawl-backed supplier extraction foundation + normalized package schema/provenance/validation and ROC948 fixture proof; MR `!308`, pipeline `2568207604` success).
 - Shopify Phase 6.3.1 Rocktomic Live Source Parser (Firecrawl cache + PyMuPDF + CSV foundation): Completed and merged (`sprint-6-3-1-rocktomic-live-source-parser`, MR `!310`, pipeline `2568493491` success).
-- Current recommended sprint: `Shopify Phase 6.3.2 Firecrawl Candidate Promotion + Expanded Multi-SKU Calibration`.
+- Shopify Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction: In progress (`sprint-6-3-2-rocktomic-supplement-facts-panel-extraction`, local implementation complete; MR/pipeline/merge/deploy pending).
+- Current recommended sprint: `Shopify Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction`.
+
+## Sprint Checkpoint: Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction (Local Branch)
+
+- Branch: `sprint-6-3-2-rocktomic-supplement-facts-panel-extraction`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: `IMPLEMENTED_ONLY`
+- Scope implemented:
+  - deterministic catalog PDF acquisition/cache metadata:
+    - `lib/ecomviper/suppliers/rocktomic/pdf-source-cache.ts`
+  - expanded PyMuPDF evidence JSON + optional render/panel crop:
+    - `scripts/ecomviper/pdf_evidence_extract.py`
+    - `lib/ecomviper/suppliers/rocktomic/pdf-evidence.ts`
+  - deterministic supplement-facts parser + validator:
+    - `lib/ecomviper/suppliers/rocktomic/supplement-facts-panel.ts`
+  - optional/gated/cached OpenAI vision fallback contract:
+    - `lib/ecomviper/suppliers/rocktomic/openai-vision-supplement-facts.ts`
+  - extractor integration + source-status gating updates:
+    - `lib/ecomviper/suppliers/rocktomic/firecrawl-supplier-intelligence.ts`
+    - `lib/ecomviper/suppliers/rocktomic/supplier-intelligence-schema.ts`
+  - CLI flags/candidate artifact controls:
+    - `scripts/ecomviper/build_rocktomic_supplier_intelligence.ts`
+- Local ROC948 cache proof:
+  - `records_extracted=1`, `selected_sku=ROC948`
+  - candidate page evidence resolved (`page-76`) with optional rendered artifact output
+  - deterministic panel parser executes and records explicit validation failures when panel facts are incomplete
+  - current local outcome remains `sourceStatus=needs_review` with no fabricated facts
+- Focused tests added/passing:
+  - `tests/ecomviper_rocktomic_pdf_source_cache.test.ts`
+  - `tests/ecomviper_rocktomic_supplement_facts_panel.test.ts`
+  - `tests/ecomviper_rocktomic_openai_vision_gating.test.ts`
+  - `tests/ecomviper_rocktomic_supplier_intelligence_cli_flags.test.ts`
+  - existing extractor/pdf/parser/schema suites updated and passing
+- Boundaries preserved:
+  - no Product Editor behavior change
+  - no Product Editor auto-save/auto-publish
+  - no model call during page render
+  - no DB writes/imports/migrations
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
 ## Sprint Checkpoint: Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation (Local Branch)
 

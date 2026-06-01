@@ -130,3 +130,19 @@ Boundaries preserved:
 - no Product Editor render-time source fetch
 - no DB writes/imports/migrations
 - no OCR/vision default extraction path
+
+## Phase 6.3.2 Supplement Facts Panel Extraction Update (IMPLEMENTED_ONLY)
+
+Added panel-focused extraction lane on top of Firecrawl catalog acquisition:
+
+- deterministic catalog PDF acquisition/cache metadata (`sourceUrl`, hash, file size, downloadedAt, source version)
+- expanded PyMuPDF page evidence with candidate page index/label, links, and optional rendered page/panel artifacts
+- deterministic supplement-facts parser + strict structured promotion validator
+- explicit extraction warnings when evidence is incomplete (`panel_validation_*`, incomplete parse warnings)
+- optional OpenAI vision fallback is now explicit, gated, and cached (`--use-openai-vision` + env enable)
+- CLI panel flags and candidate artifact write controls added
+
+Current local ROC948 outcome in cache mode:
+- extraction now proves page-level candidate evidence and artifacts
+- structured promotion remains blocked on incomplete panel evidence in current cache source text
+- `sourceStatus` remains `needs_review` with precise failure reasons (no fabricated facts)

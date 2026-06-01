@@ -31,6 +31,7 @@ export interface SupplierNutrientFact {
   dailyValue: string | null;
   unit: string | null;
   rawText: string;
+  confidence?: number;
   provenance: SupplierFactProvenance[];
 }
 
@@ -40,6 +41,7 @@ export interface SupplierActiveIngredient {
   unit: string | null;
   standardization: string | null;
   rawText: string;
+  confidence?: number;
   provenance: SupplierFactProvenance[];
 }
 
@@ -118,11 +120,13 @@ export function hasProvenance(entries: SupplierFactProvenance[] | null | undefin
 
 export function calculateRecordSourceStatus(record: NormalizedSupplierIntelligenceRecord): SupplierSourceStatus {
   const hasStructuredNutrition = record.nutrientFacts.length > 0 || record.activeIngredients.length > 0;
+  const hasServingSize = Boolean(record.servingSize);
+  const hasServingsPerContainer = record.servingsPerContainer != null;
   const hasTextOnlyEvidence = record.provenance.some((entry) => entry.confidence < 0.7);
   if (!hasStructuredNutrition && hasTextOnlyEvidence) return "image_text_only";
   if (record.missingFields.length >= 8) return "missing";
   if (record.sourceStatus === "needs_review") return "needs_review";
-  if (hasStructuredNutrition && record.missingFields.length <= 3) return "structured";
+  if (hasStructuredNutrition && hasServingSize && hasServingsPerContainer && record.missingFields.length <= 3) return "structured";
   if (hasStructuredNutrition) return "partial";
   return "missing";
 }

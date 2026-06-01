@@ -45,3 +45,6 @@ next-env.d.ts
 _artifacts/
 artifacts/
 /build.tar.gz
+.cache/
+data/ecomviper/suppliers/rocktomic/cache/
+data/ecomviper/suppliers/rocktomic/candidates/
