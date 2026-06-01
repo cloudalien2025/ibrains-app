@@ -51,7 +51,36 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 5.1 Route Reconciliation: In progress (`sprint-5-1-remove-duplicate-shopify-product-route`, global removal of mistaken duplicate `/ecomviper/shopify/products/[productId-or-handle]` merchant route family).
 - Shopify Phase 5.2 Product Editor Default Front Image: Completed and merged (`sprint-5-2-product-editor-default-front-image`, canonical Product Editor defaults main gallery image to best front/primary/featured candidate for all products).
 - Shopify Phase 6.1 AI Copywriting Agent Contract + Eval Harness: Completed and merged (`sprint-6-1-ai-copywriting-agent-contract-evals`, all-product contract/schema/prompt/eval harness foundation with no live Product Editor or Generate Intelligence behavior change).
+- Shopify Phase 6.2 Generate Intelligence Copywriting Agent Binding: In progress (`sprint-6-2-generate-intelligence-copywriting-agent`, review-only Generate Intelligence model binding using all-product copywriting contract).
 - Current recommended sprint: `Manual signed-in desktop/mobile verification for Hotfix 009.8 Data Binding`, then resume `Shopify Sprint 011 planning`.
+
+## Sprint Checkpoint: Phase 6.2 Generate Intelligence Copywriting Agent Binding (Local Branch)
+
+- Branch: `sprint-6-2-generate-intelligence-copywriting-agent`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks in progress; MR/pipeline/deploy verification pending.
+- Scope implemented locally:
+  - added runtime runner:
+    - `lib/ecomviper/copywriting-agent/copywriting-agent-runner.ts`
+  - wired Generate Intelligence action route to copywriting runner:
+    - `app/api/ecomviper/pdp-intelligence/route.ts`
+  - wired Product Editor client review-only proposal rendering:
+    - `app/ecomviper/products/[productId-or-handle]/product-editor-client.tsx`
+  - added focused tests:
+    - `tests/ecomviper_copywriting_agent_runner.test.ts`
+    - `tests/ecomviper_generate_intelligence_copywriting_action.test.ts`
+    - `tests/ecomviper_product_editor_generate_intelligence_review.test.tsx`
+  - updated route contract test for runner binding:
+    - `tests/ecomviper_product_editor_route_contract.test.ts`
+  - added planning contract doc:
+    - `planning/apps/ecomviper/shopify/generate-intelligence-copywriting-agent-binding.md`
+- Boundary confirmation:
+  - Generate Intelligence is review-only (no auto-save/publish)
+  - no model call on Product Editor page render
+  - all-product input builder/contract path used
+  - plain missing-data notices surfaced
+  - no supplier writes/import/sync/extraction/OCR
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
 ## Sprint Checkpoint: Phase 6.1 All-Product AI Copywriting Agent Contract + Eval Harness (Local Branch)
 

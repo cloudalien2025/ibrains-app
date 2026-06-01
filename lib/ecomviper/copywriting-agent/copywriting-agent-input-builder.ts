@@ -28,8 +28,15 @@ function asNullableString(value: unknown): string | null {
   return text || null;
 }
 
-function dedupe(values: string[]): string[] {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+function dedupe(values: Array<string | null | undefined>): string[] {
+  return Array.from(
+    new Set(
+      values
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  );
 }
 
 function inferProductClass(input: { productType: string | null; supplementFacts: { activeIngredients: string[]; servingSize: string | null } }): "supplement" | "non_supplement" | "unknown" {
@@ -269,7 +276,8 @@ export function buildProductCopywritingInputFromShopifyEditorState(initialState:
   if (!product) return null;
 
   const sourceFacts = initialState.sourceFacts || null;
-  const supplier = initialState.supplierContext.product || null;
+  const supplierContextState = initialState.supplierContext;
+  const supplier = supplierContextState?.product || null;
   const supplierFactsPanel = initialState.supplierFactsPanel || null;
 
   const baseListing = fromShopifyListing(product);
@@ -287,19 +295,19 @@ export function buildProductCopywritingInputFromShopifyEditorState(initialState:
   };
 
   const supplierContext: ProductCopywritingBuildContext["supplierContext"] = {
-    supplierSlug: supplierFactsPanel?.supplierSlug || "rocktomic",
+    supplierSlug: supplierFactsPanel?.supplierSlug || (supplier ? "rocktomic" : null),
     supplierName: supplierFactsPanel?.supplierName || supplier?.supplier || null,
-    supplierSku: supplierFactsPanel?.supplierSku || initialState.supplierContext.matchedSku,
+    supplierSku: supplierFactsPanel?.supplierSku || supplierContextState?.matchedSku || null,
     supplierProductName: supplierFactsPanel?.supplierProductName || supplier?.productName || null,
     matchStatus: supplierFactsPanel?.matchStatus === "matched"
       ? "matched"
       : supplierFactsPanel?.matchStatus === "candidate"
         ? "candidate"
-        : initialState.supplierContext.matched
+        : supplierContextState?.matched
           ? "matched"
           : "no_match",
-    matchConfidence: supplierFactsPanel?.matchConfidence || initialState.supplierContext.matchReason || null,
-    matchReasons: supplierFactsPanel?.matchReasons || [initialState.supplierContext.matchReason],
+    matchConfidence: supplierFactsPanel?.matchConfidence || supplierContextState?.matchReason || null,
+    matchReasons: supplierFactsPanel?.matchReasons || [supplierContextState?.matchReason],
     ingredientMatchingReadiness: supplierFactsPanel?.readiness?.ingredientMatching || null,
     productEditorFactsReadiness: supplierFactsPanel?.readiness?.productEditorFacts || null,
     complianceEvidenceReadiness: supplierFactsPanel?.readiness?.complianceEvidence || null,

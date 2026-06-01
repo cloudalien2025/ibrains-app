@@ -9,6 +9,7 @@ import {
   type ShopifyPdpFaqEntry,
   type ShopifyPdpIntelligenceRecord,
 } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence";
+import type { ProductCopywritingOutput } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-types";
 import { orderProductImages } from "@/lib/ecomviper/shopify/product-image-ordering";
 import { getDefaultProductImageIndex } from "@/lib/ecomviper/shopify/product-image-selection";
 import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
@@ -28,10 +29,32 @@ interface PdpIntelligenceApiResponse {
   ok?: boolean;
   intelligence?: ShopifyPdpIntelligenceRecord | null;
   generationUnavailable?: boolean;
+  reviewOnly?: boolean;
+  copywriting?: {
+    status?: "success" | "validation_error" | "model_error" | "unavailable" | "blocked";
+    output?: ProductCopywritingOutput | null;
+    missingDataNotices?: string[];
+    complianceWarnings?: string[];
+    errorCode?: string | null;
+    safeMessage?: string;
+    generationMetadata?: {
+      model?: string | null;
+      generatedAt?: string;
+      sourceMode?: string;
+    };
+  };
   message?: string | null;
   error?: {
     message?: string;
   };
+}
+
+interface CopywritingReviewState {
+  status: "success" | "validation_error" | "model_error" | "unavailable" | "blocked";
+  output: ProductCopywritingOutput | null;
+  missingDataNotices: string[];
+  complianceWarnings: string[];
+  safeMessage: string;
 }
 
 function asIso(value: string | null): string {
@@ -244,6 +267,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<EditorTab>("overview");
   const [publishStatus] = useState<AsyncStatus>("idle");
+  const [copywritingReview, setCopywritingReview] = useState<CopywritingReviewState | null>(null);
 
   const productReference = initialState.productReference || product.handle || product.productId;
   const selectedMembershipTier = sourceFacts?.selectedMembershipTier ?? supplierProduct?.pricing?.membershipTier ?? null;
@@ -340,8 +364,11 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
       body: JSON.stringify(payload),
     });
     const body = (await response.json().catch(() => ({}))) as PdpIntelligenceApiResponse;
-    if (!response.ok || !body.ok || !body.intelligence) {
+    if (!response.ok || !body.ok) {
       throw new Error(body.error?.message || body.message || `PDP intelligence ${action} failed.`);
+    }
+    if (action === "save" && !body.intelligence) {
+      throw new Error(body.error?.message || body.message || "PDP intelligence save failed.");
     }
     return body;
   }
@@ -351,12 +378,24 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     setStatusMessage(null);
     try {
       const body = await postAction("generate");
-      setRecord(sanitizeShopifyPdpIntelligenceRecord(body.intelligence as ShopifyPdpIntelligenceRecord, baseRecord));
+      if (body.intelligence) {
+        setRecord(sanitizeShopifyPdpIntelligenceRecord(body.intelligence as ShopifyPdpIntelligenceRecord, baseRecord));
+      }
+      if (body.copywriting) {
+        setCopywritingReview({
+          status: body.copywriting.status || "model_error",
+          output: body.copywriting.output || null,
+          missingDataNotices: body.copywriting.missingDataNotices || [],
+          complianceWarnings: body.copywriting.complianceWarnings || [],
+          safeMessage: body.copywriting.safeMessage || body.message || "Generated proposal is ready for review.",
+        });
+      }
       setGenerationStatus("success");
       setStatusMessage(
-        body.generationUnavailable
-          ? "Generation is unavailable right now. Configure AI access to enable this action."
-          : "Source-grounded intelligence generated. Review before saving."
+        body.copywriting?.safeMessage
+          || (body.generationUnavailable
+            ? "AI generation is unavailable right now."
+            : "Generated proposal is ready for review.")
       );
     } catch (error) {
       setGenerationStatus("error");
@@ -511,6 +550,41 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
           </p>
         ) : null}
         {statusMessage ? <p className="mb-2 text-sm text-[#334155]">{statusMessage}</p> : null}
+        {copywritingReview ? (
+          <article className="mb-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3" data-testid="ecomviper-copywriting-review-panel">
+            <h2 className="text-sm font-semibold text-[#0F172A]">Generated Proposal (Review Only)</h2>
+            <p className="mt-1 text-xs text-[#475569]">{copywritingReview.safeMessage}</p>
+            {copywritingReview.missingDataNotices.length ? (
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                {copywritingReview.missingDataNotices.map((notice) => (
+                  <p key={notice}>{notice}</p>
+                ))}
+              </div>
+            ) : null}
+            {copywritingReview.complianceWarnings.length ? (
+              <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-900">
+                {copywritingReview.complianceWarnings.map((warning) => (
+                  <p key={warning}>{warning}</p>
+                ))}
+              </div>
+            ) : null}
+            {copywritingReview.output ? (
+              <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
+                <p><span className="font-semibold">Optimized Title:</span> {copywritingReview.output.optimizedTitle}</p>
+                <p><span className="font-semibold">Subtitle:</span> {copywritingReview.output.listingSubtitle}</p>
+                <p className="md:col-span-2"><span className="font-semibold">Short Description:</span> {copywritingReview.output.shortDescription}</p>
+                <p className="md:col-span-2"><span className="font-semibold">Full Description:</span> {copywritingReview.output.fullDescription}</p>
+                <p className="md:col-span-2"><span className="font-semibold">Benefit Bullets:</span> {copywritingReview.output.benefitBullets.join(" | ") || "Not provided."}</p>
+                <p><span className="font-semibold">Ingredient Highlights:</span> {copywritingReview.output.ingredientHighlights.join(" | ") || "Not provided."}</p>
+                <p><span className="font-semibold">Usage Summary:</span> {copywritingReview.output.usageSummary || "Not provided."}</p>
+                <p className="md:col-span-2"><span className="font-semibold">FAQ Suggestions:</span> {copywritingReview.output.faqSuggestions.map((faq) => faq.question).join(" | ") || "Not provided."}</p>
+                <p className="md:col-span-2"><span className="font-semibold">Image Alt Suggestions:</span> {copywritingReview.output.imageAltTextSuggestions.map((item) => item.altText).join(" | ") || "Not provided."}</p>
+                <p><span className="font-semibold">Meta Title:</span> {copywritingReview.output.metaTitle || "Not provided."}</p>
+                <p><span className="font-semibold">Meta Description:</span> {copywritingReview.output.metaDescription || "Not provided."}</p>
+              </div>
+            ) : null}
+          </article>
+        ) : null}
 
         <div className="mb-3 flex flex-wrap gap-2" data-testid="ecomviper-product-editor-tabs">
             {tabs.map((tab) => (

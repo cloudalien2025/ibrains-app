@@ -295,3 +295,24 @@ Phase 6.1 contract sources:
 
 - `planning/apps/ecomviper/shopify/ai-copywriting-agent-contract.md`
 - `planning/apps/ecomviper/shopify/generate-intelligence-eval-harness.md`
+
+## Generate Intelligence Copywriting Binding (Phase 6.2)
+
+- Phase 6.2 wires canonical Product Editor `Generate Intelligence` to the Phase 6.1 all-product copywriting contract in review-only mode.
+- Runtime behavior:
+  - model call executes only when `Generate Intelligence` is explicitly invoked
+  - no model call occurs during Product Editor page render
+  - output is strict-schema validated before review rendering
+- Merchant UX behavior:
+  - generated proposal appears in review-only panel/state
+  - plain missing-data notices are shown (for example COA/Pricing/Supplement Facts/supplier-match)
+  - no internal readiness labels are surfaced in the review proposal UI
+  - no auto-save and no auto-publish
+- Phase 6.2 boundaries preserved:
+  - no Product Editor layout redesign
+  - no supplier writes/import/sync/extraction/OCR
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
+Phase 6.2 contract source:
+
+- `planning/apps/ecomviper/shopify/generate-intelligence-copywriting-agent-binding.md`

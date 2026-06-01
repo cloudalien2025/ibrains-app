@@ -78,8 +78,8 @@ describe("ecomviper product editor route contract", () => {
     expect(imageSelectionSource).not.toContain("ROC123");
     expect(imageSelectionSource).not.toContain("ROC948");
     expect(imageSelectionSource).not.toContain("opa-oxy-burn-thermogenic-support");
-    expect(pdpIntelligenceRouteSource).toContain("generateShopifyPdpIntelligence");
+    expect(pdpIntelligenceRouteSource).toContain("runProductCopywritingAgent");
     expect(pdpIntelligenceGeneratorSource).toContain("openai");
-    expect(canonicalClientSource).not.toContain("copywriting-agent");
+    expect(canonicalClientSource).not.toContain("runProductCopywritingAgent(");
   });
 });
