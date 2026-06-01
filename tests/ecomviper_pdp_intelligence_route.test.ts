@@ -227,12 +227,12 @@ describe("ecomviper PDP intelligence route", () => {
         supplementFacts: {
           status: "ocr_required",
           value: "",
-          displayText: "Supplement Facts require OCR extraction from catalog label image.",
+          displayText: "Supplement Facts are available as image/text evidence but structured details are not available yet.",
         },
         activeIngredients: {
           status: "ocr_required",
           values: [],
-          displayText: "Active Ingredients require OCR extraction from catalog label image.",
+          displayText: "Active Ingredients not available in structured source facts yet.",
         },
         amountPerServing: { status: "source_missing", value: "", displayText: "Amount Per Serving not found in normalized source record." },
         otherIngredients: { status: "source_missing", value: "", displayText: "Other Ingredients not found in normalized source record." },

@@ -296,4 +296,62 @@ describe("ecomviper copywriting agent runner", () => {
     expect(result.missingDataNotices).not.toContain("Supplement Facts missing.");
     expect(result.missingDataNotices).not.toContain("Ingredient amounts missing.");
   });
+
+  it("sanitizes internal/debug warnings from merchant-facing output", async () => {
+    const modelClient: ProductCopywritingModelClient = {
+      async generateStructuredOutput() {
+        return {
+          content: JSON.stringify({
+            ...validOutput(),
+            complianceWarnings: [
+              "source fact references include non-listed facts",
+              "ingredientMatchingReadiness: blocked",
+              "requires OCR extraction from catalog label image",
+            ],
+            missingDataNotices: [
+              "requires OCR extraction from catalog label image",
+              "source fact references include non-listed facts",
+            ],
+          }),
+          model: "gpt-4.1-mini",
+        };
+      },
+    };
+
+    const result = await runProductCopywritingAgent({
+      copywritingInput: baseInput(),
+      openAiApiKey: "sk-test",
+      modelClient,
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.complianceWarnings.join(" ")).not.toMatch(/non-listed facts|ingredientMatchingReadiness|OCR/i);
+    expect(result.missingDataNotices.join(" ")).not.toMatch(/non-listed facts|OCR/i);
+  });
+
+  it("drops model-claimed blanket missing notices when input has structured facts", async () => {
+    const modelClient: ProductCopywritingModelClient = {
+      async generateStructuredOutput() {
+        return {
+          content: JSON.stringify({
+            ...validOutput(),
+            missingDataNotices: ["Supplement Facts missing.", "Ingredient amounts missing."],
+            complianceWarnings: ["Supplement Facts missing. Ingredient-backed claims were limited."],
+          }),
+          model: "gpt-4.1-mini",
+        };
+      },
+    };
+
+    const result = await runProductCopywritingAgent({
+      copywritingInput: baseInput(),
+      openAiApiKey: "sk-test",
+      modelClient,
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.missingDataNotices).not.toContain("Supplement Facts missing.");
+    expect(result.missingDataNotices).not.toContain("Ingredient amounts missing.");
+    expect(result.complianceWarnings.join(" ")).not.toContain("Supplement Facts missing");
+  });
 });

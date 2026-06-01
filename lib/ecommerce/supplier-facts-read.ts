@@ -151,6 +151,7 @@ function defaultUnavailableState(product: ShopifyProductRecord, message: string)
     sourceFactsSummary: [],
     supplementFactsSummary: [],
     activeIngredients: [],
+    ingredientAmounts: [],
     otherIngredients: [],
     servingSize: null,
     servingsPerContainer: null,
@@ -286,6 +287,17 @@ function sourceFactsSummary(sourceFacts: Record<string, unknown>): string[] {
   return summary;
 }
 
+function toAmountPerServingList(value: unknown): string[] {
+  const direct = asStringArray(value);
+  if (direct.length > 0) return direct;
+  const text = asString(value);
+  if (!text) return [];
+  return text
+    .split(/\n|,|;/g)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 function supplementFactsSummary(supplementFacts: Record<string, unknown>): string[] {
   const summary: string[] = [];
   const servingSize = asString(supplementFacts.servingSize);
@@ -325,6 +337,11 @@ function buildMatchedState(product: ShopifyProductRecord, row: SupplierCandidate
 
   const activeIngredients = asStringArray(
     supplementFacts.activeIngredients || sourceFacts.activeIngredients || asObject(sourceFacts.supplementFacts).activeIngredients
+  );
+  const ingredientAmounts = toAmountPerServingList(
+    supplementFacts.amountPerServing
+    || sourceFacts.amountPerServing
+    || asObject(sourceFacts.supplementFacts).amountPerServing
   );
   const otherIngredientsRaw =
     asStringArray(supplementFacts.otherIngredients).length > 0
@@ -380,6 +397,7 @@ function buildMatchedState(product: ShopifyProductRecord, row: SupplierCandidate
     sourceFactsSummary: sourceFactsSummary(sourceFacts),
     supplementFactsSummary: supplementFactsSummary(supplementFacts),
     activeIngredients,
+    ingredientAmounts,
     otherIngredients: otherIngredientsRaw,
     servingSize,
     servingsPerContainer,

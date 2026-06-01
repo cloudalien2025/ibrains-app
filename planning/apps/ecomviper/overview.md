@@ -352,3 +352,27 @@ Phase 6.2 contract source:
 Phase 6.2.2-B contract source:
 
 - `planning/apps/ecomviper/shopify/supplement-facts-input-mapping-hotfix.md`
+
+## Generate Intelligence Live Source Facts Fix (Phase 6.2.2-C)
+
+- Phase 6.2.2-C fixes the live signed-in Generate Intelligence source-facts parity gap (not an env/proxy issue).
+- Live Product Editor Generate Intelligence now merges authoritative supplier facts/evidence from shared ecommerce DB read-model projection with Product Editor state mapping.
+- Merchant-facing proposal hardening now blocks internal/debug wording from render paths, including:
+  - `source fact references include non-listed facts`
+  - OCR directive placeholder wording
+  - readiness/debug labels
+- Missing-data notices are now enforced as precise and contradiction-safe in live runner output:
+  - partial-facts products avoid blanket `Supplement Facts missing.`
+  - ingredient amounts notice appears only when truly missing
+  - serving-size and servings-per-container are independent notices
+- Review-only boundaries remain unchanged:
+  - no auto-save
+  - no auto-publish
+  - no model call during Product Editor render
+  - no supplier DB writes/imports/migrations
+  - no OCR/.ai extraction/source fetch from Product Editor generate action
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
+Phase 6.2.2-C contract source:
+
+- `planning/apps/ecomviper/shopify/generate-intelligence-live-source-facts-fix.md`

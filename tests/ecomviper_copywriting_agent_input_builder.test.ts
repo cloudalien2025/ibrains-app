@@ -159,6 +159,96 @@ describe("ecomviper copywriting agent input builder", () => {
     expect(input?.missingData.pricingMissing).toBe(false);
   });
 
+  it("uses supplier facts read-model fields when sourceFacts values are stale/missing", () => {
+    const state = shopifyStateFixture();
+    state.sourceFacts = {
+      ...state.sourceFacts!,
+      activeIngredients: { status: "source_missing", values: [], displayText: "" },
+      amountPerServing: { status: "source_missing", value: "", displayText: "" },
+      servingSize: { status: "source_missing", value: "", displayText: "" },
+      servingsPerContainer: { status: "source_missing", value: "", displayText: "" },
+      assets: {
+        ...state.sourceFacts!.assets,
+        coaUrl: null,
+        labelTemplateUrl: null,
+        mockupUrl: null,
+      },
+    };
+    state.supplierFactsPanel = {
+      status: "matched",
+      supplierSlug: "rocktomic",
+      message: "matched",
+      checkedIdentifiers: {
+        skus: ["SKU-1"],
+        normalizedSkus: ["SKU1"],
+        barcodes: [],
+        handle: "test-supplement",
+        title: "Test Supplement",
+      },
+      matchStatus: "matched",
+      matchConfidence: "exact_sku",
+      matchReasons: ["exact SKU match"],
+      supplierName: "Rocktomic",
+      supplierSku: "SKU-1",
+      supplierProductName: "Test Supplement",
+      validationStatus: "usable_with_warnings",
+      readiness: {
+        ingredientMatching: "ready",
+        productEditorFacts: "ready",
+        pricing: "ready",
+        inventory: "ready",
+        complianceEvidence: "ready_with_warnings",
+        optiPixelAssets: "unknown",
+        channelImageGeneration: "unknown",
+      },
+      sourceFactsSummary: [],
+      supplementFactsSummary: [],
+      activeIngredients: ["Magnesium"],
+      ingredientAmounts: ["Magnesium 30mg"],
+      otherIngredients: ["Cellulose"],
+      servingSize: "1 capsule",
+      servingsPerContainer: "30",
+      directions: "Use daily",
+      warnings: "Keep away from children",
+      pricingSummary: {
+        available: true,
+        wholesaleCost: 9,
+        msrp: 19.99,
+        currency: "USD",
+        statusLabel: "ready",
+      },
+      inventorySummary: {
+        available: true,
+        status: "in_stock",
+        raw: "8",
+        comments: null,
+      },
+      assetSummary: {
+        coaPresent: true,
+        coaUrl: "https://example.com/coa.pdf",
+        labelTemplateAiPresent: true,
+        mockupTemplateTifPresent: true,
+        readyForOptiPixel: false,
+      },
+      evidence: {
+        sourceMethod: "ai_pdf_text",
+        aiLabelTextEvidenceStatus: "reused_cached",
+        needsReview: false,
+        missingCoaWarning: false,
+        topDefects: [],
+      },
+    };
+
+    const input = buildProductCopywritingInputFromShopifyEditorState(state);
+    expect(input).not.toBeNull();
+    expect(input?.supplementFacts.activeIngredients).toContain("Magnesium");
+    expect(input?.supplementFacts.ingredientAmounts).toContain("Magnesium 30mg");
+    expect(input?.supplementFacts.servingSize).toBe("1 capsule");
+    expect(input?.sourceEvidence.coaPresent).toBe(true);
+    expect(input?.missingData.supplementFactsMissing).toBe(false);
+    expect(input?.missingData.ingredientAmountsMissing).toBe(false);
+  });
+
   it("supports Shopify-only no-supplier products", () => {
     const input = buildProductCopywritingInput({
       channel: "shopify",

@@ -53,7 +53,33 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 6.1 AI Copywriting Agent Contract + Eval Harness: Completed and merged (`sprint-6-1-ai-copywriting-agent-contract-evals`, all-product contract/schema/prompt/eval harness foundation with no live Product Editor or Generate Intelligence behavior change).
 - Shopify Phase 6.2 Generate Intelligence Copywriting Agent Binding: Completed and merged (`sprint-6-2-generate-intelligence-copywriting-agent`, review-only Generate Intelligence model binding using all-product copywriting contract).
 - Shopify Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix: In progress (`sprint-6-2-1-generate-intelligence-prod-hotfix`, fix signed-in Generate Intelligence production failure caused by incorrect localhost HTTPS proxy behavior + safe error mapping/UI stale-state handling).
-- Current recommended sprint: `Shopify Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix`.
+- Shopify Phase 6.2.2-C Live Source Facts + Merchant Output Fix: In progress (`sprint-6-2-2-c-live-generate-intelligence-source-facts`, live Generate Intelligence source-facts parity + output sanitization + Product Editor merchant wording cleanup).
+- Current recommended sprint: `Shopify Phase 6.2.2-C Live Source Facts + Merchant Output Fix`.
+
+## Sprint Checkpoint: Phase 6.2.2-C Live Source Facts + Merchant Output Fix (Local Branch)
+
+- Branch: `sprint-6-2-2-c-live-generate-intelligence-source-facts`
+- Date: `2026-06-01 (UTC)`
+- Local checkpoint status: implementation + focused tests/checks complete locally; MR/pipeline/deploy + signed-in production browser QA pending.
+- Root cause confirmed:
+  - live Generate Intelligence input path underused shared ecommerce supplier read-model facts/evidence and could project stale/partial source states into copywriting input;
+  - merchant proposal path surfaced internal/debug warning strings and OCR/dev wording.
+- Implemented scope:
+  - supplier facts read model now exposes ingredient amount evidence to live consumers.
+  - Product Editor source-facts projection now consumes supplier facts panel fields for structured facts/evidence precedence.
+  - copywriting input builder now merges source facts + supplier facts panel + supplier snapshot for live parity.
+  - runner now sanitizes internal/debug warnings and drops contradictory missing-data notices.
+  - Product Editor merchant text replaced dev-like `supplier intelligence update`/OCR directive wording with plain user-facing text.
+  - safe server-side Generate trace logging added (`trace_id` + compact redacted summaries).
+- Local dry-run and check summary:
+  - `prepare --all --dry-run`: `supplementFactsMissing=16`, `coaMissing=40`, `pricingMissing=22`, `inventoryMissing=38`.
+  - focused tests for route/input-builder/runner/UI parity passed.
+  - `npm run build` passed in this run.
+  - `git diff --check` passed.
+- Pending closure items:
+  - GitLab MR/pipeline/merge/branch cleanup flow.
+  - deploy verification + `/api/meta/release` and `/api/health` checks on deployed release.
+  - signed-in browser QA confirmation on Oxy-Burn + one additional affected SKU.
 
 ## Sprint Checkpoint: Phase 6.2.1 Generate Intelligence Signed-In Production Hotfix (Local Branch)
 

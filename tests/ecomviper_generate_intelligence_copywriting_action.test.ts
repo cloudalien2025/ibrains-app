@@ -101,6 +101,7 @@ function stateFixture(overrides?: Partial<ShopifyProductEditorInitialState>): Sh
       sourceFactsSummary: [],
       supplementFactsSummary: [],
       activeIngredients: ["Magnesium"],
+      ingredientAmounts: ["Magnesium 30mg"],
       otherIngredients: ["Cellulose"],
       servingSize: "1 capsule",
       servingsPerContainer: "30",
@@ -473,6 +474,14 @@ describe("ecomviper generate intelligence copywriting action", () => {
           coa: { status: "missing", url: null },
         },
       },
+      supplierFactsPanel: {
+        ...stateFixture().supplierFactsPanel!,
+        assetSummary: {
+          ...stateFixture().supplierFactsPanel!.assetSummary,
+          coaPresent: false,
+          coaUrl: null,
+        },
+      },
     });
     mocks.buildShopifyProductEditorStateForUser.mockResolvedValue(missingDataState);
 
@@ -522,6 +531,13 @@ describe("ecomviper generate intelligence copywriting action", () => {
           servingsPerContainer: null,
           supplementFacts: { status: "pending_source", value: null },
         },
+      },
+      supplierFactsPanel: {
+        ...stateFixture().supplierFactsPanel!,
+        activeIngredients: [],
+        ingredientAmounts: [],
+        servingSize: null,
+        servingsPerContainer: null,
       },
     });
     mocks.buildShopifyProductEditorStateForUser.mockResolvedValue(missingFactsState);

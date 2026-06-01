@@ -87,22 +87,122 @@ function normalizeMissingNotice(value: string): string {
   return `${value.trim().replace(/\.+$/, "")}.`;
 }
 
-function enforceInputGuards(input: ProductCopywritingInput, output: ProductCopywritingOutput): ProductCopywritingOutput {
-  const requiredNotices = canonicalMissingNotices(input);
-  const normalizedOutputNotices = output.missingDataNotices.map(normalizeMissingNotice);
+const MERCHANT_BLOCKED_PATTERNS = [
+  /source fact references include non-listed facts/i,
+  /require[s]?\s+ocr\s+extraction/i,
+  /supplier intelligence update/i,
+  /ingredientmatchingreadiness/i,
+  /producteditorfactsreadiness/i,
+  /complianceevidencereadiness/i,
+  /raw schema/i,
+  /raw debug/i,
+  /fix lane/i,
+];
 
-  const complianceWarnings = [...output.complianceWarnings];
-  let ingredientHighlights = output.ingredientHighlights;
-  if (input.missingData.supplementFactsMissing || input.missingData.ingredientFactsMissing) {
-    ingredientHighlights = [];
-    complianceWarnings.push("Supplement Facts missing. Ingredient-backed claims were limited.");
-  }
+function isMerchantBlockedLine(value: string): boolean {
+  return MERCHANT_BLOCKED_PATTERNS.some((pattern) => pattern.test(value));
+}
+
+function sanitizeMerchantText(value: string): string {
+  const text = value.trim();
+  if (!text) return "";
+  if (isMerchantBlockedLine(text)) return "";
+  return text;
+}
+
+function sanitizeMerchantLines(values: string[]): string[] {
+  return dedupe(values.map((value) => sanitizeMerchantText(value)).filter(Boolean));
+}
+
+function filterNoticesByInput(input: ProductCopywritingInput, notices: string[]): string[] {
+  return notices.filter((notice) => {
+    const normalized = normalizeMissingNotice(notice);
+    if (normalized === "Supplement Facts missing.") return input.missingData.supplementFactsMissing;
+    if (normalized === "Serving size missing.") return input.missingData.servingSizeMissing;
+    if (normalized === "Servings per container missing.") return input.missingData.servingsPerContainerMissing;
+    if (normalized === "Ingredient amounts missing.") {
+      return input.missingData.ingredientAmountsMissing && !input.missingData.ingredientFactsMissing;
+    }
+    if (normalized === "Supplement Facts image available; ingredient details are not structured yet.") {
+      return input.missingData.supplementFactsImageOnly;
+    }
+    if (normalized === "Supplement Facts text needs review.") return input.missingData.supplementFactsTextNeedsReview;
+    if (normalized === "Supplier match not found.") return input.missingData.supplierMatchMissing;
+    if (normalized === "COA missing.") return input.missingData.coaMissing;
+    if (normalized === "Pricing missing.") return input.missingData.pricingMissing;
+    if (normalized === "Inventory missing.") return input.missingData.inventoryMissing;
+    return true;
+  });
+}
+
+function sanitizeOutput(output: ProductCopywritingOutput): ProductCopywritingOutput {
+  const benefitBullets = sanitizeMerchantLines(output.benefitBullets);
+  const ingredientHighlights = sanitizeMerchantLines(output.ingredientHighlights);
+  const complianceWarnings = sanitizeMerchantLines(output.complianceWarnings);
+  const missingDataNotices = sanitizeMerchantLines(output.missingDataNotices);
+  const faqSuggestions = output.faqSuggestions
+    .map((faq) => ({
+      question: sanitizeMerchantText(faq.question),
+      answer: sanitizeMerchantText(faq.answer),
+    }))
+    .filter((faq) => faq.question && faq.answer);
+  const imageAltTextSuggestions = output.imageAltTextSuggestions
+    .map((entry) => ({
+      imageId: entry.imageId,
+      altText: sanitizeMerchantText(entry.altText),
+    }))
+    .filter((entry) => entry.altText);
 
   return {
     ...output,
+    optimizedTitle: sanitizeMerchantText(output.optimizedTitle),
+    listingSubtitle: sanitizeMerchantText(output.listingSubtitle),
+    shortDescription: sanitizeMerchantText(output.shortDescription),
+    fullDescription: sanitizeMerchantText(output.fullDescription),
+    benefitBullets,
     ingredientHighlights,
-    missingDataNotices: dedupe([...requiredNotices, ...normalizedOutputNotices]),
-    complianceWarnings: dedupe(complianceWarnings),
+    usageSummary: sanitizeMerchantText(output.usageSummary),
+    faqSuggestions,
+    imageAltTextSuggestions,
+    metaTitle: sanitizeMerchantText(output.metaTitle),
+    metaDescription: sanitizeMerchantText(output.metaDescription),
+    complianceWarnings,
+    missingDataNotices,
+  };
+}
+
+function enforceInputGuards(input: ProductCopywritingInput, output: ProductCopywritingOutput): ProductCopywritingOutput {
+  const sanitizedOutput = sanitizeOutput(output);
+  const requiredNotices = canonicalMissingNotices(input);
+  const normalizedOutputNotices = sanitizedOutput.missingDataNotices.map(normalizeMissingNotice);
+
+  const complianceWarnings = [...sanitizedOutput.complianceWarnings];
+  let ingredientHighlights = sanitizedOutput.ingredientHighlights;
+  if (input.missingData.supplementFactsMissing || input.missingData.ingredientFactsMissing) {
+    ingredientHighlights = [];
+    if (input.missingData.supplementFactsMissing) {
+      complianceWarnings.push("Supplement Facts missing. Ingredient-backed claims were limited.");
+    } else {
+      complianceWarnings.push("Ingredient-backed claims were limited to available source facts.");
+    }
+  }
+
+  const mergedNotices = sanitizeMerchantLines(
+    filterNoticesByInput(input, dedupe([...requiredNotices, ...normalizedOutputNotices]))
+  );
+  const mergedWarnings = sanitizeMerchantLines(
+    complianceWarnings.filter((warning) => {
+      if (/supplement facts missing/i.test(warning) && !input.missingData.supplementFactsMissing) return false;
+      if (/ingredient amounts missing/i.test(warning) && !input.missingData.ingredientAmountsMissing) return false;
+      return true;
+    })
+  );
+
+  return {
+    ...sanitizedOutput,
+    ingredientHighlights,
+    missingDataNotices: mergedNotices,
+    complianceWarnings: mergedWarnings,
   };
 }
 
@@ -226,7 +326,11 @@ export async function runProductCopywritingAgent(input: {
         status: "blocked",
         output: null,
         missingDataNotices: guardedOutput.missingDataNotices,
-        complianceWarnings: dedupe([...guardedOutput.complianceWarnings, ...evalResult.hardFailures, ...evalResult.warnings]),
+        complianceWarnings: sanitizeMerchantLines([
+          ...guardedOutput.complianceWarnings,
+          ...evalResult.hardFailures,
+          ...evalResult.warnings,
+        ]),
         errorCode: "COMPLIANCE_BLOCKED",
         safeMessage: "Generated copy was blocked by compliance safeguards.",
         generationMetadata: {
@@ -241,7 +345,7 @@ export async function runProductCopywritingAgent(input: {
       status: "success",
       output: guardedOutput,
       missingDataNotices: guardedOutput.missingDataNotices,
-      complianceWarnings: dedupe([...guardedOutput.complianceWarnings, ...evalResult.warnings]),
+      complianceWarnings: sanitizeMerchantLines([...guardedOutput.complianceWarnings, ...evalResult.warnings]),
       errorCode: null,
       safeMessage: "Generated proposal is ready for review.",
       generationMetadata: {

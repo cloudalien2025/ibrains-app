@@ -40,6 +40,7 @@ export interface SupplierFactsPanelViewModel {
   sourceFactsSummary: string[];
   supplementFactsSummary: string[];
   activeIngredients: string[];
+  ingredientAmounts: string[];
   otherIngredients: string[];
   servingSize: string | null;
   servingsPerContainer: string | null;
