@@ -237,6 +237,14 @@ function splitTextToList(value: string | null | undefined): string[] {
   return dedupe((value || "").split(/\n|,|;/g).map((entry) => entry.trim()).filter(Boolean));
 }
 
+function panelAmountPerServingToList(values: string[] | null | undefined): string[] {
+  return dedupe(
+    (values || [])
+      .flatMap((value) => splitTextToList(value))
+      .filter(Boolean)
+  );
+}
+
 function mapSourceFactsToIngredients(sourceFacts: ShopifyProductEditorSourceFacts | null | undefined): ProductCopywritingInput["supplementFacts"] {
   return {
     servingSize: sourceFacts?.servingSize?.value || null,
@@ -318,15 +326,36 @@ export function buildProductCopywritingInputFromShopifyEditorState(initialState:
   const baseListing = fromShopifyListing(product);
   const sourceSupplementFacts = mapSourceFactsToIngredients(sourceFacts);
   const supplierSupplementFacts = mapSupplierToSupplementFacts(supplier);
+  const panelSupplementFacts: ProductCopywritingInput["supplementFacts"] = {
+    servingSize: supplierFactsPanel?.servingSize || null,
+    servingsPerContainer: supplierFactsPanel?.servingsPerContainer || null,
+    activeIngredients: dedupe(supplierFactsPanel?.activeIngredients || []),
+    ingredientAmounts: panelAmountPerServingToList(supplierFactsPanel?.ingredientAmounts),
+    otherIngredients: dedupe(supplierFactsPanel?.otherIngredients || []),
+    suggestedUse: supplierFactsPanel?.directions || null,
+    warnings: supplierFactsPanel?.warnings || null,
+  };
 
   const supplementFacts: ProductCopywritingInput["supplementFacts"] = {
-    servingSize: sourceSupplementFacts.servingSize || supplierSupplementFacts.servingSize,
-    servingsPerContainer: sourceSupplementFacts.servingsPerContainer || supplierSupplementFacts.servingsPerContainer,
-    activeIngredients: dedupe([...sourceSupplementFacts.activeIngredients, ...supplierSupplementFacts.activeIngredients]),
-    ingredientAmounts: dedupe([...sourceSupplementFacts.ingredientAmounts, ...supplierSupplementFacts.ingredientAmounts]),
-    otherIngredients: dedupe([...sourceSupplementFacts.otherIngredients, ...supplierSupplementFacts.otherIngredients]),
-    suggestedUse: supplierSupplementFacts.suggestedUse,
-    warnings: supplierSupplementFacts.warnings,
+    servingSize: sourceSupplementFacts.servingSize || panelSupplementFacts.servingSize || supplierSupplementFacts.servingSize,
+    servingsPerContainer: sourceSupplementFacts.servingsPerContainer || panelSupplementFacts.servingsPerContainer || supplierSupplementFacts.servingsPerContainer,
+    activeIngredients: dedupe([
+      ...sourceSupplementFacts.activeIngredients,
+      ...panelSupplementFacts.activeIngredients,
+      ...supplierSupplementFacts.activeIngredients,
+    ]),
+    ingredientAmounts: dedupe([
+      ...sourceSupplementFacts.ingredientAmounts,
+      ...panelSupplementFacts.ingredientAmounts,
+      ...supplierSupplementFacts.ingredientAmounts,
+    ]),
+    otherIngredients: dedupe([
+      ...sourceSupplementFacts.otherIngredients,
+      ...panelSupplementFacts.otherIngredients,
+      ...supplierSupplementFacts.otherIngredients,
+    ]),
+    suggestedUse: sourceSupplementFacts.suggestedUse || panelSupplementFacts.suggestedUse || supplierSupplementFacts.suggestedUse,
+    warnings: sourceSupplementFacts.warnings || panelSupplementFacts.warnings || supplierSupplementFacts.warnings,
   };
 
   const supplierContext: ProductCopywritingBuildContext["supplierContext"] = {
@@ -352,12 +381,20 @@ export function buildProductCopywritingInputFromShopifyEditorState(initialState:
   };
 
   const sourceEvidence: ProductCopywritingBuildContext["sourceEvidence"] = {
-    coaPresent: Boolean(sourceFacts?.assets?.coaUrl || supplier?.coa?.url),
-    coaUrl: sourceFacts?.assets?.coaUrl || supplier?.coa?.url || null,
-    labelEvidencePresent: Boolean(sourceFacts?.assets?.labelTemplateUrl || supplier?.labelTemplate?.url),
+    coaPresent: Boolean(sourceFacts?.assets?.coaUrl || supplierFactsPanel?.assetSummary?.coaPresent || supplier?.coa?.url),
+    coaUrl: sourceFacts?.assets?.coaUrl || supplierFactsPanel?.assetSummary?.coaUrl || supplier?.coa?.url || null,
+    labelEvidencePresent: Boolean(
+      sourceFacts?.assets?.labelTemplateUrl
+      || supplierFactsPanel?.assetSummary?.labelTemplateAiPresent
+      || supplierFactsPanel?.assetSummary?.mockupTemplateTifPresent
+      || supplier?.labelTemplate?.url
+      || supplier?.mockup?.url
+    ),
     supplementFactsImagePresent: Boolean(
       sourceFacts?.assets?.labelTemplateUrl
       || sourceFacts?.assets?.mockupUrl
+      || supplierFactsPanel?.assetSummary?.labelTemplateAiPresent
+      || supplierFactsPanel?.assetSummary?.mockupTemplateTifPresent
       || supplier?.labelTemplate?.url
       || supplier?.mockup?.url
     ),

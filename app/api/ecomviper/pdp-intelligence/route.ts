@@ -6,7 +6,7 @@ import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getShopifyOpenAiApiKeyForUser } from "@/lib/ecomviper/shopify/openai-connection";
 import { buildProductCopywritingInputFromShopifyEditorState } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-input-builder";
 import { runProductCopywritingAgent } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-runner";
-import type { ProductCopywritingOutput } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-types";
+import type { ProductCopywritingInput, ProductCopywritingOutput } from "@/lib/ecomviper/copywriting-agent/copywriting-agent-types";
 import { evaluateShopifyPdpCompliance } from "@/lib/ecomviper/shopify/shopify-pdp-intelligence-compliance";
 import {
   createEmptyShopifyPdpIntelligenceRecord,
@@ -42,6 +42,35 @@ function asErrorMessage(error: unknown): string {
 
 function toArray(value: string[] | null | undefined): string[] {
   return Array.isArray(value) ? value.map((entry) => asString(entry)).filter(Boolean) : [];
+}
+
+function createTraceId(): string {
+  try {
+    return `gi_${crypto.randomUUID().slice(0, 8)}`;
+  } catch {
+    return `gi_${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
+function summarizeCopywritingInput(input: ProductCopywritingInput) {
+  return {
+    productId: input.productIdentity.productId,
+    handle: input.productIdentity.handle,
+    sku: input.variants.find((variant) => variant.sku)?.sku || null,
+    supplierMatchStatus: input.supplierContext.matchStatus,
+    supplierSku: input.supplierContext.supplierSku,
+    sourceFactsUsed: input.sourceEvidence.sourceFactsUsed,
+    supplementFactsSource: input.sourceEvidence.supplementFactsSource,
+    supplementFactsImagePresent: input.sourceEvidence.supplementFactsImagePresent,
+    aiLabelTextEvidenceStatus: input.sourceEvidence.aiLabelTextEvidenceStatus,
+    structuredSupplementFactsPresent: input.sourceEvidence.structuredSupplementFactsPresent,
+    counts: {
+      activeIngredients: input.supplementFacts.activeIngredients.length,
+      ingredientAmounts: input.supplementFacts.ingredientAmounts.length,
+      otherIngredients: input.supplementFacts.otherIngredients.length,
+    },
+    missingData: input.missingData,
+  };
 }
 
 function mapRunStatusToGenerationStatus(
@@ -246,13 +275,28 @@ export async function POST(req: NextRequest) {
     const supplierFactsSynced = Boolean(sourceFacts?.supplierProductRecordFound && supplierProduct);
     const openAiApiKey = await getShopifyOpenAiApiKeyForUser(userId);
     const generatedAt = new Date().toISOString();
+    const traceId = createTraceId();
     const copywritingInput = buildProductCopywritingInputFromShopifyEditorState(editorState);
     if (!copywritingInput) {
       return fail(400, "Product copywriting input could not be prepared.", "VALIDATION_ERROR");
     }
+    console.info("[pdp-intelligence.generate][input]", {
+      traceId,
+      userId,
+      productReference,
+      input: summarizeCopywritingInput(copywritingInput),
+    });
     const runResult = await runProductCopywritingAgent({
       copywritingInput,
       openAiApiKey,
+    });
+    console.info("[pdp-intelligence.generate][result]", {
+      traceId,
+      status: runResult.status,
+      errorCode: runResult.errorCode,
+      missingDataNotices: runResult.missingDataNotices,
+      complianceWarnings: runResult.complianceWarnings,
+      generationMetadata: runResult.generationMetadata,
     });
     const reviewRecord = toReviewRecord({
       base: existing ?? fallbackRecord,
@@ -279,6 +323,7 @@ export async function POST(req: NextRequest) {
         generationMetadata: runResult.generationMetadata,
       },
       diagnostics: {
+        trace_id: traceId,
         normalized_sku: sourceFacts?.normalizedSku || null,
         supplier_product_record_status: sourceFacts?.supplierProductRecordFound ? "synced" : "missing",
         pricing_record_status: sourceFacts?.pricingRecordFound ? "synced" : "missing",

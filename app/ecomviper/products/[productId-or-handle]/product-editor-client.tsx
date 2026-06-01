@@ -492,7 +492,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
               {record.coa_link ? (
                 <a className="text-[#1D4ED8] hover:underline" href={record.coa_link} target="_blank" rel="noreferrer">View COA</a>
               ) : (
-                "Available after supplier intelligence update"
+                "Not available from current source facts"
               )}
             </p>
             <p><span className="font-semibold text-[#0B1A36]">Price:</span> {asMoney(record.price, record.currency)}</p>
@@ -505,7 +505,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
             </p>
             <p>
               <span className="font-semibold text-[#0B1A36]">Wholesale Cost:</span>{" "}
-              {hasSelectedTierWholesale ? asMoney(record.wholesale_cost, record.currency) : "Available after supplier intelligence update"}
+              {hasSelectedTierWholesale ? asMoney(record.wholesale_cost, record.currency) : "Not available from current source facts"}
             </p>
             <p>
               <span className="font-semibold text-[#0B1A36]">Margin:</span>{" "}
@@ -685,7 +685,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
                   <textarea value={listToTextarea(record.ingredient_highlights)} onChange={(e) => setRecord((s) => ({ ...s, ingredient_highlights: textareaToList(e.target.value) }))} rows={3} className="rounded-lg border border-[#D9E4F0] px-3 py-2" />
                 </label>
                 {sourceFacts && sourceFacts.activeIngredients.status !== "extracted" ? (
-                  <p className="text-sm text-amber-800 md:col-span-2">Ingredient highlights will be more complete after supplier intelligence update.</p>
+                  <p className="text-sm text-amber-800 md:col-span-2">Ingredient highlights are limited to currently available source facts.</p>
                 ) : null}
               </div>
             ) : null}

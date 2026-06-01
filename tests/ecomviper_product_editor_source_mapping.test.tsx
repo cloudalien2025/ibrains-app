@@ -296,12 +296,12 @@ describe("ecomviper product editor supplier field mapping", () => {
       state.sourceFacts.supplementFacts = {
         status: "ocr_required",
         value: "",
-        displayText: "Supplement Facts require OCR extraction from catalog label image.",
+        displayText: "Supplement Facts are available as image/text evidence but structured details are not available yet.",
       };
       state.sourceFacts.activeIngredients = {
         status: "ocr_required",
         values: [],
-        displayText: "Active Ingredients require OCR extraction from catalog label image.",
+        displayText: "Active Ingredients not available in structured source facts yet.",
       };
     }
 
@@ -316,7 +316,7 @@ describe("ecomviper product editor supplier field mapping", () => {
       ingredientsTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(container.textContent).toContain("Supplement Facts require OCR extraction from catalog label image.");
+    expect(container.textContent).toContain("Supplement Facts are available as image/text evidence but structured details are not available yet.");
     expect(container.textContent).toContain("Source data has changed since this intelligence was generated.");
     expect(container.textContent).toContain("Inventory: Available");
   });

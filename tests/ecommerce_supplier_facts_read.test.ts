@@ -70,6 +70,7 @@ function createRow(overrides: Record<string, unknown> = {}) {
       servingSize: "1 gummy",
       servingsPerContainer: "60",
       activeIngredients: ["Magnesium 30mg"],
+      amountPerServing: ["Magnesium 30mg"],
       otherIngredients: ["Glucose syrup"],
     },
     facts_directions: "Take one gummy daily",
@@ -147,6 +148,7 @@ describe("supplier facts read model", () => {
     expect(result.status).toBe("matched");
     expect(result.readiness.ingredientMatching).toBe("ready_with_warnings");
     expect(result.readiness.complianceEvidence).toBe("blocked");
+    expect(result.ingredientAmounts).toContain("Magnesium 30mg");
     expect(result.evidence.missingCoaWarning).toBe(true);
   });
 

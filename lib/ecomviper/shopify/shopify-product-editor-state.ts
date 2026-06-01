@@ -324,7 +324,7 @@ function sourceStatusForScalar(input: {
     return {
       status: "ocr_required",
       value: "",
-      displayText: `${input.fieldName} require OCR extraction from catalog label image.`,
+      displayText: `${input.fieldName} not available in structured source facts yet.`,
     };
   }
   if (diagnosticHas(input.product, "extraction_failed")) {
@@ -347,7 +347,7 @@ function sourceStatusForArray(input: {
     return {
       status: "ocr_required",
       values: [],
-      displayText: `${input.fieldName} require OCR extraction from catalog label image.`,
+      displayText: `${input.fieldName} not available in structured source facts yet.`,
     };
   }
   return {
@@ -376,7 +376,7 @@ function supplementFactsStatus(product: RocktomicSupplierProduct | null) {
     return {
       status: "ocr_required" as const,
       value: "",
-      displayText: "Supplement Facts require OCR extraction from catalog label image.",
+      displayText: "Supplement Facts are available as image/text evidence but structured details are not available yet.",
     };
   }
   if (diagnosticHas(product, "extraction_failed")) {
@@ -419,6 +419,13 @@ function buildPricingMessage(input: {
   return "Selected membership tier pricing mapped.";
 }
 
+function splitListValue(value: string | null | undefined): string[] {
+  return (value || "")
+    .split(/\n|,|;/g)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 function resolveDefaultMembershipTier(input: {
   selectedMembershipTier: string | null;
   membershipTierCosts: Record<string, number> | null | undefined;
@@ -449,11 +456,13 @@ function buildSourceFacts(input: {
   product: ShopifyProductRecord;
   currentShopifyListing: ShopifyCurrentListingDocket;
   supplierProduct: RocktomicSupplierProduct | null;
+  supplierFactsPanel: SupplierFactsPanelViewModel | null;
   pdpIntelligence: ShopifyPdpIntelligenceRecord | null;
   syncStatus: string | null;
   lastSupplierCheckAt: string | null;
 }): ShopifyProductEditorSourceFacts {
   const supplierProduct = input.supplierProduct;
+  const panel = input.supplierFactsPanel;
   const shopifySku = firstVariantSku(input.product);
   const normalizedSku = normalizeRocktomicSku(shopifySku || "");
   const pricingRecordFound = normalizedRecordFound(supplierProduct, "pricing");
@@ -483,30 +492,51 @@ function buildSourceFacts(input: {
     pdpIntelligence: input.pdpIntelligence,
     latestSupplierSyncAt,
   });
-  const supplementFacts = supplementFactsStatus(supplierProduct);
+  const supplementFacts = (() => {
+    const panelHasStructuredFacts =
+      Boolean(panel?.servingSize)
+      || Boolean(panel?.servingsPerContainer)
+      || (panel?.activeIngredients?.length || 0) > 0
+      || (panel?.ingredientAmounts?.length || 0) > 0;
+    if (!panelHasStructuredFacts) return supplementFactsStatus(supplierProduct);
+    return {
+      status: "extracted" as const,
+      value: [
+        panel?.servingSize ? `Serving Size: ${panel.servingSize}` : null,
+        panel?.servingsPerContainer ? `Servings Per Container: ${panel.servingsPerContainer}` : null,
+      ].filter(Boolean).join(" | "),
+      displayText: [
+        panel?.servingSize ? `Serving Size: ${panel.servingSize}` : null,
+        panel?.servingsPerContainer ? `Servings Per Container: ${panel.servingsPerContainer}` : null,
+      ].filter(Boolean).join(" | "),
+    };
+  })();
+  const panelIngredientAmounts = splitListValue((panel?.ingredientAmounts || []).join("\n"));
+  const panelActiveIngredients = (panel?.activeIngredients || []).map((entry) => entry.trim()).filter(Boolean);
+  const panelOtherIngredients = (panel?.otherIngredients || []).map((entry) => entry.trim()).filter(Boolean);
   const activeIngredients = sourceStatusForArray({
     product: supplierProduct,
-    values: supplierProduct?.activeIngredients,
+    values: panelActiveIngredients.length ? panelActiveIngredients : supplierProduct?.activeIngredients,
     fieldName: "Active Ingredients",
   });
   const amountPerServing = sourceStatusForScalar({
     product: supplierProduct,
-    value: supplierProduct?.amountPerServing,
+    value: panelIngredientAmounts.length ? panelIngredientAmounts.join(", ") : supplierProduct?.amountPerServing,
     fieldName: "Amount Per Serving",
   });
   const otherIngredients = sourceStatusForScalar({
     product: supplierProduct,
-    value: supplierProduct?.otherIngredients,
+    value: panelOtherIngredients.length ? panelOtherIngredients.join(", ") : supplierProduct?.otherIngredients,
     fieldName: "Other Ingredients",
   });
   const servingSize = sourceStatusForScalar({
     product: supplierProduct,
-    value: supplierProduct?.servingSize,
+    value: panel?.servingSize || supplierProduct?.servingSize,
     fieldName: "Serving Size",
   });
   const servingsPerContainer = sourceStatusForScalar({
     product: supplierProduct,
-    value: supplierProduct?.servingsPerContainer,
+    value: panel?.servingsPerContainer || supplierProduct?.servingsPerContainer,
     fieldName: "Servings Per Container",
   });
   const dietaryAllergenAttributes = sourceStatusForArray({
@@ -623,12 +653,12 @@ function buildSourceFacts(input: {
       displayText: availabilityFromInventoryStatus(inventoryStatus),
     },
     assets: {
-      coaUrl: supplierProduct?.coa?.url || null,
+      coaUrl: panel?.assetSummary.coaUrl || supplierProduct?.coa?.url || null,
       labelTemplateUrl: supplierProduct?.labelTemplate?.url || null,
       mockupUrl: supplierProduct?.mockup?.url || null,
-      coaStatus: supplierProduct?.coa?.url ? "available" : supplierProduct?.coa?.status || "pending_source",
+      coaStatus: panel?.assetSummary.coaPresent ? "available" : supplierProduct?.coa?.url ? "available" : supplierProduct?.coa?.status || "pending_source",
       coaLinkStatus: supplierProduct?.coaLinkStatus || "not_present",
-      message: supplierProduct?.coa?.url
+      message: (panel?.assetSummary.coaPresent || supplierProduct?.coa?.url)
         ? "available/extracted"
         : !supplierProduct
           ? "Source sync required."
@@ -875,6 +905,7 @@ export async function buildShopifyProductEditorStateForUser(
     product: resolved.product,
     currentShopifyListing,
     supplierProduct,
+    supplierFactsPanel,
     pdpIntelligence,
     syncStatus,
     lastSupplierCheckAt: supplierSnapshot?.lastCheckedAt ?? null,

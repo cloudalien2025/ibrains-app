@@ -110,3 +110,20 @@ Phase 6.2 does not introduce:
 - Review-only behavior remains unchanged:
   - no auto-save
   - no auto-publish
+
+## Phase 6.2.2-C Live Source Facts Addendum
+
+- Live signed-in Generate Intelligence now reuses authoritative supplier read-model facts/evidence during input build, instead of relying only on potentially stale source snapshot projection.
+- Input construction now merges:
+  - Product Editor source facts
+  - supplier facts panel (shared ecommerce DB read-model)
+  - supplier snapshot fallback
+- Runner now sanitizes internal/debug warning text before merchant render and suppresses contradictory missing-data lines when input evidence is present.
+- Product Editor source field wording is plain merchant language; OCR/dev placeholder phrasing is removed from merchant-facing displays.
+- Safe server-side trace logging was added for Generate requests with compact redacted summaries and trace IDs.
+- Boundaries remain unchanged:
+  - review-only proposal
+  - no auto-save
+  - no auto-publish
+  - no model call during page render
+  - no supplier writes/import/OCR/.ai extraction/source fetch
