@@ -56,14 +56,14 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 6.2.2-C Live Source Facts + Merchant Output Fix: Completed and merged (`sprint-6-2-2-c-live-generate-intelligence-source-facts`, live Generate Intelligence source-facts parity + output sanitization + Product Editor merchant wording cleanup; production deployed; signed-in browser QA pending user verification).
 - Shopify Phase 6.2.2-D Live Supplier Facts Hydration Fix: In progress (`sprint-6-2-2-d-live-supplier-facts-hydration`, live route supplier-facts rehydration by SKU + compact trace read-source diagnostics to prevent false `image_only` degradation when structured facts exist).
 - Shopify Phase 6.2.2-E Per-SKU Hydration + Compliance False-Block Fix: In progress (`sprint-6-2-2-e-hydration-compliance-fix`, parity diagnostics expansion + ROC123/ROC948 class hydration/compliance hardening).
-- Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation: In progress (`sprint-6-3-firecrawl-supplier-intelligence-extractor`, upstream Firecrawl-backed supplier extraction foundation + normalized package schema/provenance/validation and ROC948 fixture proof).
-- Current recommended sprint: `Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation`.
+- Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation: Completed and merged (`sprint-6-3-firecrawl-supplier-intelligence-extractor`, Firecrawl-backed supplier extraction foundation + normalized package schema/provenance/validation and ROC948 fixture proof; MR `!308`, pipeline `2568207604` success).
+- Current recommended sprint: `Shopify Phase 6.3.1 Firecrawl Live Extraction Calibration + Candidate Promotion`.
 
 ## Sprint Checkpoint: Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation (Local Branch)
 
 - Branch: `sprint-6-3-firecrawl-supplier-intelligence-extractor`
 - Date: `2026-06-01 (UTC)`
-- Local checkpoint status: `IMPLEMENTED_ONLY` (MR/pipeline/deploy/merge pending)
+- Local checkpoint status: `DELIVERED` (MR merged + pipeline green + branch cleanup + clean local `main`)
 - Foundation scope implemented:
   - Firecrawl wrapper with env-gated live mode + local cache + fixture mode:
     - `lib/ecomviper/suppliers/firecrawl/firecrawl-client.ts`
@@ -94,6 +94,30 @@ Last updated: 2026-06-01 (UTC)
   - no model call during page render
   - no production DB writes/imports/migrations in this phase
   - no default OCR extraction path in extractor foundation
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+
+## Sprint Closure Update: Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation
+
+- Sprint/branch: `sprint-6-3-firecrawl-supplier-intelligence-extractor`
+- MR:
+  - `!308`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/308`
+  - source branch commit SHA: `678ebb11260b26878408f7a0840d644e95cb2bb6`
+  - merge commit SHA: `8652a73779c4750a34c2f703ab3962f4ec71c2b5`
+  - MR pipeline `2568207604`: success
+- Branch cleanup:
+  - remote source branch deletion: completed via MR merge (`--remove-source-branch`)
+  - local source branch deletion: completed (`git branch -d sprint-6-3-firecrawl-supplier-intelligence-extractor`)
+  - local repository reset: clean `main` synced to `origin/main` before closure metadata branch
+- Delivered behavior summary:
+  - Firecrawl wrapper foundation added with fixture/cache/live boundaries and env-only key usage.
+  - normalized supplier intelligence schema + provenance + validation/audit outputs added.
+  - ROC948 golden fixture baseline added as structured regression proof.
+  - read-model compatibility projection tests added so Product Editor/Generate can consume normalized upstream facts.
+- Runtime safety confirmation:
+  - no Product Editor auto-save/publish
+  - no model call during page render
+  - no production supplier DB writes/imports/migrations in this phase
+  - no default OCR path for extractor foundation
   - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
 
