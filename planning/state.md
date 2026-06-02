@@ -59,7 +59,7 @@ Last updated: 2026-06-02 (UTC)
 - Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation: Completed and merged (`sprint-6-3-firecrawl-supplier-intelligence-extractor`, Firecrawl-backed supplier extraction foundation + normalized package schema/provenance/validation and ROC948 fixture proof; MR `!308`, pipeline `2568207604` success).
 - Shopify Phase 6.3.1 Rocktomic Live Source Parser (Firecrawl cache + PyMuPDF + CSV foundation): Completed and merged (`sprint-6-3-1-rocktomic-live-source-parser`, MR `!310`, pipeline `2568493491` success).
 - Shopify Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction: Completed and merged (`sprint-6-3-2-rocktomic-supplement-facts-panel-extraction`, MR `!312`, pipeline `2568627769` success, production release SHA verified).
-- Shopify Phase 6.4 Rocktomic Master Package Builder: In progress (`sprint-6-4-rocktomic-master-package-builder`, production-grade offline source ingestion pipeline + canonical master package schema + source identity validator + RFC 4180 CSV parser + field-level provenance + runtime validation + read helpers).
+- Shopify Phase 6.4 Rocktomic Master Package Builder: In progress (`sprint-6-4-rocktomic-master-package-builder`, branch pushed to origin; MR creation pending GitLab token — use MR creation link from push output).
 - Current recommended sprint: `Shopify Phase 6.4 Rocktomic Master Package Builder` (in progress on branch `sprint-6-4-rocktomic-master-package-builder`).
 
 ## Sprint Checkpoint: Phase 6.4 Rocktomic Master Package Builder (Local Branch)
