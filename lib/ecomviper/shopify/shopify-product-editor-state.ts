@@ -1,5 +1,11 @@
 import "server-only";
 
+import {
+  getRocktomicPackageFactsForSku,
+  mapPackageProductToHydratedFacts,
+  supplementFactsStatusToMerchantText,
+  type PackageHydratedFacts,
+} from "@/lib/ecomviper/suppliers/rocktomic/rocktomic-package-source-facts";
 import { buildShopifyAgenticDemoWorkspaceState } from "@/lib/ecomviper/shopify/shopify-agentic-demo-data";
 import { getShopifyConnectionStatusForUser } from "@/lib/ecomviper/shopify/shopify-connection";
 import { hydrateShopifyLiveWorkspaceForUser } from "@/lib/ecomviper/shopify/shopify-live-hydrator";
@@ -310,13 +316,32 @@ function normalizedRecordFound(product: RocktomicSupplierProduct | null, recordN
   return Boolean(product.coa?.url || product.labelTemplate?.url || product.mockup?.url);
 }
 
+function packageMissingFieldText(fieldName: string, packageFacts: PackageHydratedFacts): string {
+  const sf = packageFacts.supplementFactsStatus;
+  if (sf === "visual_only") return `${fieldName}: ${supplementFactsStatusToMerchantText("visual_only")}`;
+  if (sf === "missing") return `${fieldName}: ${supplementFactsStatusToMerchantText("missing")}`;
+  return `${fieldName} not available in supplier package for this product.`;
+}
+
 function sourceStatusForScalar(input: {
   product: RocktomicSupplierProduct | null;
   value: string | null | undefined;
   fieldName: string;
+  packageFacts?: PackageHydratedFacts | null;
 }): { status: ShopifyProductEditorSourceFieldStatus; value: string; displayText: string } {
   const value = asString(input.value);
   if (value) return { status: "extracted", value, displayText: value };
+  if (input.packageFacts) {
+    const sf = input.packageFacts.supplementFactsStatus;
+    if (sf === "not_applicable") {
+      return { status: "not_applicable", value: "", displayText: `${input.fieldName} not applicable for this product type.` };
+    }
+    return {
+      status: sf === "structured" || sf === "partial" ? "partial" : "source_missing",
+      value: "",
+      displayText: packageMissingFieldText(input.fieldName, input.packageFacts),
+    };
+  }
   if (!input.product) {
     return { status: "source_sync_required", value: "", displayText: "Run source sync to extract supplier facts." };
   }
@@ -337,9 +362,21 @@ function sourceStatusForArray(input: {
   product: RocktomicSupplierProduct | null;
   values: string[] | null | undefined;
   fieldName: string;
+  packageFacts?: PackageHydratedFacts | null;
 }): { status: ShopifyProductEditorSourceFieldStatus; values: string[]; displayText: string } {
   const values = Array.from(new Set((input.values || []).map((entry) => entry.trim()).filter(Boolean)));
   if (values.length) return { status: "extracted", values, displayText: values.join(", ") };
+  if (input.packageFacts) {
+    const sf = input.packageFacts.supplementFactsStatus;
+    if (sf === "not_applicable") {
+      return { status: "not_applicable", values: [], displayText: `${input.fieldName} not applicable for this product type.` };
+    }
+    return {
+      status: sf === "structured" || sf === "partial" ? "partial" : "source_missing",
+      values: [],
+      displayText: packageMissingFieldText(input.fieldName, input.packageFacts),
+    };
+  }
   if (!input.product) {
     return { status: "source_sync_required", values: [], displayText: "Run source sync to extract supplier facts." };
   }
@@ -460,6 +497,7 @@ function buildSourceFacts(input: {
   pdpIntelligence: ShopifyPdpIntelligenceRecord | null;
   syncStatus: string | null;
   lastSupplierCheckAt: string | null;
+  packageFacts: PackageHydratedFacts | null;
 }): ShopifyProductEditorSourceFacts {
   const supplierProduct = input.supplierProduct;
   const panel = input.supplierFactsPanel;
@@ -492,7 +530,48 @@ function buildSourceFacts(input: {
     pdpIntelligence: input.pdpIntelligence,
     latestSupplierSyncAt,
   });
+  const packageFacts = input.packageFacts;
   const supplementFacts = (() => {
+    if (packageFacts) {
+      const sf = packageFacts.supplementFactsStatus;
+      if (sf === "structured" || sf === "partial") {
+        const hasData = packageFacts.activeIngredients.length > 0 || packageFacts.servingSize;
+        if (hasData) {
+          return {
+            status: "extracted" as const,
+            value: [
+              packageFacts.servingSize ? `Serving Size: ${packageFacts.servingSize}` : null,
+              packageFacts.servingsPerContainer ? `Servings Per Container: ${packageFacts.servingsPerContainer}` : null,
+            ].filter(Boolean).join(" | "),
+            displayText: packageFacts.supplementFactsMerchantText,
+          };
+        }
+        return {
+          status: "partial" as const,
+          value: "",
+          displayText: packageFacts.supplementFactsMerchantText,
+        };
+      }
+      if (sf === "visual_only") {
+        return {
+          status: "partial" as const,
+          value: "",
+          displayText: supplementFactsStatusToMerchantText("visual_only"),
+        };
+      }
+      if (sf === "not_applicable") {
+        return {
+          status: "not_applicable" as const,
+          value: "",
+          displayText: supplementFactsStatusToMerchantText("not_applicable"),
+        };
+      }
+      return {
+        status: "source_missing" as const,
+        value: "",
+        displayText: supplementFactsStatusToMerchantText("missing"),
+      };
+    }
     const panelHasStructuredFacts =
       Boolean(panel?.servingSize)
       || Boolean(panel?.servingsPerContainer)
@@ -514,30 +593,55 @@ function buildSourceFacts(input: {
   const panelIngredientAmounts = splitListValue((panel?.ingredientAmounts || []).join("\n"));
   const panelActiveIngredients = (panel?.activeIngredients || []).map((entry) => entry.trim()).filter(Boolean);
   const panelOtherIngredients = (panel?.otherIngredients || []).map((entry) => entry.trim()).filter(Boolean);
+  const pkgActiveIngredients = packageFacts?.activeIngredients ?? [];
+  const pkgIngredientAmounts = packageFacts?.ingredientAmounts ?? [];
+  const pkgOtherIngredients = packageFacts?.otherIngredients ?? [];
+  const effectiveActiveIngredients = pkgActiveIngredients.length
+    ? pkgActiveIngredients
+    : panelActiveIngredients.length
+      ? panelActiveIngredients
+      : supplierProduct?.activeIngredients;
+  const effectiveIngredientAmounts = pkgIngredientAmounts.length
+    ? pkgIngredientAmounts.join(", ")
+    : panelIngredientAmounts.length
+      ? panelIngredientAmounts.join(", ")
+      : supplierProduct?.amountPerServing;
+  const effectiveOtherIngredients = pkgOtherIngredients.length
+    ? pkgOtherIngredients.join(", ")
+    : panelOtherIngredients.length
+      ? panelOtherIngredients.join(", ")
+      : supplierProduct?.otherIngredients;
+  const effectiveServingSize = packageFacts?.servingSize ?? panel?.servingSize ?? supplierProduct?.servingSize;
+  const effectiveServingsPerContainer = packageFacts?.servingsPerContainer ?? panel?.servingsPerContainer ?? supplierProduct?.servingsPerContainer;
   const activeIngredients = sourceStatusForArray({
     product: supplierProduct,
-    values: panelActiveIngredients.length ? panelActiveIngredients : supplierProduct?.activeIngredients,
+    values: effectiveActiveIngredients,
     fieldName: "Active Ingredients",
+    packageFacts,
   });
   const amountPerServing = sourceStatusForScalar({
     product: supplierProduct,
-    value: panelIngredientAmounts.length ? panelIngredientAmounts.join(", ") : supplierProduct?.amountPerServing,
+    value: effectiveIngredientAmounts,
     fieldName: "Amount Per Serving",
+    packageFacts,
   });
   const otherIngredients = sourceStatusForScalar({
     product: supplierProduct,
-    value: panelOtherIngredients.length ? panelOtherIngredients.join(", ") : supplierProduct?.otherIngredients,
+    value: effectiveOtherIngredients,
     fieldName: "Other Ingredients",
+    packageFacts,
   });
   const servingSize = sourceStatusForScalar({
     product: supplierProduct,
-    value: panel?.servingSize || supplierProduct?.servingSize,
+    value: effectiveServingSize,
     fieldName: "Serving Size",
+    packageFacts,
   });
   const servingsPerContainer = sourceStatusForScalar({
     product: supplierProduct,
-    value: panel?.servingsPerContainer || supplierProduct?.servingsPerContainer,
+    value: effectiveServingsPerContainer,
     fieldName: "Servings Per Container",
+    packageFacts,
   });
   const dietaryAllergenAttributes = sourceStatusForArray({
     product: supplierProduct,
@@ -605,6 +709,8 @@ function buildSourceFacts(input: {
     `stale_intelligence: ${staleIntelligence ? "true" : "false"}`,
     `supplier_sync_status: ${input.syncStatus || "unknown"}`,
     `supplement_facts_status: ${supplementFacts.status}`,
+    `package_supplement_facts_status: ${packageFacts?.supplementFactsStatus ?? "not_checked"}`,
+    `package_sku_found: ${packageFacts ? "true" : "false"}`,
     `missing_fields: ${missingFields.length ? missingFields.join(",") : "none"}`,
     ...(supplierProduct?.sourceDiagnostics || []),
   ];
@@ -653,10 +759,10 @@ function buildSourceFacts(input: {
       displayText: availabilityFromInventoryStatus(inventoryStatus),
     },
     assets: {
-      coaUrl: panel?.assetSummary.coaUrl || supplierProduct?.coa?.url || null,
+      coaUrl: panel?.assetSummary.coaUrl || packageFacts?.coaUrl || supplierProduct?.coa?.url || null,
       labelTemplateUrl: supplierProduct?.labelTemplate?.url || null,
       mockupUrl: supplierProduct?.mockup?.url || null,
-      coaStatus: panel?.assetSummary.coaPresent ? "available" : supplierProduct?.coa?.url ? "available" : supplierProduct?.coa?.status || "pending_source",
+      coaStatus: panel?.assetSummary.coaPresent ? "available" : packageFacts?.coaUrl ? "available" : supplierProduct?.coa?.url ? "available" : supplierProduct?.coa?.status || "pending_source",
       coaLinkStatus: supplierProduct?.coaLinkStatus || "not_present",
       message: (panel?.assetSummary.coaPresent || supplierProduct?.coa?.url)
         ? "available/extracted"
@@ -901,6 +1007,16 @@ export async function buildShopifyProductEditorStateForUser(
     : null;
   const inventoryAvailable = supplierSnapshot?.inventoryAvailable ?? false;
   const syncStatus = supplierSnapshot?.syncStatus || null;
+  const skusForPackage = currentShopifyListing.variants.map((entry) => entry.sku.trim()).filter(Boolean);
+  const packageSkuCandidates = Array.from(new Set(skusForPackage.map((s) => s.toUpperCase().replace(/[^A-Z0-9]/g, "")).filter(Boolean)));
+  let packageFacts: PackageHydratedFacts | null = null;
+  for (const sku of packageSkuCandidates) {
+    const pkgResult = await getRocktomicPackageFactsForSku(sku).catch(() => null);
+    if (pkgResult?.packageSkuStatus === "sku_found" && pkgResult.product) {
+      packageFacts = mapPackageProductToHydratedFacts(pkgResult.product);
+      break;
+    }
+  }
   const sourceFacts = buildSourceFacts({
     product: resolved.product,
     currentShopifyListing,
@@ -909,6 +1025,7 @@ export async function buildShopifyProductEditorStateForUser(
     pdpIntelligence,
     syncStatus,
     lastSupplierCheckAt: supplierSnapshot?.lastCheckedAt ?? null,
+    packageFacts,
   });
   const supplierInventoryStatus = sourceFacts.inventory.status;
   const syncRequired = !supplierProduct;

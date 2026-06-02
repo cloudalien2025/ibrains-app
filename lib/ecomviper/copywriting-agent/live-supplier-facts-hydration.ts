@@ -3,8 +3,12 @@ import path from "node:path";
 import { queryEcommerce } from "@/lib/ecommerce/database";
 import type { SupplierFactsPanelViewModel } from "@/lib/ecommerce/supplier-facts-types";
 import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/shopify-product-editor-state";
+import {
+  getRocktomicPackageFactsForSku,
+  mapPackageProductToHydratedFacts,
+} from "@/lib/ecomviper/suppliers/rocktomic/rocktomic-package-source-facts";
 
-type SupplierFactsReadSource = "db" | "artifact" | "none" | "failed";
+type SupplierFactsReadSource = "package" | "db" | "artifact" | "none" | "failed";
 
 interface HydratedFactsPayload {
   supplierSku: string;
@@ -22,7 +26,8 @@ interface HydratedFactsPayload {
   aiLabelTextEvidenceStatus: string;
   sourceMethod: string | null;
   needsReview: boolean;
-  source: "db" | "artifact";
+  source: "package" | "db" | "artifact";
+  packageSupplementFactsStatus?: string | null;
 }
 
 interface SupplierFactsHydrationResult {
@@ -30,7 +35,9 @@ interface SupplierFactsHydrationResult {
   supplierFactsReadSource: SupplierFactsReadSource;
   supplierFactsReadFound: boolean;
   supplierFactsReadErrorCode: string | null;
+  packageSupplementFactsStatus: string | null;
   readDiagnostics: {
+    package: { attempted: boolean; found: boolean; supplementFactsStatus: string | null; errorCode: string | null };
     db: { attempted: boolean; found: boolean; errorCode: string | null };
     artifact: { attempted: boolean; found: boolean; errorCode: string | null };
   };
@@ -194,6 +201,35 @@ function readSupplementFactsShape(input: unknown): {
   };
 }
 
+async function readPackageHydratedFactsBySkus(skus: string[]): Promise<HydratedFactsPayload | null> {
+  if (skus.length === 0) return null;
+  for (const sku of skus) {
+    const result = await getRocktomicPackageFactsForSku(sku).catch(() => null);
+    if (!result || result.packageSkuStatus !== "sku_found" || !result.product) continue;
+    const facts = mapPackageProductToHydratedFacts(result.product);
+    return {
+      supplierSku: facts.supplierSku,
+      supplierProductName: facts.supplierProductName,
+      activeIngredients: facts.activeIngredients,
+      ingredientAmounts: facts.ingredientAmounts,
+      otherIngredients: facts.otherIngredients,
+      servingSize: facts.servingSize,
+      servingsPerContainer: facts.servingsPerContainer,
+      directions: null,
+      warnings: facts.warnings,
+      coaUrl: facts.coaUrl,
+      labelTemplateAiPresent: facts.labelTemplateAiPresent,
+      mockupTemplateTifPresent: facts.mockupTemplateTifPresent,
+      aiLabelTextEvidenceStatus: "package",
+      sourceMethod: "master_package",
+      needsReview: facts.supplementFactsStatus !== "structured",
+      source: "package",
+      packageSupplementFactsStatus: facts.supplementFactsStatus,
+    };
+  }
+  return null;
+}
+
 async function readDbHydratedFactsBySkus(skus: string[]): Promise<HydratedFactsPayload | null> {
   if (!process.env.ECOMMERCE_DATABASE_URL?.trim() || skus.length === 0) return null;
 
@@ -341,7 +377,9 @@ function mergeHydratedFactsIntoPanel(
     supplierSlug: "rocktomic",
     message: payload.source === "db"
       ? "Validated supplier match found from shared ecommerce database."
-      : "Supplier facts rehydrated from source artifacts.",
+      : payload.source === "package"
+        ? "Supplier facts loaded from Rocktomic master package."
+        : "Supplier facts rehydrated from source artifacts.",
     checkedIdentifiers: {
       skus: variants.map((variant) => asString(variant.sku)).filter(Boolean),
       normalizedSkus: variants.map((variant) => normalizeSku(variant.sku)).filter(Boolean),
@@ -445,6 +483,7 @@ export async function hydrateLiveSupplierFactsForCopywriting(
   state: ShopifyProductEditorInitialState
 ): Promise<SupplierFactsHydrationResult> {
   const readDiagnostics: SupplierFactsHydrationResult["readDiagnostics"] = {
+    package: { attempted: false, found: false, supplementFactsStatus: null, errorCode: null },
     db: { attempted: false, found: false, errorCode: null },
     artifact: { attempted: false, found: false, errorCode: null },
   };
@@ -455,6 +494,7 @@ export async function hydrateLiveSupplierFactsForCopywriting(
       supplierFactsReadSource: "none",
       supplierFactsReadFound: false,
       supplierFactsReadErrorCode: null,
+      packageSupplementFactsStatus: null,
       readDiagnostics,
     };
   }
@@ -465,6 +505,7 @@ export async function hydrateLiveSupplierFactsForCopywriting(
       supplierFactsReadSource: panelHasStructuredFacts(state.supplierFactsPanel) ? "db" : "none",
       supplierFactsReadFound: panelHasStructuredFacts(state.supplierFactsPanel),
       supplierFactsReadErrorCode: null,
+      packageSupplementFactsStatus: null,
       readDiagnostics: {
         ...readDiagnostics,
         db: {
@@ -483,6 +524,26 @@ export async function hydrateLiveSupplierFactsForCopywriting(
       supplierFactsReadSource: "none",
       supplierFactsReadFound: false,
       supplierFactsReadErrorCode: null,
+      packageSupplementFactsStatus: null,
+      readDiagnostics,
+    };
+  }
+
+  // Package is the first-priority source for supplement facts.
+  readDiagnostics.package.attempted = true;
+  const packagePayload = await readPackageHydratedFactsBySkus(skuCandidates).catch(() => null);
+  if (packagePayload) {
+    readDiagnostics.package.found = true;
+    readDiagnostics.package.supplementFactsStatus = packagePayload.packageSupplementFactsStatus ?? null;
+    return {
+      state: {
+        ...state,
+        supplierFactsPanel: mergeHydratedFactsIntoPanel(state, packagePayload),
+      },
+      supplierFactsReadSource: "package",
+      supplierFactsReadFound: true,
+      supplierFactsReadErrorCode: null,
+      packageSupplementFactsStatus: packagePayload.packageSupplementFactsStatus ?? null,
       readDiagnostics,
     };
   }
@@ -500,12 +561,12 @@ export async function hydrateLiveSupplierFactsForCopywriting(
         supplierFactsReadSource: "db",
         supplierFactsReadFound: true,
         supplierFactsReadErrorCode: null,
+        packageSupplementFactsStatus: null,
         readDiagnostics,
       };
     }
   } catch {
     readDiagnostics.db.errorCode = "DB_READ_FAILED";
-    // Continue to artifact fallback and keep a safe read error code.
     readDiagnostics.artifact.attempted = true;
     const artifactPayload = await readArtifactHydratedFactsBySkus(skuCandidates).catch(() => null);
     if (artifactPayload) {
@@ -518,6 +579,7 @@ export async function hydrateLiveSupplierFactsForCopywriting(
         supplierFactsReadSource: "artifact",
         supplierFactsReadFound: true,
         supplierFactsReadErrorCode: "DB_READ_FAILED",
+        packageSupplementFactsStatus: null,
         readDiagnostics,
       };
     }
@@ -526,6 +588,7 @@ export async function hydrateLiveSupplierFactsForCopywriting(
       supplierFactsReadSource: "failed",
       supplierFactsReadFound: false,
       supplierFactsReadErrorCode: "DB_READ_FAILED",
+      packageSupplementFactsStatus: null,
       readDiagnostics,
     };
   }
@@ -542,6 +605,7 @@ export async function hydrateLiveSupplierFactsForCopywriting(
       supplierFactsReadSource: "artifact",
       supplierFactsReadFound: true,
       supplierFactsReadErrorCode: null,
+      packageSupplementFactsStatus: null,
       readDiagnostics,
     };
   }
@@ -551,6 +615,7 @@ export async function hydrateLiveSupplierFactsForCopywriting(
     supplierFactsReadSource: "none",
     supplierFactsReadFound: false,
     supplierFactsReadErrorCode: null,
+    packageSupplementFactsStatus: null,
     readDiagnostics,
   };
 }

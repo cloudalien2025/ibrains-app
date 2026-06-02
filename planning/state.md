@@ -59,8 +59,8 @@ Last updated: 2026-06-02 (UTC)
 - Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation: Completed and merged (`sprint-6-3-firecrawl-supplier-intelligence-extractor`, Firecrawl-backed supplier extraction foundation + normalized package schema/provenance/validation and ROC948 fixture proof; MR `!308`, pipeline `2568207604` success).
 - Shopify Phase 6.3.1 Rocktomic Live Source Parser (Firecrawl cache + PyMuPDF + CSV foundation): Completed and merged (`sprint-6-3-1-rocktomic-live-source-parser`, MR `!310`, pipeline `2568493491` success).
 - Shopify Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction: Completed and merged (`sprint-6-3-2-rocktomic-supplement-facts-panel-extraction`, MR `!312`, pipeline `2568627769` success, production release SHA verified).
-- Shopify Phase 6.4 Rocktomic Master Package Builder: `READY_TO_MERGE_IN_UI` (`sprint-6-4-rocktomic-master-package-builder`, branch pushed to origin, all pre-merge checks pass; MR creation blocked on GitLab write-token — open MR at https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/new?merge_request%5Bsource_branch%5D=sprint-6-4-rocktomic-master-package-builder then wait for green pipeline and merge with --squash=false --delete-source-branch).
-- Current recommended sprint: `Shopify Phase 6.4 Rocktomic Master Package Builder` (in progress on branch `sprint-6-4-rocktomic-master-package-builder`).
+- Shopify Phase 6.4 Rocktomic Master Package Builder: Completed and merged (`sprint-6-4-rocktomic-master-package-builder`, MR `!315`, pipeline `2570381373` success, merge SHA `c363135be8f521979e29af09a34b3632c60ec378`, production deployed and verified).
+- Current recommended sprint: `Shopify Phase 6.5 or next EcomViper workstream` — Phase 6.4 is fully closed; main is clean.
 
 ## Sprint Checkpoint: Phase 6.4 Rocktomic Master Package Builder (Local Branch)
 
@@ -113,6 +113,49 @@ Last updated: 2026-06-02 (UTC)
   - no live Firecrawl or OpenAI required in tests
   - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
   - no SKU-specific implementation logic
+
+## Sprint Closure Update: Phase 6.4 Rocktomic Master Package Builder
+
+- Sprint/branch: `sprint-6-4-rocktomic-master-package-builder`
+- MR:
+  - `!315`: `https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/315`
+  - merge commit SHA: `c363135be8f521979e29af09a34b3632c60ec378` (short: `c363135`)
+  - MR pipeline `2570381373`: success
+- Main/deploy pipeline:
+  - pipeline `2570391704`: success
+  - jobs green: `verify_frontdoor_integrity`, `build_release`, `deploy_production`
+- Branch cleanup:
+  - remote source branch deletion: completed via MR merge (`--remove-source-branch`)
+  - local source branch deletion: completed (`git branch -d sprint-6-4-rocktomic-master-package-builder`)
+  - local repository reset: clean `main` synced to `origin/main` (HEAD `c363135be8f521979e29af09a34b3632c60ec378`)
+- Production release verification:
+  - `/api/meta/release`:
+    - `git_sha=c363135be8f521979e29af09a34b3632c60ec378`
+    - `git_sha_short=c363135`
+    - `build_id=2570391704`
+    - `build_timestamp=2026-06-02T13:05:59Z`
+    - `deployed_at=2026-06-02T13:05:59Z`
+    - `release_metadata_complete=true`
+  - `/api/health`: `{"ok":true,"upstream_ok":true}` — HTTP 200
+  - production smoke (`RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai`):
+    - all HTTP route checks passed (`/api/health 200`, `/api/meta/release 200`, `/brains 307`, `/ecomviper 307`, `/ecomviper/settings 307`, `/ecomviper/dropshipping/rocktomic 307`)
+    - all static asset checks passed (JS/CSS bundles returned 200 with correct content-type)
+    - `release build_id is non-null` ✓, `release git_sha is non-null` ✓
+    - 6 smoke failures are local Windows environment artifacts (no Python, no sudo, no systemd/nginx service checks) — not production failures
+- Validation summary from Phase 6.4 implementation:
+  - `product_count=164`
+  - `source_identity_valid=false` (1 duplicate URL, 1 duplicate sheet ID — correctly detected; `plds_catalog` + `msrp_report` confirmed same Google Sheet ID)
+  - `supplement_facts_structured=68`, `partial=62`, `visual_only=15`, `missing=19`
+  - `missing_productName=19`, `missing_pricing=22`, `missing_inventory=11`, `missing_coaUrl=40`
+  - `validation_package_status=fail` (1 invalid SKU: string literal "UNDEFINED" correctly detected)
+  - `validation_warning=163`, `validation_valid=0`, `validation_invalid=1`
+  - 104 tests across 9 focused test files — all passing
+- Boundary confirmation:
+  - no Product Editor behavior change
+  - no auto-save/publish
+  - no model call during page render
+  - no DB writes/imports/migrations
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
 
 ## Sprint Checkpoint: Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction (Local Branch)
 
