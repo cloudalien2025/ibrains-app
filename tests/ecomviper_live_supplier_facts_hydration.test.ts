@@ -3,10 +3,26 @@ import type { ShopifyProductEditorInitialState } from "@/lib/ecomviper/shopify/s
 
 const mocks = vi.hoisted(() => ({
   queryEcommerce: vi.fn(),
+  getRocktomicPackageFactsForSku: vi.fn().mockResolvedValue({
+    packageReadStatus: "package_missing",
+    packageSkuStatus: "sku_missing",
+    product: null,
+    supplementFactsStatus: null,
+    activeIngredientCount: 0,
+    nutrientFactCount: 0,
+    missingDataCount: 0,
+    diagnostics: ["package_file: not_found"],
+  }),
+  mapPackageProductToHydratedFacts: vi.fn(),
 }));
 
 vi.mock("@/lib/ecommerce/database", () => ({
   queryEcommerce: mocks.queryEcommerce,
+}));
+
+vi.mock("@/lib/ecomviper/suppliers/rocktomic/rocktomic-package-source-facts", () => ({
+  getRocktomicPackageFactsForSku: mocks.getRocktomicPackageFactsForSku,
+  mapPackageProductToHydratedFacts: mocks.mapPackageProductToHydratedFacts,
 }));
 
 function createState(overrides?: Partial<ShopifyProductEditorInitialState>): ShopifyProductEditorInitialState {

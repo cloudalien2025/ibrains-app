@@ -54,7 +54,7 @@ function createTraceId(): string {
 }
 
 function summarizeCopywritingInput(input: ProductCopywritingInput, factsRead: {
-  supplierFactsReadSource: "db" | "artifact" | "none" | "failed";
+  supplierFactsReadSource: "package" | "db" | "artifact" | "none" | "failed";
   supplierFactsReadFound: boolean;
   supplierFactsReadErrorCode: string | null;
 }) {
@@ -338,6 +338,9 @@ export async function POST(req: NextRequest) {
         supplier_facts_read_source: hydrationResult.supplierFactsReadSource,
         supplier_facts_read_found: hydrationResult.supplierFactsReadFound,
         supplier_facts_read_error_code: hydrationResult.supplierFactsReadErrorCode,
+        package_supplement_facts_status: hydrationResult.packageSupplementFactsStatus,
+        package_read_attempted: hydrationResult.readDiagnostics.package.attempted,
+        package_sku_found: hydrationResult.readDiagnostics.package.found,
         normalized_sku: sourceFacts?.normalizedSku || null,
         supplier_product_record_status: sourceFacts?.supplierProductRecordFound ? "synced" : "missing",
         pricing_record_status: sourceFacts?.pricingRecordFound ? "synced" : "missing",
