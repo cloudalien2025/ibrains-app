@@ -1,0 +1,1575 @@
+{
+  "generatedAt": "2026-06-02T05:02:24.069Z",
+  "packageVersion": "1.0.0",
+  "packageStatus": "fail",
+  "productCount": 164,
+  "validProductCount": 0,
+  "warningProductCount": 163,
+  "invalidProductCount": 1,
+  "supplementFactsCounts": {
+    "structured": 68,
+    "partial": 62,
+    "visual_only": 15,
+    "missing": 19,
+    "not_applicable": 0
+  },
+  "inventoryStatusCounts": {
+    "in_stock": 126,
+    "low_stock": 4,
+    "out_of_stock": 23,
+    "backordered": 0,
+    "unknown": 11
+  },
+  "missingDataCounts": {
+    "productName": 19,
+    "category": 164,
+    "pricing": 22,
+    "msrp": 164,
+    "inventory": 11,
+    "coaUrl": 40,
+    "labelTemplateUrl": 16,
+    "mockupUrl": 16,
+    "supplementFacts": 19,
+    "provenance": 8
+  },
+  "perProduct": [
+    {
+      "sku": "ROC001",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing",
+        "inventory_status_unknown",
+        "missing_provenance"
+      ]
+    },
+    {
+      "sku": "ROC002",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing",
+        "inventory_status_unknown",
+        "missing_provenance"
+      ]
+    },
+    {
+      "sku": "ROC004",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing",
+        "inventory_status_unknown",
+        "missing_provenance"
+      ]
+    },
+    {
+      "sku": "ROC006",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing",
+        "inventory_status_unknown",
+        "missing_provenance"
+      ]
+    },
+    {
+      "sku": "ROC008",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing",
+        "inventory_status_unknown",
+        "missing_provenance"
+      ]
+    },
+    {
+      "sku": "ROC009",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing",
+        "inventory_status_unknown",
+        "missing_provenance"
+      ]
+    },
+    {
+      "sku": "ROC010",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC011",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC012",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC013",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC014",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC015",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC016",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC017",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC018",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC100",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing"
+      ]
+    },
+    {
+      "sku": "ROC102",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing",
+        "inventory_status_unknown"
+      ]
+    },
+    {
+      "sku": "ROC105",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC107M",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC110M",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC112",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing",
+        "inventory_status_unknown",
+        "missing_provenance"
+      ]
+    },
+    {
+      "sku": "ROC1120",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC1125",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC1205",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC121",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC1215",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC123",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC126",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC210N",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC220",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC2201N",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC223",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC2232",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC224",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC2241N",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC2251",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC2272",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC2292",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC260V",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC263V",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC281",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC2811",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC282",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC2821",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC2841",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC2851",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC2861",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC301",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC302",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC303",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC304",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC401",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC402",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC450",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC501",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC502",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC503",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC504",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC506",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC507",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC507W",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC508",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC509",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC601",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC603",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC604",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC605",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC606",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC607",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC608",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC609",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC610",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC611",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC612",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC613",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC617",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC618",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC619",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC620",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing"
+      ]
+    },
+    {
+      "sku": "ROC621",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing"
+      ]
+    },
+    {
+      "sku": "ROC622",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing"
+      ]
+    },
+    {
+      "sku": "ROC623",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing"
+      ]
+    },
+    {
+      "sku": "ROC714",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC717",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC720",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC721",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC723",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC725",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC727",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC728",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC729",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC730",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC731",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC732",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC733",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC734",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC735",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC736",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC738",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC739",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC740",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC741",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC743",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC744",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC745",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC801",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC802",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC803",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC805",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC808",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC812",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC814",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC816",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC817",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC818",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC822",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC823",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC824",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC826",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC830",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC831",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC835",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC840",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing"
+      ]
+    },
+    {
+      "sku": "ROC841",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing"
+      ]
+    },
+    {
+      "sku": "ROC903M",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC908",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing"
+      ]
+    },
+    {
+      "sku": "ROC910",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing"
+      ]
+    },
+    {
+      "sku": "ROC911",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing"
+      ]
+    },
+    {
+      "sku": "ROC914",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC915",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC917",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing",
+        "inventory_status_unknown"
+      ]
+    },
+    {
+      "sku": "ROC918",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC919",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC920",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC921",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing",
+        "inventory_status_unknown"
+      ]
+    },
+    {
+      "sku": "ROC922",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC923",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC924",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC925",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC927",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC928",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC929",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC930",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC934",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC937",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC939",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC941",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing"
+      ]
+    },
+    {
+      "sku": "ROC943",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC944",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC945",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC946",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC947",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC948",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC949",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC980",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC981",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC982",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC983",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC984",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC985",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC986",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC987",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "ROC988",
+      "valid": true,
+      "errors": [],
+      "warnings": [
+        "missing_category",
+        "unknown_membershipAccess"
+      ]
+    },
+    {
+      "sku": "UNDEFINED",
+      "valid": false,
+      "errors": [
+        "invalid_sku: \"UNDEFINED\""
+      ],
+      "warnings": [
+        "missing_productName",
+        "missing_category",
+        "unknown_membershipAccess",
+        "missing_all_pricing",
+        "inventory_status_unknown",
+        "missing_provenance"
+      ]
+    }
+  ]
+}

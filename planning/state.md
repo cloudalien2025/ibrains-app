@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-06-01 (UTC)
+Last updated: 2026-06-02 (UTC)
 
 ## Program Status
 
@@ -59,7 +59,60 @@ Last updated: 2026-06-01 (UTC)
 - Shopify Phase 6.3 Firecrawl Supplier Intelligence Extractor Foundation: Completed and merged (`sprint-6-3-firecrawl-supplier-intelligence-extractor`, Firecrawl-backed supplier extraction foundation + normalized package schema/provenance/validation and ROC948 fixture proof; MR `!308`, pipeline `2568207604` success).
 - Shopify Phase 6.3.1 Rocktomic Live Source Parser (Firecrawl cache + PyMuPDF + CSV foundation): Completed and merged (`sprint-6-3-1-rocktomic-live-source-parser`, MR `!310`, pipeline `2568493491` success).
 - Shopify Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction: Completed and merged (`sprint-6-3-2-rocktomic-supplement-facts-panel-extraction`, MR `!312`, pipeline `2568627769` success, production release SHA verified).
-- Current recommended sprint: `Shopify Phase 6.3.3 ROC panel-quality promotion calibration`.
+- Shopify Phase 6.4 Rocktomic Master Package Builder: In progress (`sprint-6-4-rocktomic-master-package-builder`, production-grade offline source ingestion pipeline + canonical master package schema + source identity validator + RFC 4180 CSV parser + field-level provenance + runtime validation + read helpers).
+- Current recommended sprint: `Shopify Phase 6.4 Rocktomic Master Package Builder` (in progress on branch `sprint-6-4-rocktomic-master-package-builder`).
+
+## Sprint Checkpoint: Phase 6.4 Rocktomic Master Package Builder (Local Branch)
+
+- Branch: `sprint-6-4-rocktomic-master-package-builder`
+- Date: `2026-06-02 (UTC)`
+- Local checkpoint status: `IMPLEMENTED_ONLY`
+- Root cause diagnosed:
+  - Existing `rocktomic-ingest.ts` / `build_rocktomic_supplier_data.ts` did not produce a canonical unified master package with field-level provenance, source identity validation, or RFC 4180 compliant CSV parsing.
+  - Source URL #1 and #6 were both labeled the same Google Sheet ID; confirmed as duplicate: `plds_catalog` and `msrp_profit_margins_report` share the same Google Sheet ID (`15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU`).
+  - Catalog PDF URL was already correctly set in `sources.json` (not the inventory sheet).
+  - Legacy CSV parser in `google-sheets-csv.ts` splits on `\n` before handling quotes — fragile for embedded newlines.
+- Scope implemented:
+  - Source identity validator (`lib/ecomviper/suppliers/rocktomic/source-identity-validator.ts`): detects duplicate URLs, duplicate sheet IDs, type mismatches, mislabeled catalog-as-sheet
+  - RFC 4180 state-machine CSV parser (`lib/ecomviper/suppliers/rocktomic/rocktomic-csv-parser.ts`): handles embedded newlines, escaped quotes, CRLF/LF
+  - Sheet-specific parsers (`lib/ecomviper/suppliers/rocktomic/rocktomic-sheet-parsers.ts`): PLDS catalog, MSRP/pricing, inventory with row/column provenance
+  - Canonical master package schema + runtime validation (`lib/ecomviper/suppliers/rocktomic/master-package-schema.ts`): all required product fields, supplement facts status enum, field-level provenance, missingData flags, validateProductRecord, validateMasterPackage
+  - Master package builder (`lib/ecomviper/suppliers/rocktomic/master-package-builder.ts`): merges all sources by SKU, field-level provenance, does NOT default membershipAccess to "all"
+  - Templates HTML parser (`lib/ecomviper/suppliers/rocktomic/templates-html-parser.ts`): static link extraction, per-SKU label/mockup URL map, graceful fallback for JS-driven pages
+  - DOCX policy parser (`lib/ecomviper/suppliers/rocktomic/docx-policy-parser.ts`): mammoth-backed with graceful fallback when mammoth not installed
+  - Master package reader helpers (`lib/ecomviper/suppliers/rocktomic/master-package-reader.ts`): readRocktomicSupplierPackage, getRocktomicProduct, resolvePrice, getMissingDataSummary
+  - CLI script (`scripts/ecomviper/build_rocktomic_master_package.ts`): --dry-run, --write, --source-bundle, --live, --identity-only, --per-sku-files, --verbose
+  - npm script: `ecomviper:rocktomic:package`
+  - Updated `data/ecomviper/suppliers/rocktomic/sources.json` with `sourceManifestVersion=3` and sourceIdentityWarnings
+  - Generated output: `rocktomic-supplier-package.json`, `source-identity-report.json`, `validation-report-master.json`, `audit-master.csv`
+- Local dry-run result (against existing `latest/` artifacts):
+  - `product_count=164`
+  - `source_identity_valid=false` (1 duplicate URL, 1 duplicate sheet ID — correctly detected)
+  - `supplement_facts_structured=68`, `partial=62`, `visual_only=15`, `missing=19`, `not_applicable=0`
+  - `missing_productName=19`, `missing_pricing=22`, `missing_inventory=11`, `missing_coaUrl=40`
+  - `validation_package_status=fail` (1 invalid SKU: string literal "UNDEFINED" correctly detected as invalid)
+  - `validation_warning=163`, `validation_valid=0`, `validation_invalid=1`
+- Focused tests added/passing (104 tests across 9 test files):
+  - `tests/ecomviper_rocktomic_source_identity_validator.test.ts` (9 tests)
+  - `tests/ecomviper_rocktomic_csv_parser.test.ts` (14 tests)
+  - `tests/ecomviper_rocktomic_sheet_parsers.test.ts` (15 tests)
+  - `tests/ecomviper_rocktomic_master_package_schema.test.ts` (15 tests)
+  - `tests/ecomviper_rocktomic_master_package_builder.test.ts` (17 tests)
+  - `tests/ecomviper_rocktomic_master_package_reader.test.ts` (14 tests)
+  - `tests/ecomviper_rocktomic_templates_html_parser.test.ts` (8 tests)
+  - `tests/ecomviper_rocktomic_docx_policy_parser.test.ts` (6 tests)
+  - `tests/ecomviper_rocktomic_master_package_constraints.test.ts` (6 tests)
+- `npm run build`: pass
+- `git diff --check`: pass
+- `npm test`: 15 failing tests, all pre-existing unrelated baseline failures; zero new failures from this sprint
+- Boundary confirmation:
+  - no Product Editor behavior change
+  - no auto-save/publish
+  - no model call during page render
+  - no DB writes/imports/migrations
+  - no live Firecrawl or OpenAI required in tests
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+  - no SKU-specific implementation logic
 
 ## Sprint Checkpoint: Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction (Local Branch)
 
