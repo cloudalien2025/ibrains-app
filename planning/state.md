@@ -60,8 +60,8 @@ Last updated: 2026-06-02 (UTC)
 - Shopify Phase 6.3.1 Rocktomic Live Source Parser (Firecrawl cache + PyMuPDF + CSV foundation): Completed and merged (`sprint-6-3-1-rocktomic-live-source-parser`, MR `!310`, pipeline `2568493491` success).
 - Shopify Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction: Completed and merged (`sprint-6-3-2-rocktomic-supplement-facts-panel-extraction`, MR `!312`, pipeline `2568627769` success, production release SHA verified).
 - Shopify Phase 6.4 Rocktomic Master Package Builder: Completed and merged (`sprint-6-4-rocktomic-master-package-builder`, MR `!315`, pipeline `2570381373` success, merge SHA `c363135be8f521979e29af09a34b3632c60ec378`, production deployed and verified).
-- Shopify Phase 6.5 Rocktomic Package Reader + EcomViper Wiring: `READY_TO_MERGE_IN_UI` (`sprint-6-5-ecomviper-rocktomic-package-reader`, branch pushed; open MR at https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/new?merge_request%5Bsource_branch%5D=sprint-6-5-ecomviper-rocktomic-package-reader then wait for green pipeline and merge).
-- Current recommended sprint: `Shopify Phase 6.5 Rocktomic Package Reader + EcomViper Wiring` (branch `sprint-6-5-ecomviper-rocktomic-package-reader` pending MR pipeline and merge).
+- Shopify Phase 6.5 Rocktomic Package Reader + EcomViper Wiring: Completed and merged (`sprint-6-5-ecomviper-rocktomic-package-reader`, merge SHA `659133488cd4034c3f516070e8e97fff2171f986`, build `2570565864`, production deployed and verified).
+- Current recommended sprint: `Shopify Phase 6.6 or next EcomViper workstream` — Phase 6.5 is fully closed; main is clean.
 
 ## Sprint Checkpoint: Phase 6.5 Rocktomic Package Reader + EcomViper Wiring (Local Branch)
 
@@ -104,6 +104,46 @@ Last updated: 2026-06-02 (UTC)
   - no live Firecrawl/OpenAI/OCR in package reader runtime path
   - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
   - package reader reads local file artifact only (cached per process lifetime)
+
+## Sprint Closure Update: Phase 6.5 Rocktomic Package Reader + EcomViper Wiring
+
+- Sprint/branch: `sprint-6-5-ecomviper-rocktomic-package-reader`
+- MR:
+  - merge commit SHA: `659133488cd4034c3f516070e8e97fff2171f986` (short: `6591334`)
+  - build_id: `2570565864`
+- Branch cleanup:
+  - remote source branch deletion: completed (pruned from origin on merge)
+  - local source branch deletion: completed (`git branch -d sprint-6-5-ecomviper-rocktomic-package-reader`)
+  - local repository reset: clean `main` fast-forwarded to `659133488cd4034c3f516070e8e97fff2171f986`
+- Production release verification:
+  - `/api/meta/release`:
+    - `git_sha=659133488cd4034c3f516070e8e97fff2171f986`
+    - `git_sha_short=6591334`
+    - `build_id=2570565864`
+    - `build_timestamp=2026-06-02T14:04:14Z`
+    - `deployed_at=2026-06-02T14:04:14Z`
+    - `release_metadata_complete=true`
+  - `/api/health`: `{"ok":true,"upstream_ok":true}` — HTTP 200
+  - production smoke (`RUN_DETAILED_SMOKE=1 scripts/production_smoke_check.sh app.ibrains.ai`):
+    - all HTTP route checks passed (`/api/health 200`, `/api/meta/release 200`, `/brains 307`, `/ecomviper 307`, `/ecomviper/settings 307`, `/ecomviper/dropshipping/rocktomic 307`)
+    - all static asset checks passed (JS/CSS bundles returned 200 with correct content-type)
+    - 4 smoke FAIL lines are local Windows environment artifacts (no Python, no sudo/systemd/nginx) — not production failures
+- Delivered behavior summary:
+  - Rocktomic master package is now the first-priority supplier facts source for both Product Editor and Generate Intelligence
+  - `structured` package facts → `extracted` status with ingredient/serving data populated
+  - `partial` package facts → `partial` status with merchant text: "Some ingredient details are available; review before publishing."
+  - `visual_only` package facts → `partial` status with merchant text: "Supplement Facts panel is available, but structured details are incomplete." (no OCR language)
+  - `missing` package facts → `source_missing` status with merchant text: "Supplement Facts are not available in the current supplier package." (no OCR language)
+  - `not_applicable` package facts → `not_applicable` status
+  - PDP intelligence route diagnostics include `package_supplement_facts_status`, `package_read_attempted`, `package_sku_found`
+  - 47 new tests added across 3 focused suites; zero new test failures
+- Honest boundary confirmation:
+  - no Product Editor auto-save/publish
+  - no model call during page render
+  - no DB writes/imports/migrations
+  - no live Firecrawl/OpenAI/OCR in runtime path
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+  - package reader reads local file artifact only (process-lifetime cache)
 
 ## Sprint Checkpoint: Phase 6.4 Rocktomic Master Package Builder (Local Branch)
 
