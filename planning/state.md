@@ -60,7 +60,50 @@ Last updated: 2026-06-02 (UTC)
 - Shopify Phase 6.3.1 Rocktomic Live Source Parser (Firecrawl cache + PyMuPDF + CSV foundation): Completed and merged (`sprint-6-3-1-rocktomic-live-source-parser`, MR `!310`, pipeline `2568493491` success).
 - Shopify Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction: Completed and merged (`sprint-6-3-2-rocktomic-supplement-facts-panel-extraction`, MR `!312`, pipeline `2568627769` success, production release SHA verified).
 - Shopify Phase 6.4 Rocktomic Master Package Builder: Completed and merged (`sprint-6-4-rocktomic-master-package-builder`, MR `!315`, pipeline `2570381373` success, merge SHA `c363135be8f521979e29af09a34b3632c60ec378`, production deployed and verified).
-- Current recommended sprint: `Shopify Phase 6.5 or next EcomViper workstream` — Phase 6.4 is fully closed; main is clean.
+- Shopify Phase 6.5 Rocktomic Package Reader + EcomViper Wiring: `READY_TO_MERGE_IN_UI` (`sprint-6-5-ecomviper-rocktomic-package-reader`, branch pushed; open MR at https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/new?merge_request%5Bsource_branch%5D=sprint-6-5-ecomviper-rocktomic-package-reader then wait for green pipeline and merge).
+- Current recommended sprint: `Shopify Phase 6.5 Rocktomic Package Reader + EcomViper Wiring` (branch `sprint-6-5-ecomviper-rocktomic-package-reader` pending MR pipeline and merge).
+
+## Sprint Checkpoint: Phase 6.5 Rocktomic Package Reader + EcomViper Wiring (Local Branch)
+
+- Branch: `sprint-6-5-ecomviper-rocktomic-package-reader`
+- Date: `2026-06-02 (UTC)`
+- Local checkpoint status: `IMPLEMENTED_ONLY` (MR/pipeline/deploy pending)
+- Scope implemented:
+  - New module `lib/ecomviper/suppliers/rocktomic/rocktomic-package-source-facts.ts`:
+    - `getRocktomicPackageFactsForSku(sku)` — reads master package, looks up SKU, returns `PackageSkuLookupResult` with diagnostics
+    - `mapPackageProductToHydratedFacts(product)` — maps `RocktomicProductRecord` to `PackageHydratedFacts` with merchant-safe text
+    - `supplementFactsStatusToMerchantText(status)` — converts `SupplementFactsStatus` to merchant-safe text; never emits OCR/debug language
+    - `clearPackageCache()` — for test isolation
+  - Updated `lib/ecomviper/copywriting-agent/live-supplier-facts-hydration.ts`:
+    - Package is first-priority source in `hydrateLiveSupplierFactsForCopywriting`
+    - `SupplierFactsReadSource` now includes `"package"`
+    - `readDiagnostics` extended with `package.supplementFactsStatus`
+    - `packageSupplementFactsStatus` field on `SupplierFactsHydrationResult`
+  - Updated `lib/ecomviper/shopify/shopify-product-editor-state.ts`:
+    - Package facts resolved per-SKU in `buildShopifyProductEditorStateForUser`
+    - `buildSourceFacts` accepts `packageFacts: PackageHydratedFacts | null`
+    - Supplement facts status driven by package (`structured/partial/visual_only/missing/not_applicable`)
+    - Active ingredients, serving size, ingredient amounts, other ingredients resolved from package first
+    - COA URL includes package `coaUrl` in priority chain
+    - Package diagnostics in `diagnostics` array
+    - `sourceStatusForScalar/Array` updated for merchant-safe package text; no OCR language when package has the SKU
+  - Updated `app/api/ecomviper/pdp-intelligence/route.ts`:
+    - Response diagnostics include `package_supplement_facts_status`, `package_read_attempted`, `package_sku_found`
+- Tests added (47 new tests, 3 files):
+  - `tests/ecomviper_rocktomic_package_source_facts.test.ts` (20 tests)
+  - `tests/ecomviper_rocktomic_package_product_editor_binding.test.ts` (16 tests)
+  - `tests/ecomviper_rocktomic_package_generate_intelligence_binding.test.ts` (11 tests)
+  - `tests/ecomviper_live_supplier_facts_hydration.test.ts` — updated to mock package reader (isolates DB path)
+- Build: pass
+- `git diff --check`: pass
+- `npm test`: 13 failing (all pre-existing baseline failures across casahud/walmart/siteforge/frontdoor suites); zero new failures from Phase 6.5
+- Boundary confirmation:
+  - no Product Editor auto-save/publish
+  - no model call during page render
+  - no DB writes/imports/migrations
+  - no live Firecrawl/OpenAI/OCR in package reader runtime path
+  - no duplicate `/ecomviper/shopify/products/[productId-or-handle]` route restoration
+  - package reader reads local file artifact only (cached per process lifetime)
 
 ## Sprint Checkpoint: Phase 6.4 Rocktomic Master Package Builder (Local Branch)
 
