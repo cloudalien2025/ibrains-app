@@ -3,8 +3,12 @@
   "supplierId": "rocktomic",
   "supplierName": "Rocktomic",
   "version": 1,
-  "sourceManifestVersion": 2,
+  "sourceManifestVersion": 3,
   "generatedBy": "manual-canonical-registry",
+  "sourceIdentityWarnings": [
+    "plds_catalog and msrp_profit_margins_report share the same Google Sheet ID (15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU). They may be different tabs of the same spreadsheet. Use gid parameter to target specific tabs.",
+    "The original user-provided URL labeled 'Supplement & Apparel Catalog' was the Inventory Report sheet (1oOjqXsaCAjSOkA1lXrasNtUVtrsxvyxcFcolD8n6YXY). This has been corrected: catalog_pdf now points to the Azure Blob PDF, and inventory_report points to the correct sheet ID."
+  ],
   "firecrawl": {
     "apiBaseUrl": "https://api.firecrawl.dev/v2",
     "enabledEnvVar": "ECOMVIPER_SUPPLIER_FIRECRAWL_ENABLED",
