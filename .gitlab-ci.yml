@@ -113,8 +113,12 @@ deploy_production:
       git pull --ff-only origin "${CI_DEFAULT_BRANCH}"
 
       current_sha="$(git rev-parse HEAD)"
-      if [ "${current_sha}" != "${CI_COMMIT_SHA}" ]; then
-        echo "deployed checkout mismatch: expected ${CI_COMMIT_SHA}, got ${current_sha}"
+      if [ "${current_sha}" = "${CI_COMMIT_SHA}" ]; then
+        echo "deployed checkout at expected SHA ${CI_COMMIT_SHA}"
+      elif git merge-base --is-ancestor "${CI_COMMIT_SHA}" "${current_sha}"; then
+        echo "deployed checkout fast-forwarded past expected: expected ${CI_COMMIT_SHA}, running ${current_sha}"
+      else
+        echo "deployed checkout mismatch: expected ${CI_COMMIT_SHA} (or descendant), got ${current_sha}"
         exit 1
       fi
 
