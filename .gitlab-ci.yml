@@ -63,6 +63,7 @@ build_release:
 # Triggered when none of the dependency/server-side files below changed.
 deploy_production_fast:
   stage: deploy
+  resource_group: production-deploy
   needs:
     - build_release
   rules:
@@ -150,10 +151,15 @@ deploy_production_fast:
         set +a
       fi
 
-      # fast-path deploy: extract pre-built .next from CI artifact — skip npm ci + npm run build
+      # fast-path deploy: extract pre-built .next from CI artifact — skip npm run build.
+      # node_modules must still be present for the Next.js runtime; run npm ci --omit=dev
+      # so the service can find node_modules/.bin/next on start.
       echo "fast-path deploy: extracting pre-built .next from CI artifact"
       tar -xzf "${ARTIFACT_PATH}" .next
       rm -f "${ARTIFACT_PATH}"
+
+      echo "fast-path deploy: installing production dependencies"
+      npm ci --omit=dev
 
       BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
       bash "${DEPLOY_PATH}/scripts/write_release_metadata.sh" app/_meta/release.json "${CI_COMMIT_SHA}" "${CI_PIPELINE_ID}" "${BUILD_TIMESTAMP}" "ibrains" "production" "gitlab_ci"
@@ -249,6 +255,7 @@ deploy_production_fast:
 # server-side files change.
 deploy_production:
   stage: deploy
+  resource_group: production-deploy
   needs:
     - build_release
   rules:

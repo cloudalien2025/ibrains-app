@@ -185,11 +185,15 @@ describe("gitlab deploy pipeline contract", () => {
     expect(smokeSource.includes("health parsed:")).toBe(true);
     expect(smokeSource.includes("release build_id is non-null")).toBe(true);
     expect(smokeSource.includes("release git_sha is non-null")).toBe(true);
-    // Fast-path deploy job: UI-only changes skip npm ci + build, use CI artifact
+    // Fast-path deploy job: UI-only changes skip npm run build, use CI artifact
     expect(pipelineSource.includes("deploy_production_fast")).toBe(true);
     expect(pipelineSource.includes("fast-path deploy")).toBe(true);
     expect(pipelineSource.includes("tar -xzf")).toBe(true);
     expect(pipelineSource.includes("when: never")).toBe(true);
+    // Fast-path installs production deps so node_modules/.bin/next is present at service start
+    expect(pipelineSource.includes("npm ci --omit=dev")).toBe(true);
+    // Both deploy jobs share a concurrency lock to prevent simultaneous server deploys
+    expect(pipelineSource.match(/resource_group: production-deploy/g)?.length).toBe(2);
   });
 
   it("passes when protected routes redirect unauthenticated requests to app.ibrains.ai sign-in", async () => {
