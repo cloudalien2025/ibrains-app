@@ -257,7 +257,8 @@ check_health_json() {
     return
   fi
 
-  python3 - "$body" <<'PY' > /tmp/health_parse.txt 2>/dev/null || true
+  local parsed
+  parsed=$(python3 - "$body" 2>/dev/null <<'PY' || true
 import json,sys
 try:
     data=json.loads(sys.argv[1])
@@ -274,36 +275,36 @@ print(f"DEPLOY_READY={data.get('deploy_ready')!r}")
 print(f"STATUS={data.get('status')!r}")
 print(f"UPSTREAM_ERROR={data.get('upstream_error')!r}")
 PY
+)
 
-  if grep -q '^BADJSON$' /tmp/health_parse.txt; then
+  if printf '%s\n' "$parsed" | grep -q '^BADJSON$'; then
     fail "health check invalid JSON"
     note "health http status: ${status_code:-missing}"
     note "health body: ${body}"
     return
   fi
 
-  if grep -q '^OK=true$' /tmp/health_parse.txt; then
+  if printf '%s\n' "$parsed" | grep -q '^OK=true$'; then
     pass "health ok=true"
   else
     fail "health ok not true"
   fi
 
-  if grep -q '^UPSTREAM_OK=true$' /tmp/health_parse.txt; then
+  if printf '%s\n' "$parsed" | grep -q '^UPSTREAM_OK=true$'; then
     pass "health upstream_ok=true"
   else
     fail "health upstream_ok not true"
   fi
 
-  if ! grep -q '^OK=true$' /tmp/health_parse.txt || ! grep -q '^UPSTREAM_OK=true$' /tmp/health_parse.txt; then
+  if ! printf '%s\n' "$parsed" | grep -q '^OK=true$' || ! printf '%s\n' "$parsed" | grep -q '^UPSTREAM_OK=true$'; then
     note "health http status: ${status_code:-missing}"
     note "health body: ${body}"
-    note "health parsed: $(tr '\n' ';' < /tmp/health_parse.txt | sed 's/;$/\\n/')"
+    note "health parsed: $(printf '%s\n' "$parsed" | tr '\n' ';')"
   fi
 }
 
-# Fetches /api/meta/release and parses it into /tmp/release_meta_parse.txt.
-# Returns 1 (without writing the file) if the response body is empty so callers
-# can treat a brief restart-window gap as a retryable condition.
+# Fetches /api/meta/release and prints parsed key=value lines to stdout.
+# Returns 1 if the response body is empty (retryable restart-window condition).
 _fetch_release_meta_parse() {
   local url="$1"
   local body
@@ -311,7 +312,7 @@ _fetch_release_meta_parse() {
   if [ -z "$body" ]; then
     return 1
   fi
-  python3 - "$body" <<'PY' > /tmp/release_meta_parse.txt 2>/dev/null || true
+  python3 - "$body" 2>/dev/null <<'PY' || true
 import json,sys
 try:
     data=json.loads(sys.argv[1])
@@ -327,68 +328,88 @@ PY
   return 0
 }
 
+# Returns 0 if actual satisfies the expected SHA constraint:
+# exact match, short-SHA prefix match, or actual is a descendant of expected
+# (handles the case where a concurrent pipeline fast-forwarded the server past
+# the SHA this pipeline deployed).
+_sha_satisfies_expect() {
+  local expected="$1" actual="$2"
+  [ -z "$actual" ] && return 1
+  [ "$actual" = "$expected" ] && return 0
+  # Tolerate short vs full SHA (one is a prefix of the other)
+  case "$actual" in "$expected"*) return 0;; esac
+  case "$expected" in "$actual"*) return 0;; esac
+  # Descendant: expected is an ancestor of actual (server fast-forwarded)
+  if command -v git >/dev/null 2>&1; then
+    git fetch --quiet --depth=1 origin "$actual" 2>/dev/null || true
+    git merge-base --is-ancestor "$expected" "$actual" 2>/dev/null && return 0
+  fi
+  return 1
+}
+
 check_release_meta() {
   local url="$1"
+  local parsed
 
-  if ! _fetch_release_meta_parse "$url"; then
+  if ! parsed=$(_fetch_release_meta_parse "$url"); then
     fail "release meta empty response"
     return
   fi
 
-  if grep -q '^BADJSON$' /tmp/release_meta_parse.txt; then
+  if printf '%s\n' "$parsed" | grep -q '^BADJSON$'; then
     fail "release meta invalid JSON"
     return
   fi
 
   if [ "${EXPECT_RELEASE_FILE}" = "1" ]; then
-    if grep -q '^RELEASE_FILE_TRUE$' /tmp/release_meta_parse.txt; then
+    if printf '%s\n' "$parsed" | grep -q '^RELEASE_FILE_TRUE$'; then
       pass "release meta preserved release.json"
     else
       fail "release meta missing release.json"
     fi
   fi
 
-  if grep -q '^BUILD_ID=$' /tmp/release_meta_parse.txt || grep -q '^BUILD_ID=unavailable$' /tmp/release_meta_parse.txt; then
+  if printf '%s\n' "$parsed" | grep -q '^BUILD_ID=$' || printf '%s\n' "$parsed" | grep -q '^BUILD_ID=unavailable$'; then
     fail "release build_id is missing or unavailable"
   else
     pass "release build_id is non-null"
   fi
 
-  if grep -q '^GIT_SHA=$' /tmp/release_meta_parse.txt || grep -q '^GIT_SHA=unavailable$' /tmp/release_meta_parse.txt; then
+  if printf '%s\n' "$parsed" | grep -q '^GIT_SHA=$' || printf '%s\n' "$parsed" | grep -q '^GIT_SHA=unavailable$'; then
     fail "release git_sha is missing or unavailable"
   else
     pass "release git_sha is non-null"
   fi
 
   # SHA/build_id comparison: retry with backoff to absorb the deploy restart
-  # timing window.  The service may still be serving the previous build when the
-  # smoke test first fires — we poll until the expected values appear or the
-  # retry budget is exhausted.
+  # timing window.  SHA check uses _sha_satisfies_expect so a concurrent
+  # pipeline that fast-forwarded the server past our expected SHA does not fail.
   if [ -n "${EXPECT_BUILD_ID}" ] || [ -n "${EXPECT_GIT_SHA}" ]; then
     local attempt=1
+    local actual_build_id actual_sha sha_ok
     while true; do
-      local sha_ok=1
-      if [ -n "${EXPECT_BUILD_ID}" ] && ! grep -q "^BUILD_ID=${EXPECT_BUILD_ID}$" /tmp/release_meta_parse.txt 2>/dev/null; then
+      sha_ok=1
+      actual_build_id=$(printf '%s\n' "$parsed" | grep '^BUILD_ID=' | cut -d= -f2- || true)
+      actual_sha=$(printf '%s\n' "$parsed" | grep '^GIT_SHA=' | cut -d= -f2- || true)
+
+      if [ -n "${EXPECT_BUILD_ID}" ] && [ "${actual_build_id}" != "${EXPECT_BUILD_ID}" ]; then
         sha_ok=0
       fi
-      if [ -n "${EXPECT_GIT_SHA}" ] && ! grep -q "^GIT_SHA=${EXPECT_GIT_SHA}$" /tmp/release_meta_parse.txt 2>/dev/null; then
+      if [ -n "${EXPECT_GIT_SHA}" ] && ! _sha_satisfies_expect "${EXPECT_GIT_SHA}" "${actual_sha}"; then
         sha_ok=0
       fi
 
       if [ "${sha_ok}" -eq 1 ]; then
         [ -n "${EXPECT_BUILD_ID}" ] && pass "release build_id matches ${EXPECT_BUILD_ID}"
-        [ -n "${EXPECT_GIT_SHA}" ] && pass "release git_sha matches ${EXPECT_GIT_SHA}"
+        [ -n "${EXPECT_GIT_SHA}" ] && pass "release git_sha matches or is descendant of ${EXPECT_GIT_SHA}"
         return
       fi
 
       if [ "${attempt}" -ge "${RELEASE_SHA_POLL_RETRIES}" ]; then
-        local actual_build_id actual_sha
-        actual_build_id=$(grep '^BUILD_ID=' /tmp/release_meta_parse.txt 2>/dev/null | cut -d= -f2- || true)
-        actual_sha=$(grep '^GIT_SHA=' /tmp/release_meta_parse.txt 2>/dev/null | cut -d= -f2- || true)
         if [ -n "${EXPECT_BUILD_ID}" ] && [ "${actual_build_id}" != "${EXPECT_BUILD_ID}" ]; then
           fail "release build_id mismatch after ${attempt} poll attempt(s): expected=${EXPECT_BUILD_ID} actual=${actual_build_id:-missing}"
         fi
-        if [ -n "${EXPECT_GIT_SHA}" ] && [ "${actual_sha}" != "${EXPECT_GIT_SHA}" ]; then
+        if [ -n "${EXPECT_GIT_SHA}" ] && ! _sha_satisfies_expect "${EXPECT_GIT_SHA}" "${actual_sha}"; then
           fail "release git_sha mismatch after ${attempt} poll attempt(s): expected=${EXPECT_GIT_SHA} actual=${actual_sha:-missing}"
         fi
         return
@@ -397,7 +418,7 @@ check_release_meta() {
       note "release SHA not yet updated (attempt ${attempt}/${RELEASE_SHA_POLL_RETRIES}), waiting ${RELEASE_SHA_POLL_INTERVAL}s..."
       sleep "${RELEASE_SHA_POLL_INTERVAL}"
       attempt=$((attempt + 1))
-      _fetch_release_meta_parse "$url" || true
+      parsed=$(_fetch_release_meta_parse "$url") || true
     done
   fi
 }
