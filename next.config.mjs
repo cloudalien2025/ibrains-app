@@ -3,6 +3,7 @@ const nextConfig = {
   experimental: {
     serverActions: {
       allowedOrigins: ["app.ibrains.ai"],
+      bodySizeLimit: "100mb",
     },
   },
 };

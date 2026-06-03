@@ -187,6 +187,8 @@ function isDeprecatedLegacyRoute(req: NextRequest): boolean {
 const clerkProxy = clerkMiddleware(async (auth, req) => {
   if (req.nextUrl.pathname === "/api/_meta/release") {
     const url = req.nextUrl.clone();
+    url.protocol = "http:";
+    url.hostname = "127.0.0.1";
     url.pathname = "/api/meta/release";
     return NextResponse.rewrite(url);
   }
