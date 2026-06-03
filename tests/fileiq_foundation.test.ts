@@ -57,12 +57,14 @@ describe("FileIQ navigation contract", () => {
     }
   });
 
-  it("marks only the built Command Center route as ready in Phase 1.0", () => {
+  it("marks Command Center and Source Bundles as ready in Phase 1.1", () => {
     // Guards against linking the sidebar to unbuilt routes, which would render
     // the not-found boundary (404, or 500 during a Turbopack cold-start window).
     const ready = fileIqNavItems.filter((item) => item.ready);
-    expect(ready).toEqual([{ label: "Command Center", href: "/fileiq", ready: true }]);
-    expect(fileIqNavItems.filter((item) => !item.ready)).toHaveLength(9);
+    expect(ready).toHaveLength(2);
+    expect(ready[0]).toEqual({ label: "Command Center", href: "/fileiq", ready: true });
+    expect(ready[1]).toEqual({ label: "Source Bundles", href: "/fileiq/source-bundles", ready: true });
+    expect(fileIqNavItems.filter((item) => !item.ready)).toHaveLength(8);
   });
 });
 
@@ -80,8 +82,8 @@ describe("FileIQ status guards", () => {
 });
 
 describe("FileIQ shared-DB boundary", () => {
-  it("is planning-only on the shared ecommerce DB and targets the five downstream brains", () => {
-    expect(fileIqDatabaseBoundary.migrationState).toBe("planning_only");
+  it("is on the shared ecommerce DB at source_registry migration state and targets the five downstream brains", () => {
+    expect(fileIqDatabaseBoundary.migrationState).toBe("source_registry");
     expect(fileIqDatabaseBoundary.sharedDatabaseEnvVar).toBe("ECOMMERCE_DATABASE_URL");
     expect(fileIqDatabaseBoundary.downstreamBrains).toEqual([...fileIqDownstreamBrains]);
     expect(fileIqDatabaseBoundary.writeTables).toEqual(fileIqPlannedTables);

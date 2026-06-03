@@ -60,7 +60,7 @@ export default function FileIqSidebar() {
       <div className="mt-3 rounded-lg border border-dashed border-[#D9E4F0] bg-[#F8FBFF] p-3">
         <p className="text-[11px] uppercase tracking-[0.14em] text-[#64748B]">Boundary</p>
         <p className="mt-1 text-xs text-[#475569]">
-          Phase 1.0 is contracts and dashboard foundation only. No OCR, extraction runs, or downstream execution wiring.
+          Phase 1.1 adds source registry tables and the Source Bundles shell. No OCR, extraction runs, or downstream execution wiring.
         </p>
       </div>
     </aside>

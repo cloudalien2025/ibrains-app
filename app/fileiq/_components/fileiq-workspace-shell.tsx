@@ -53,8 +53,8 @@ export default function FileIqWorkspaceShell() {
       >
         <h2 className="text-lg font-semibold text-[#0F172A]">Ingestion Pipeline</h2>
         <p className="mt-2 text-sm text-[#475569]">
-          FileIQ moves supplier files through a provenance-tracked pipeline. Phase 1.0 establishes the contract and
-          dashboard foundation only — no extraction runtime is executed in this phase.
+          FileIQ moves supplier files through a provenance-tracked pipeline. Phase 1.1 adds the source
+          registry tables and the Source Bundles route — extraction runtime wires in Phase 1.2.
         </p>
         <ol className="mt-4 grid gap-2">
           {ingestionStages.map((stage, index) => (

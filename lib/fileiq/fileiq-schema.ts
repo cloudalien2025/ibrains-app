@@ -1,5 +1,7 @@
 import type { FileIqDownstreamBrain } from "@/lib/fileiq/fileiq-status";
 
+export type FileIqMigrationState = "planning_only" | "source_registry";
+
 export const fileIqPlannedTables = [
   "fileiq_source_bundles",
   "fileiq_source_files",
@@ -25,7 +27,7 @@ export type FileIqDatabaseBoundary = {
     includeValidationStatus: true;
   };
   downstreamBrains: readonly FileIqDownstreamBrain[];
-  migrationState: "planning_only";
+  migrationState: FileIqMigrationState;
 };
 
 export const fileIqDatabaseBoundary: FileIqDatabaseBoundary = {
@@ -37,5 +39,5 @@ export const fileIqDatabaseBoundary: FileIqDatabaseBoundary = {
     includeValidationStatus: true,
   },
   downstreamBrains: ["ecomviper", "optibay", "optiwal", "optipixel", "optizon"],
-  migrationState: "planning_only",
+  migrationState: "source_registry",
 };
