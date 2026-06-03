@@ -41,7 +41,7 @@ build_release:
     - npm run build
     - mkdir -p artifacts
     - |
-      tar -czf artifacts/build.tar.gz \
+      tar --ignore-failed-read -czf artifacts/build.tar.gz \
       .next \
       package.json \
       package-lock.json \
