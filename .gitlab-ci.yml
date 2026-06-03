@@ -57,12 +57,212 @@ build_release:
       - artifacts/build.tar.gz
     expire_in: 1 day
 
+# Fast path: UI / planning / docs changes only.
+# Skips npm ci + npm run build on the server — transfers the CI-built .next
+# artifact via SCP, extracts it, then restarts the service.
+# Triggered when none of the dependency/server-side files below changed.
+deploy_production_fast:
+  stage: deploy
+  needs:
+    - build_release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - package.json
+        - package-lock.json
+        - lib/**/*
+        - app/api/**/*
+        - middleware.ts
+        - next.config.mjs
+        - tsconfig.json
+        - tailwind.config.*
+        - db/**/*
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  before_script:
+    - apt-get update
+    - apt-get install -y openssh-client curl
+    - eval "$(ssh-agent -s)"
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' | ssh-add -
+    - |
+      if [ -n "${DEPLOY_KNOWN_HOSTS:-}" ]; then
+        printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      else
+        ssh-keyscan -p "${DEPLOY_PORT:-22}" "$DEPLOY_HOST" > ~/.ssh/known_hosts
+      fi
+    - chmod 600 ~/.ssh/known_hosts
+  script:
+    - test -n "${DEPLOY_HOST:-}"
+    - test -n "${DEPLOY_USER:-}"
+    - test -n "${DEPLOY_PATH:-}"
+    - scp -P "${DEPLOY_PORT:-22}" artifacts/build.tar.gz "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/ibrains-build-${CI_PIPELINE_ID}.tar.gz"
+    - |
+      ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+        "CI_COMMIT_SHA='${CI_COMMIT_SHA}' CI_PIPELINE_ID='${CI_PIPELINE_ID}' CI_DEFAULT_BRANCH='${CI_DEFAULT_BRANCH}' DEPLOY_PATH='${DEPLOY_PATH}' SERVICE_NAME='${SERVICE_NAME:-ibrains-app}' ARTIFACT_PATH='/tmp/ibrains-build-${CI_PIPELINE_ID}.tar.gz' bash -s" <<'EOF'
+      set -euo pipefail
+
+      GUARD_SCRIPT="${DEPLOY_PATH}/scripts/guard-canonical-worktree.sh"
+      if [ ! -x "${GUARD_SCRIPT}" ]; then
+        echo "missing canonical worktree guard script: ${GUARD_SCRIPT}"
+        exit 1
+      fi
+      bash "${GUARD_SCRIPT}" "${DEPLOY_PATH}"
+
+      cd "${DEPLOY_PATH}"
+
+      export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -i /root/.ssh/gitlab_ibrains_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new}"
+      git fetch --prune origin
+      git checkout "${CI_DEFAULT_BRANCH}"
+
+      UNTRACKED_GUARD="${DEPLOY_PATH}/scripts/guard-untracked-pull-conflicts.sh"
+      if [ -x "${UNTRACKED_GUARD}" ]; then
+        bash "${UNTRACKED_GUARD}" "${DEPLOY_PATH}" "origin/${CI_DEFAULT_BRANCH}"
+      else
+        echo "untracked-pull-conflict guard not present yet; skipping (active after this deploy)"
+      fi
+
+      git pull --ff-only origin "${CI_DEFAULT_BRANCH}"
+
+      current_sha="$(git rev-parse HEAD)"
+      if [ "${current_sha}" = "${CI_COMMIT_SHA}" ]; then
+        echo "deployed checkout at expected SHA ${CI_COMMIT_SHA}"
+      elif git merge-base --is-ancestor "${CI_COMMIT_SHA}" "${current_sha}"; then
+        echo "deployed checkout fast-forwarded past expected: expected ${CI_COMMIT_SHA}, running ${current_sha}"
+      else
+        echo "deployed checkout mismatch: expected ${CI_COMMIT_SHA} (or descendant), got ${current_sha}"
+        exit 1
+      fi
+
+      systemctl_cmd=(systemctl)
+      if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
+        systemctl_cmd=(sudo systemctl)
+      fi
+
+      if "${systemctl_cmd[@]}" is-enabled "$SERVICE_NAME" 2>/dev/null | grep -q "^masked$"; then
+        "${systemctl_cmd[@]}" unmask "$SERVICE_NAME"
+      fi
+
+      if [ -f "${DEPLOY_PATH}/.env.production.local" ]; then
+        set -a
+        . "${DEPLOY_PATH}/.env.production.local"
+        set +a
+      fi
+
+      # fast-path deploy: extract pre-built .next from CI artifact — skip npm ci + npm run build
+      echo "fast-path deploy: extracting pre-built .next from CI artifact"
+      tar -xzf "${ARTIFACT_PATH}" .next
+      rm -f "${ARTIFACT_PATH}"
+
+      BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+      bash "${DEPLOY_PATH}/scripts/write_release_metadata.sh" app/_meta/release.json "${CI_COMMIT_SHA}" "${CI_PIPELINE_ID}" "${BUILD_TIMESTAMP}" "ibrains" "production" "gitlab_ci"
+
+      bash "${DEPLOY_PATH}/scripts/apply_directoryiq_schema.sh"
+
+      service_started=0
+      cleanup_on_error() {
+        if [ "$service_started" -eq 0 ]; then
+          "${systemctl_cmd[@]}" start "$SERVICE_NAME" >/dev/null 2>&1 || true
+        fi
+      }
+      trap cleanup_on_error EXIT
+
+      "${systemctl_cmd[@]}" stop "$SERVICE_NAME"
+      "${systemctl_cmd[@]}" start "$SERVICE_NAME"
+      service_started=1
+      trap - EXIT
+
+      release_probe_url="http://127.0.0.1:3001/api/meta/release"
+      release_probe_host="${DOMAIN:-app.ibrains.ai}"
+      release_probe_args=()
+      if [ -n "${release_probe_host}" ]; then
+        release_probe_args=(-H "Host: ${release_probe_host}")
+      fi
+
+      release_probe_attempts="${RELEASE_PROBE_ATTEMPTS:-30}"
+      release_probe_sleep_seconds="${RELEASE_PROBE_SLEEP_SECONDS:-2}"
+      ready=0
+      for attempt in $(seq 1 "${release_probe_attempts}"); do
+        echo "release readiness probe ${attempt}/${release_probe_attempts}"
+        if curl -fsS "${release_probe_args[@]}" "${release_probe_url}"; then
+          ready=1
+          break
+        fi
+        sleep "${release_probe_sleep_seconds}"
+      done
+
+      if [ "$ready" -ne 1 ]; then
+        echo "release endpoint did not become ready after restart"
+        echo "release probe attempts: ${release_probe_attempts}"
+        echo "release probe sleep seconds: ${release_probe_sleep_seconds}"
+        echo "release probe url: ${release_probe_url}"
+        if [ -n "${release_probe_host}" ]; then
+          echo "release probe host: ${release_probe_host}"
+        fi
+        curl -sS "${release_probe_args[@]}" "${release_probe_url}" || true
+        tail -n 120 /var/log/ibrains-app/app.log || true
+        "${systemctl_cmd[@]}" status "$SERVICE_NAME" --no-pager -l || true
+        (command -v journalctl >/dev/null 2>&1 && journalctl -u "$SERVICE_NAME" -n 150 --no-pager) || true
+        exit 1
+      fi
+
+      cd "${DEPLOY_PATH}"
+      SMOKE_SCRIPT="${DEPLOY_PATH}/scripts/prod_smoke.sh"
+      bash "${GUARD_SCRIPT}" "${DEPLOY_PATH}"
+      smoke_fail() {
+        echo "smoke verification failed"
+        "${systemctl_cmd[@]}" status "$SERVICE_NAME" --no-pager -l || true
+        tail -n 120 /var/log/ibrains-app/app.log || true
+        tail -n 120 /var/log/nginx/app.ibrains.ai.error.log || true
+        tail -n 120 /var/log/nginx/app.ibrains.ai.access.log || true
+        exit 1
+      }
+
+      EXPECT_RELEASE_FILE=1 \
+      EXPECT_BUILD_ID="${CI_PIPELINE_ID}" \
+      EXPECT_GIT_SHA="${CI_COMMIT_SHA}" \
+      PUBLIC_SMOKE_PATHS="/ /sign-in" \
+      PROTECTED_REDIRECT_PATHS="/dashboard /optiwal/connect" \
+      LEGACY_NOT_FOUND_PATHS="/apps /apps/studio /studio /siteforge /uapforge" \
+      BASE_URL=http://127.0.0.1:3001 \
+      HOST_HEADER=app.ibrains.ai \
+      PROTO=http \
+      DOMAIN=app.ibrains.ai \
+      "${SMOKE_SCRIPT}" app.ibrains.ai || smoke_fail
+
+      EXPECT_RELEASE_FILE=1 \
+      EXPECT_BUILD_ID="${CI_PIPELINE_ID}" \
+      EXPECT_GIT_SHA="${CI_COMMIT_SHA}" \
+      PUBLIC_SMOKE_PATHS="/ /sign-in" \
+      PROTECTED_REDIRECT_PATHS="/dashboard /optiwal/connect" \
+      LEGACY_NOT_FOUND_PATHS="/apps /apps/studio /studio /siteforge /uapforge" \
+      BASE_URL=https://app.ibrains.ai \
+      PROTO=https \
+      DOMAIN=app.ibrains.ai \
+      "${SMOKE_SCRIPT}" app.ibrains.ai || smoke_fail
+      EOF
+
+# Full path: dependency or server-side changes.
+# Runs full npm ci + npm run build on the server — same behaviour as before.
+# Triggered when package.json, package-lock.json, lib/, app/api/, or other
+# server-side files change.
 deploy_production:
   stage: deploy
   needs:
     - build_release
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - package.json
+        - package-lock.json
+        - lib/**/*
+        - app/api/**/*
+        - middleware.ts
+        - next.config.mjs
+        - tsconfig.json
+        - tailwind.config.*
+        - db/**/*
   before_script:
     - apt-get update
     - apt-get install -y openssh-client curl
