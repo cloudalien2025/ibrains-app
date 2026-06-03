@@ -65,7 +65,8 @@ export interface FileIqExtractionJob {
 export interface FileIqRawExtraction {
   id: string;
   extractionJobId: string;
-  sourceFileId: string;
+  /** Null for bundle-level extractions that are not linked to a single source file. */
+  sourceFileId: string | null;
   artifactType: string;
   storageUri: string;
   payload: FileIqJsonObject;

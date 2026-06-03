@@ -1,6 +1,6 @@
 import type { FileIqDownstreamBrain } from "@/lib/fileiq/fileiq-status";
 
-export type FileIqMigrationState = "planning_only" | "source_registry";
+export type FileIqMigrationState = "planning_only" | "source_registry" | "extraction_jobs";
 
 export const fileIqPlannedTables = [
   "fileiq_source_bundles",
@@ -39,5 +39,5 @@ export const fileIqDatabaseBoundary: FileIqDatabaseBoundary = {
     includeValidationStatus: true,
   },
   downstreamBrains: ["ecomviper", "optibay", "optiwal", "optipixel", "optizon"],
-  migrationState: "source_registry",
+  migrationState: "extraction_jobs",
 };

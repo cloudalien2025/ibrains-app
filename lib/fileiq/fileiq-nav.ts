@@ -16,7 +16,7 @@ export const fileIqNavItems: FileIqNavItem[] = [
   { label: "Source Bundles", href: "/fileiq/source-bundles", ready: true },
   { label: "Suppliers", href: "/fileiq/suppliers", ready: false },
   { label: "Files", href: "/fileiq/files", ready: false },
-  { label: "Extraction Jobs", href: "/fileiq/extraction-jobs", ready: false },
+  { label: "Extraction Jobs", href: "/fileiq/extraction-jobs", ready: true },
   { label: "Packages", href: "/fileiq/packages", ready: false },
   { label: "Review Queue", href: "/fileiq/review-queue", ready: false },
   { label: "Validation Reports", href: "/fileiq/validation-reports", ready: false },

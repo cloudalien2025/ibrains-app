@@ -29,6 +29,7 @@ const isProtectedRoute = createRouteMatcher([
   "/reelify(.*)",
   "/ipetzo(.*)",
   "/api/ecomviper(.*)",
+  "/api/fileiq(.*)",
   "/brains(.*)",
   "/runs(.*)",
   "/mission-control(.*)",
