@@ -154,6 +154,10 @@ function isBrainsApiRoute(req: NextRequest): boolean {
   return req.nextUrl.pathname.startsWith("/api/brains");
 }
 
+function isFileIqApiRoute(req: NextRequest): boolean {
+  return req.nextUrl.pathname.startsWith("/api/fileiq");
+}
+
 function isProtectedShellRoute(req: NextRequest): boolean {
   return isProtectedRoute(req) && !req.nextUrl.pathname.startsWith("/api/");
 }
@@ -251,6 +255,7 @@ export default e2eMockGraph
         return NextResponse.next();
       }
       if (isBrainsApiRoute(req)) return NextResponse.next();
+      if (isFileIqApiRoute(req)) return NextResponse.next();
       if (isPublicClerkPassthroughRoute(req)) return NextResponse.next();
       if (isProtectedShellRoute(req)) {
         if (!hasLikelyJwtSessionCookie(req)) {
