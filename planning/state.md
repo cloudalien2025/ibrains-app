@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-06-03 (UTC) — FileIQ Phase 1.3 canonical product schema v1.0 + schema badges deployed
+Last updated: 2026-06-03 (UTC) — CI fast-path deploy fix + concurrency lock
 
 ## Program Status
 
@@ -71,7 +71,24 @@ Last updated: 2026-06-03 (UTC) — FileIQ Phase 1.3 canonical product schema v1.
 - CI Split Deploy Pipeline: Completed and merged (`feat/ci-split-deploy-fast-path`, MR `!326`, merge SHA `8261ca0`, remote + local branch deleted). Split `deploy_production` into two mutually-exclusive jobs: `deploy_production_fast` (UI/config changes — SCP pre-built `.next` artifact, skip `npm ci` + `npm run build` on server, ~1–2 min) and `deploy_production` (dep/server changes — full `npm ci` + `npm run build`, ~9 min). Fast path triggered when none of `package.json`, `package-lock.json`, `lib/**`, `app/api/**`, `middleware.ts`, `next.config.mjs`, `tsconfig.json`, `tailwind.config.*`, `db/**` changed. Pipeline contract test extended with 4 new assertions; all tests green.
 - FileIQ Phase 1.2 Extraction Jobs (Live Agent Sessions): Completed and merged (`feat/fileiq-phase-1-2-extraction-jobs`, merge SHA `84fc3995300ac98ccec19f2b8c123ce3532e30f1`, build `2574432444`, production deployed and verified). Live Claude Agent SDK extraction pipeline wired end-to-end: `POST /api/fileiq/ingest` registers source bundle + files/URLs in DB, creates extraction job, runs `runFileIqExtractionAgent`, writes raw extraction payload, updates job status; `GET /api/fileiq/jobs` returns recent jobs for Command Center table; migration `20260604_fileiq_extraction_jobs.sql` adds `fileiq_extraction_jobs` + `fileiq_raw_extractions` tables; `lib/fileiq/fileiq-db.ts` typed DB helpers; Extraction Jobs page (`/fileiq/extraction-jobs`) added; Command Center Ingest button live; `/api/fileiq(.*)` added to proxy `isProtectedRoute`; nav advances to 3 ready items; schema `migrationState` → `extraction_jobs`; 31/31 tests pass, 0 new TS errors. **Post-deploy action required: run `pnpm ecommerce:migrate` on production server to apply `20260604_fileiq_extraction_jobs.sql`.**
 - FileIQ Phase 1.3 Canonical Product Schema v1.0 + Schema Badges: Completed (4 direct-to-main commits, HEAD `f0b7571`, production deployed). Wired `FileIqProductCatalogV1` TypeScript schema (`lib/fileiq/schema/product-catalog-v1.ts` + `index.ts`) with all nested interfaces and enums (`CURRENT_SCHEMA_VERSION = "1.0"`). Updated `buildExtractionPrompt` to detect product/catalog intent via 7 keywords and emit the full v1.0 JSON shape so the agent outputs `schemaType: "product_catalog"` / `schemaVersion: "1.0"`; non-product intents keep existing flexible format. POST handler detects and validates the catalog schema on parse; stamps `summary.schemaType` / `summary.schemaVersion` in the DB for downstream brain queries. Purple "Catalog v1.0" badge surfaces in both the Command Center job list (client) and the Extraction Jobs SSR page. Also added conversational intent field to Command Center (`21bd4ee`) and async ingest success state feedback. No DB schema changes; no frontend breaking changes.
-- Current recommended sprint: Run `pnpm ecommerce:migrate` on production to activate Phase 1.2 tables, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Main is clean at `f0b7571`.
+- CI Fast-Path Deploy Fix + Concurrency Lock: Completed (direct-to-main, commit `049ce67`). Fixed `next: not found` (exit 127) on fast-path deploys by adding `npm ci --omit=dev` after artifact extraction so `node_modules/.bin/next` is present before service restart. Added `resource_group: production-deploy` to both `deploy_production_fast` and `deploy_production` to serialize concurrent pipeline deploys. Contract test extended with 2 new assertions; 4/4 tests green.
+- Current recommended sprint: Run `pnpm ecommerce:migrate` on production to activate Phase 1.2 tables, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Main is clean at `049ce67`.
+
+## Sprint Closure Update: CI Fast-Path Deploy Fix + Concurrency Lock
+
+- Branch: direct-to-main (no feature branch / no MR — 1 commit)
+- Date: `2026-06-03 (UTC)`
+- Status: `DELIVERED` — commit `049ce67`, pushed to `origin/main`
+- Root cause: `deploy_production_fast` extracted the pre-built `.next` artifact but never installed `node_modules`, so the systemd service failed with `next: not found` (exit 127) on every fast-path deploy.
+- Delivered scope:
+  - `.gitlab-ci.yml` — `deploy_production_fast` script: added `npm ci --omit=dev` after `tar -xzf` artifact extraction and artifact cleanup, before `write_release_metadata.sh` and service stop/start. Comment updated to reflect that only `npm run build` is skipped (not `npm ci`).
+  - `.gitlab-ci.yml` — added `resource_group: production-deploy` to both `deploy_production_fast` and `deploy_production` so GitLab queues a second concurrent deploy rather than racing.
+  - `tests/gitlab_deploy_pipeline_contract.test.ts` — 2 new assertions: `npm ci --omit=dev` present in pipeline source; `resource_group: production-deploy` appears exactly twice.
+- Test result: 4/4 contract tests green.
+- Boundary confirmation:
+  - no application code changes
+  - no DB schema changes
+  - full-path (`deploy_production`) unchanged
 
 ## Sprint Closure Update: FileIQ Phase 1.3 — Canonical Product Schema v1.0 + Schema Badges
 
