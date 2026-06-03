@@ -1,4 +1,4 @@
-export const CURRENT_SCHEMA_VERSION = "1.0";
+export const CURRENT_SCHEMA_VERSION = "1.1";
 
 export type FileIqProductType =
   | "supplement"
@@ -23,7 +23,18 @@ export type FileIqCertification =
   | "non_gmo"
   | "grass_fed"
   | "keto"
-  | "gluten_free";
+  | "gluten_free"
+  // v1.1
+  | "nsf_certified"
+  | "natural_flavors"
+  | "natural_colors"
+  | "vegan_friendly"
+  | "vegetarian"
+  | "lactose_free"
+  | "corn_free"
+  | "all_natural"
+  | "zero_added_sugar"
+  | "sugar_free";
 
 export type FileIqRefundType =
   | "refund"
@@ -110,6 +121,7 @@ export interface FileIqAssets {
   coaUrls: string[];
   sheetUrls: string[];
   videoUrls: string[];
+  coaExpiryDate: string | null; // v1.1
 }
 
 export interface FileIqShippingRoute {
@@ -135,6 +147,7 @@ export interface FileIqAgenticVisibility {
   relatedSkus: string[];
   bundleSuggestions: string[];
   notes: string | null;
+  certifications: FileIqCertification[]; // v1.1
 }
 
 export interface FileIqSeo {
