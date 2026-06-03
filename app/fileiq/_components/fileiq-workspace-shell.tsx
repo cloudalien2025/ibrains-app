@@ -139,6 +139,7 @@ function XIcon() {
 export default function FileIqWorkspaceShell() {
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const [urlText, setUrlText] = useState("");
+  const [intent, setIntent] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
   const [ingestError, setIngestError] = useState<string | null>(null);
@@ -241,6 +242,7 @@ export default function FileIqWorkspaceShell() {
       if (parsedUrls.length > 0) {
         fd.append("urls", JSON.stringify(parsedUrls));
       }
+      fd.append("intent", intent);
 
       const res = await fetch("/api/fileiq/ingest", { method: "POST", body: fd });
       const data = (await res.json()) as {
@@ -258,6 +260,7 @@ export default function FileIqWorkspaceShell() {
       } else {
         setDroppedFiles([]);
         setUrlText("");
+        setIntent("");
         await loadJobs();
       }
     } catch {
@@ -285,6 +288,29 @@ export default function FileIqWorkspaceShell() {
         data-testid="fileiq-ingest-input"
         aria-label="Ingest files or URLs"
       >
+        {/* Intent input */}
+        <div className="mb-4">
+          <label
+            htmlFor="fileiq-intent-input"
+            className="mb-0.5 block text-sm font-semibold text-[#0F172A]"
+          >
+            What would you like to know?
+          </label>
+          <p className="mb-2 text-xs text-[#475569]">
+            Describe your goal in plain language — FileIQ&apos;s agent will tailor its analysis to your question.
+          </p>
+          <textarea
+            id="fileiq-intent-input"
+            rows={3}
+            placeholder="e.g. I have 5 months of bank statements — what am I spending the most on and how has it changed over time?"
+            value={intent}
+            onChange={(e) => setIntent(e.target.value)}
+            aria-label="What would you like to know?"
+            data-testid="fileiq-intent-input"
+            className="w-full resize-none rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155] placeholder:text-[#94A3B8] focus:border-[#93C5FD] focus:outline-none focus:ring-1 focus:ring-[#93C5FD]"
+          />
+        </div>
+
         {/* Drop zone */}
         <div
           role="button"
@@ -405,7 +431,9 @@ export default function FileIqWorkspaceShell() {
               ? "Ingestion running — the agent is extracting facts…"
               : totalQueued > 0
                 ? `${totalQueued} item${totalQueued !== 1 ? "s" : ""} ready to ingest.`
-                : "Drop files or paste URLs above to get started."}
+                : intent.trim().length === 0
+                  ? "Describe your goal above, then drop files or paste URLs to get started."
+                  : "Drop files or paste URLs above to get started."}
           </p>
           <button
             type="button"
