@@ -114,6 +114,19 @@ describe("proxy app/auth protection", () => {
     expect(state.clerkProxyCalls).toBe(0);
   });
 
+  it("redirects unauthenticated users from internal /fileiq to sign-in with redirect_url", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const response = await handler(new NextRequest("https://app.ibrains.ai/fileiq"));
+
+    expect(response.status).toBe(307);
+    const location = response.headers.get("location") ?? "";
+    expect(location).toContain("/sign-in");
+    expect(location).toContain("redirect_url=%2Ffileiq");
+    expect(state.clerkProxyCalls).toBe(0);
+  });
+
   it("redirects signed-out /admin to sign-in with redirect_url preserved", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;

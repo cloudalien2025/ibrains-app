@@ -22,6 +22,7 @@ const isProtectedRoute = createRouteMatcher([
   "/optibay(.*)",
   "/optiwal(.*)",
   "/optizon(.*)",
+  "/fileiq(.*)",
   "/directoryiq(.*)",
   "/casaflix(.*)",
   "/pagebolt(.*)",

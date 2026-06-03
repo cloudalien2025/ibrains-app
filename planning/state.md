@@ -66,7 +66,38 @@ Last updated: 2026-06-03 (UTC)
 - Dead Export & Import Cleanup Sprint (EcomViper + Brains): QUEUED (planning-only, not started). Sprint pack at `planning/apps/ecomviper/sprints/sprint-dead-export-cleanup/`. Removal-only follow-up covering verified-unused exports/imports in live modules (`walmart-products`, `walmart-optimization-rules`, `serpapi-walmart-images`, `walmart-import-enrichment`, `shopify-live-hydrator`, `brainCatalog`) + 2 unused imports; all candidates verified zero-external-reference at queue time. Excludes test-only orphans and docs (separate tiers). Builder branch: `chore/ecomviper-dead-export-cleanup`.
 - Test-Only Orphan Modules Sprint (EcomViper + Brains): QUEUED (planning-only, not started). Sprint pack at `planning/apps/ecomviper/sprints/sprint-test-only-orphans/`. Wire-or-remove decision for 8 modules imported only by their own test (3 Remove-lean: pdp-intelligence-generator, product-editor-publish-workflow, google-sheets-csv; 5 Decide: supplier-intelligence-read-model, templates-playwright, walmart-docket-diagnostics, answerOrchestration, youtubeWatchDiscovery). Requires per-module owner decision; not blind removal. Builder branch: `chore/ecomviper-test-only-orphan-cleanup`.
 - Stale DirectoryIQ Docs Audit Sprint: QUEUED (planning-only, not started). Sprint pack at `planning/apps/directoryiq/sprints/sprint-stale-docs-audit/`. Docs-only audit-and-archive of 14 `directoryiq-*` migration/audit docs in `docs/`; default Archive (git mv to `planning/apps/directoryiq/history/`) over delete; requires ground-truth check that the migration shipped. Builder branch: `chore/directoryiq-stale-docs-audit`.
+- FileIQ Phase 1.0 Internal Brain Foundation: In progress (`feat-fileiq-internal-brain-foundation`, Claude Agent SDK ingestion-brain foundation at `/fileiq` — Agent SDK backbone + UI shell + internal route protection + shared-DB type/schema/planning contracts; planning-only, no migrations/OCR/live parsing).
 - Current recommended sprint: `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Phase 6.5 closed and repo cleanup + hygiene MRs merged; main is clean.
+
+## Sprint Checkpoint: FileIQ Phase 1.0 Internal Brain Foundation (Local Branch)
+
+- Branch: `feat-fileiq-internal-brain-foundation` (cut from clean `main` at `2571dd4`)
+- Date: `2026-06-03 (UTC)`
+- Local checkpoint status: `IMPLEMENTED_ONLY` (MR/pipeline/deploy/verify pending)
+- What FileIQ is: a Claude Agent SDK-powered internal ingestion brain at `app.ibrains.ai/fileiq` that extracts structured, provenance-tracked supplier facts and stores canonical data in the shared ecommerce DB for EcomViper / OptiBay / OptiZon / OptiWal / OptiPixel to consume.
+- Scope implemented:
+  - Agent SDK backbone (`lib/fileiq/agent/fileiq-agent.ts`, server-only):
+    - `ClaudeAgentOptions` (alias of SDK `Options`), `FILEIQ_AGENT_TOOLS` (file reading / web fetch / bash / vision → `Read`/`WebFetch`/`Bash`), `buildFileIqAgentOptions` (pure), `resolveFileIqAgentApiKey`.
+    - `runFileIqExtractionAgent` drives a single `query()` session, captures the agent `session_id`, and maps the terminal result to `completed`/`failed`/`unavailable`. Credential from `ANTHROPIC_API_KEY`; safe `unavailable` degradation when missing.
+  - `FileIqExtractionJob` extended with `agentSessionId` (→ `fileiq_extraction_jobs.agent_session_id`).
+  - UI shell matching the OptiBay brain pattern: `app/fileiq/layout.tsx`, `app/fileiq/page.tsx`, `app/fileiq/_components/fileiq-workspace-shell.tsx` (+ existing sidebar/header/dashboard-cards). Nav: Command Center, Source Bundles, Suppliers, Files, Extraction Jobs, Packages, Review Queue, Validation Reports, Brain Outputs, Settings.
+  - Internal route protection: `/fileiq(.*)` added to the `proxy.ts` auth-protected matcher (+ assertion in `tests/proxy_apps_auth_protection.test.ts`).
+  - Planning docs: `planning/apps/fileiq/{overview,architecture,database-contract,mvp-roadmap}.md`.
+  - DB schema is planning/types only (`lib/fileiq/fileiq-schema.ts`): `fileiq_source_bundles`, `fileiq_source_files`, `fileiq_extraction_jobs` (with `agent_session_id`), `fileiq_raw_extractions`, `fileiq_canonical_products`, `fileiq_product_facts`, `fileiq_product_assets`, `fileiq_validation_reports`, `fileiq_review_items`, `fileiq_published_packages`, `fileiq_brain_outputs`.
+  - Dependency: `@anthropic-ai/claude-agent-sdk@^0.3.161` added to `package.json`/`package-lock.json`.
+- Tests added: `tests/fileiq_foundation.test.ts` (11 tests — nav contract, status guards, DB boundary, agent option contract, agent runner with mocked SDK). Proxy suite extended to 18 tests.
+- Local validation:
+  - `npx vitest run tests/fileiq_foundation.test.ts tests/proxy_apps_auth_protection.test.ts`: 29 passed.
+  - `npx tsc --noEmit`: 155 errors (unchanged pre-existing baseline); zero FileIQ/proxy errors introduced.
+  - `next build` not runnable locally (root-owned `.env.production.local`, EACCES) — validated by green CI pipeline per established repo practice.
+  - Agent SDK confirmed out of all route bundles (no `app/` importer of `fileiq-agent.ts` or the SDK).
+- Boundary confirmation (Phase 1.0 does NOT):
+  - run migrations
+  - add live file parsing or OCR
+  - call OpenAI or Firecrawl
+  - change EcomViper Product Editor behavior
+  - add auto-save/publish
+  - start any agent session during page render / module import
 
 ## Sprint Closure Update: Repo Cleanup — Zero-Risk Dead/Orphaned/Codex-Leftover Removal
 
