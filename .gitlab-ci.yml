@@ -137,7 +137,7 @@ deploy_production:
         set +a
       fi
 
-      npm cache clean --force
+      rm -rf /root/.npm/_cacache
       rm -rf node_modules
       npm ci
       BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
