@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-06-03 (UTC) — FileIQ Phase 1.2 deployed
+Last updated: 2026-06-03 (UTC) — FileIQ Phase 1.3 canonical product schema v1.0 + schema badges deployed
 
 ## Program Status
 
@@ -70,7 +70,31 @@ Last updated: 2026-06-03 (UTC) — FileIQ Phase 1.2 deployed
 - FileIQ Phase 1.1 Source Registry + UI Overhaul: Completed and merged (merge SHA `61d2734`, production deploy pending). Bundled two sprints: (1) `feat-fileiq-source-registry-phase-1-1` — source registry DB migration (`fileiq_source_bundles`, `fileiq_source_files`), Source Bundles route shell, untracked-pull-conflict deploy guard; (2) `feat-fileiq-ui-overhaul` — iBrains global header (IbrainsWorkspaceShell + ConfiguredClerkProvider), FileIQ registered in brains catalog at `/brains`, sidebar cleaned to 2 ready items (no SOON badges), Command Center redesigned as ingestion workspace (drop zone + URL input + jobs table); `fix(smoke)` retry backoff for SHA/build_id comparison to eliminate every-deploy timing race.
 - CI Split Deploy Pipeline: Completed and merged (`feat/ci-split-deploy-fast-path`, MR `!326`, merge SHA `8261ca0`, remote + local branch deleted). Split `deploy_production` into two mutually-exclusive jobs: `deploy_production_fast` (UI/config changes — SCP pre-built `.next` artifact, skip `npm ci` + `npm run build` on server, ~1–2 min) and `deploy_production` (dep/server changes — full `npm ci` + `npm run build`, ~9 min). Fast path triggered when none of `package.json`, `package-lock.json`, `lib/**`, `app/api/**`, `middleware.ts`, `next.config.mjs`, `tsconfig.json`, `tailwind.config.*`, `db/**` changed. Pipeline contract test extended with 4 new assertions; all tests green.
 - FileIQ Phase 1.2 Extraction Jobs (Live Agent Sessions): Completed and merged (`feat/fileiq-phase-1-2-extraction-jobs`, merge SHA `84fc3995300ac98ccec19f2b8c123ce3532e30f1`, build `2574432444`, production deployed and verified). Live Claude Agent SDK extraction pipeline wired end-to-end: `POST /api/fileiq/ingest` registers source bundle + files/URLs in DB, creates extraction job, runs `runFileIqExtractionAgent`, writes raw extraction payload, updates job status; `GET /api/fileiq/jobs` returns recent jobs for Command Center table; migration `20260604_fileiq_extraction_jobs.sql` adds `fileiq_extraction_jobs` + `fileiq_raw_extractions` tables; `lib/fileiq/fileiq-db.ts` typed DB helpers; Extraction Jobs page (`/fileiq/extraction-jobs`) added; Command Center Ingest button live; `/api/fileiq(.*)` added to proxy `isProtectedRoute`; nav advances to 3 ready items; schema `migrationState` → `extraction_jobs`; 31/31 tests pass, 0 new TS errors. **Post-deploy action required: run `pnpm ecommerce:migrate` on production server to apply `20260604_fileiq_extraction_jobs.sql`.**
-- Current recommended sprint: Run `pnpm ecommerce:migrate` on production to activate Phase 1.2 tables, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Main is clean at `84fc399`.
+- FileIQ Phase 1.3 Canonical Product Schema v1.0 + Schema Badges: Completed (4 direct-to-main commits, HEAD `f0b7571`, production deployed). Wired `FileIqProductCatalogV1` TypeScript schema (`lib/fileiq/schema/product-catalog-v1.ts` + `index.ts`) with all nested interfaces and enums (`CURRENT_SCHEMA_VERSION = "1.0"`). Updated `buildExtractionPrompt` to detect product/catalog intent via 7 keywords and emit the full v1.0 JSON shape so the agent outputs `schemaType: "product_catalog"` / `schemaVersion: "1.0"`; non-product intents keep existing flexible format. POST handler detects and validates the catalog schema on parse; stamps `summary.schemaType` / `summary.schemaVersion` in the DB for downstream brain queries. Purple "Catalog v1.0" badge surfaces in both the Command Center job list (client) and the Extraction Jobs SSR page. Also added conversational intent field to Command Center (`21bd4ee`) and async ingest success state feedback. No DB schema changes; no frontend breaking changes.
+- Current recommended sprint: Run `pnpm ecommerce:migrate` on production to activate Phase 1.2 tables, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Main is clean at `f0b7571`.
+
+## Sprint Closure Update: FileIQ Phase 1.3 — Canonical Product Schema v1.0 + Schema Badges
+
+- Branch: direct-to-main (no feature branch / no MR — 4 commits)
+- Date: `2026-06-03 (UTC)`
+- Status: `DELIVERED` — pushed to `origin/main`, production deployed
+- Commits:
+  - `21bd4ee` — `feat(fileiq): add conversational intent field to Command Center`
+  - `ffcea17` — `feat(fileiq): wire canonical product catalog schema v1.0`
+  - `dea5935` — `feat(fileiq): show schema badge in job list for product_catalog extractions`
+  - `f0b7571` — `feat(fileiq): show schema badge in extraction jobs detail page` (HEAD)
+- Delivered scope:
+  - `lib/fileiq/schema/product-catalog-v1.ts`: full TypeScript type tree — `FileIqProductCatalogV1`, `FileIqProduct`, `FileIqInventory`, `FileIqPricing`, `FileIqWholesaleTiers`, `FileIqPhysical`, `FileIqDetails`, `FileIqSupplementFacts`, `FileIqIngredient`, `FileIqAssets`, `FileIqShipping`, `FileIqShippingRoute`, `FileIqAgenticVisibility`, `FileIqSeo`, `FileIqPolicy`, `FileIqExtraction`, `FileIqSupplier`; all enum types; `CURRENT_SCHEMA_VERSION = "1.0"`.
+  - `lib/fileiq/schema/index.ts`: re-exports everything.
+  - `app/api/fileiq/ingest/route.ts`: `isProductCatalogIntent()` keyword detector (extract / sku / product / catalog / supplement / pricing / inventory) checks intent + bundle name + file paths; `buildExtractionPrompt` branches — product intents embed full `CATALOG_SCHEMA_EXAMPLE` JSON and instruct agent to output `schemaType: "product_catalog"` / `schemaVersion: "1.0"` with user priority surfaced at the top; non-product intents keep existing flexible format. POST handler detects `schemaType === "product_catalog"` + validates `schemaVersion` (string) + `products` (array) → stamps `summary.schemaType` / `summary.schemaVersion` so downstream brains can query by schema type. Pre-existing TS error in catch block fixed (`agentSessionId: null` was missing).
+  - `app/fileiq/_components/fileiq-workspace-shell.tsx`: `SchemaBadge` component + `"Schema"` column in Command Center job list; async ingest success feedback state (`ingestSuccess`) + button label updated to "Queuing…".
+  - `app/fileiq/extraction-jobs/page.tsx`: `SchemaBadge` component + `"Schema"` column in Extraction Jobs SSR table.
+- Boundary confirmation:
+  - no DB schema changes
+  - no migrations
+  - no EcomViper Product Editor changes
+  - no auto-save/publish
+  - no model call during page render
 
 ## Sprint Checkpoint: FileIQ Phase 1.0 Internal Brain Foundation (Local Branch)
 
