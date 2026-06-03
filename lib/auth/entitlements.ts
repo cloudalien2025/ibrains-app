@@ -197,6 +197,7 @@ export function entitledBrainMap(user?: EntitlementUser): Record<BrainId, boolea
     pagebolt: entitled.has("pagebolt"),
     reelify: entitled.has("reelify"),
     ipetzo: entitled.has("ipetzo"),
+    fileiq: entitled.has("fileiq"),
   };
 }
 
