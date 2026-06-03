@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-06-02 (UTC)
+Last updated: 2026-06-03 (UTC)
 
 ## Program Status
 
@@ -61,7 +61,27 @@ Last updated: 2026-06-02 (UTC)
 - Shopify Phase 6.3.2 Rocktomic Supplement Facts Panel Extraction: Completed and merged (`sprint-6-3-2-rocktomic-supplement-facts-panel-extraction`, MR `!312`, pipeline `2568627769` success, production release SHA verified).
 - Shopify Phase 6.4 Rocktomic Master Package Builder: Completed and merged (`sprint-6-4-rocktomic-master-package-builder`, MR `!315`, pipeline `2570381373` success, merge SHA `c363135be8f521979e29af09a34b3632c60ec378`, production deployed and verified).
 - Shopify Phase 6.5 Rocktomic Package Reader + EcomViper Wiring: Completed and merged (`sprint-6-5-ecomviper-rocktomic-package-reader`, merge SHA `659133488cd4034c3f516070e8e97fff2171f986`, build `2570565864`, production deployed and verified).
-- Current recommended sprint: `Shopify Phase 6.6 or next EcomViper workstream` — Phase 6.5 is fully closed; main is clean.
+- Repo Cleanup Sprint: Zero-Risk Dead/Orphaned/Codex-Leftover Removal: Completed and merged (`chore/dead-code-zero-risk-cleanup`, MR `!317`, pipeline `2572377219` success, squash SHA `0541cf8a13933b072a50da27f0ecf64db0590390`, merge SHA `dffb1fc50d0b2d25d2a8a8ab8bac30039c70e9d2`, remote + local branch deleted).
+- Current recommended sprint: `Shopify Phase 6.6 or next EcomViper workstream` — Phase 6.5 closed and repo cleanup merged; main is clean.
+
+## Sprint Closure Update: Repo Cleanup — Zero-Risk Dead/Orphaned/Codex-Leftover Removal
+
+- Branch: `chore/dead-code-zero-risk-cleanup` (cut from clean `main`)
+- Date: `2026-06-03 (UTC)`
+- Status: `DELIVERED` — MR `!317` squash-merged to `main`; remote + local branch deleted.
+- MR / pipeline / SHAs:
+  - MR: `!317` (https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/317)
+  - Pipeline: `2572377219` (merge_request_event) success; branch pipeline `2572377757` success.
+  - Squash commit SHA: `0541cf8a13933b072a50da27f0ecf64db0590390`
+  - Merge commit SHA: `dffb1fc50d0b2d25d2a8a8ab8bac30039c70e9d2`
+- Scope (26 files changed, 1903 deletions; all verified zero inbound references):
+  - Codex experimentation leftovers: `.codex/config.toml`, `CODEX_FIX_NEXT16_ROUTE_HANDLERS.txt`, `scripts/codex_pipeline.sh`, `docs/AUTOMATION.md`, and the dead `codex:run` package.json script.
+  - Orphaned `src/` DirectoryIQ modules: `src/directoryiq/domain/{gaps,pillars,scoring}.ts`, `src/directoryiq/services/blogService.ts`, `src/lib/images/normalizeListingImageUrl.ts`, `src/lib/prompts/directoryiq/listing_upgrade_v1.ts`.
+  - Orphaned components + their now-dead-only deps: `components/{brains/BrainWorkspaceFrame,brains/LockedBrainView,directoryiq/ListingHero,signal-sources/SignalSourcesPanel,siteforge/AgencyPrimitives,snapshots/SnapshotStatusStrip,studio/domara-campaign-workflow-shell}`, plus `lib/copy/signalSourcesCatalog.ts` and `lib/siteforge/agencyWorkspace.ts`.
+  - Other dead code: `lib/directoryiq/detailMetricState.ts` and the 5 create-next-app boilerplate SVGs in `public/`.
+- Intentionally kept: `scripts/patch_next_route_types.mjs` (live in postinstall + CI), `scripts/guard-next-origin-config.mjs` (guard), and the `ecomviper:live-supplier-facts:compare` alias (documented in planning as a distinct `--compare-sku` entrypoint).
+- Local verification (no regressions vs `main`): `tsc --noEmit` 155 errors on both branches (pre-existing test-env typing baseline); `vitest` 10 failures on both branches (pre-existing flaky/env-dependent suites); no broken-import errors introduced. `next build` not runnable locally (root-owned `.env.production.local`); validated by green CI pipeline.
+- Follow-up candidates (deferred, not in this sprint): dead exports inside live Walmart/Shopify modules, test-only "production orphans" in `lib/brain-learning` and `lib/ecomviper`, stale `docs/directoryiq-*` migration docs, and `git rm --cached` of 5 tracked `artifacts/ui-audit/*` files.
 
 ## Sprint Checkpoint: Phase 6.5 Rocktomic Package Reader + EcomViper Wiring (Local Branch)
 
