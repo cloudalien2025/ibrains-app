@@ -39,7 +39,7 @@ afterEach(() => {
 describe("FileIQ navigation contract", () => {
   it("exposes the ten Phase 1.0 nav destinations starting at the command center", () => {
     expect(fileIqNavItems).toHaveLength(10);
-    expect(fileIqNavItems[0]).toEqual({ label: "Command Center", href: "/fileiq" });
+    expect(fileIqNavItems[0]).toEqual({ label: "Command Center", href: "/fileiq", ready: true });
     expect(fileIqNavItems.map((item) => item.label)).toEqual([
       "Command Center",
       "Source Bundles",
@@ -55,6 +55,14 @@ describe("FileIQ navigation contract", () => {
     for (const item of fileIqNavItems) {
       expect(item.href.startsWith("/fileiq")).toBe(true);
     }
+  });
+
+  it("marks only the built Command Center route as ready in Phase 1.0", () => {
+    // Guards against linking the sidebar to unbuilt routes, which would render
+    // the not-found boundary (404, or 500 during a Turbopack cold-start window).
+    const ready = fileIqNavItems.filter((item) => item.ready);
+    expect(ready).toEqual([{ label: "Command Center", href: "/fileiq", ready: true }]);
+    expect(fileIqNavItems.filter((item) => !item.ready)).toHaveLength(9);
   });
 });
 
