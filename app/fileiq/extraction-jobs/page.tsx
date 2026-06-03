@@ -52,7 +52,18 @@ function extractedCount(job: FileIqJobListRow): string {
   return typeof n === "number" ? String(n) : "—";
 }
 
-const tableColumns = ["Source Bundle", "Status", "Products Extracted", "Brains Notified", "Started"] as const;
+function SchemaBadge({ job }: { job: FileIqJobListRow }) {
+  const schemaType = job.summary?.schemaType;
+  const schemaVersion = job.summary?.schemaVersion;
+  if (schemaType !== "product_catalog") return <span className="text-[#94A3B8]">—</span>;
+  return (
+    <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#EDE9FE] text-[#5B21B6]">
+      Catalog {typeof schemaVersion === "string" ? `v${schemaVersion}` : ""}
+    </span>
+  );
+}
+
+const tableColumns = ["Source Bundle", "Status", "Schema", "Products Extracted", "Brains Notified", "Started"] as const;
 
 export default async function FileIqExtractionJobsPage() {
   let jobs: FileIqJobListRow[] = [];
@@ -125,6 +136,9 @@ export default async function FileIqExtractionJobsPage() {
                     <td className="py-3 pr-4 font-medium text-[#0F172A]">{job.bundleName}</td>
                     <td className="py-3 pr-4">
                       <StatusBadge status={job.status} />
+                    </td>
+                    <td className="py-3 pr-4">
+                      <SchemaBadge job={job} />
                     </td>
                     <td className="py-3 pr-4 text-[#334155]">{extractedCount(job)}</td>
                     <td className="py-3 pr-4 text-[#94A3B8]">—</td>
