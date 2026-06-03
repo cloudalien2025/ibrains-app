@@ -12,6 +12,13 @@ PUBLIC_SMOKE_PATHS="${PUBLIC_SMOKE_PATHS:-/ /sign-in}"
 PROTECTED_REDIRECT_PATHS="${PROTECTED_REDIRECT_PATHS:-/dashboard /optiwal/connect}"
 LEGACY_NOT_FOUND_PATHS="${LEGACY_NOT_FOUND_PATHS:-/apps /apps/studio /studio /siteforge /uapforge}"
 SKIP_SERVICE_CHECKS="${SKIP_SERVICE_CHECKS:-0}"
+# Retry budget for SHA/build_id comparison checks.  The service restart after a
+# deploy creates a timing window where /api/meta/release still reflects the
+# previous build.  We poll until the expected values appear or retries are
+# exhausted.  6 attempts × 10 s = up to 60 s total — well within any reasonable
+# deploy restart window.
+RELEASE_SHA_POLL_RETRIES="${RELEASE_SHA_POLL_RETRIES:-6}"
+RELEASE_SHA_POLL_INTERVAL="${RELEASE_SHA_POLL_INTERVAL:-10}"
 
 curl_host_args=()
 if [ -n "${HOST_HEADER}" ]; then
@@ -294,15 +301,16 @@ PY
   fi
 }
 
-check_release_meta() {
+# Fetches /api/meta/release and parses it into /tmp/release_meta_parse.txt.
+# Returns 1 (without writing the file) if the response body is empty so callers
+# can treat a brief restart-window gap as a retryable condition.
+_fetch_release_meta_parse() {
   local url="$1"
   local body
   body=$(curl -sS "${curl_host_args[@]}" "$url" || true)
   if [ -z "$body" ]; then
-    fail "release meta empty response"
-    return
+    return 1
   fi
-
   python3 - "$body" <<'PY' > /tmp/release_meta_parse.txt 2>/dev/null || true
 import json,sys
 try:
@@ -316,6 +324,16 @@ print(f"BUILD_ID={data.get('build_id') or ''}")
 print(f"GIT_SHA={data.get('git_sha') or ''}")
 print(f"DEPLOYED_AT={data.get('deployed_at') or data.get('build_timestamp') or ''}")
 PY
+  return 0
+}
+
+check_release_meta() {
+  local url="$1"
+
+  if ! _fetch_release_meta_parse "$url"; then
+    fail "release meta empty response"
+    return
+  fi
 
   if grep -q '^BADJSON$' /tmp/release_meta_parse.txt; then
     fail "release meta invalid JSON"
@@ -342,20 +360,45 @@ PY
     pass "release git_sha is non-null"
   fi
 
-  if [ -n "${EXPECT_BUILD_ID}" ]; then
-    if grep -q "^BUILD_ID=${EXPECT_BUILD_ID}$" /tmp/release_meta_parse.txt; then
-      pass "release build_id matches ${EXPECT_BUILD_ID}"
-    else
-      fail "release build_id mismatch"
-    fi
-  fi
+  # SHA/build_id comparison: retry with backoff to absorb the deploy restart
+  # timing window.  The service may still be serving the previous build when the
+  # smoke test first fires — we poll until the expected values appear or the
+  # retry budget is exhausted.
+  if [ -n "${EXPECT_BUILD_ID}" ] || [ -n "${EXPECT_GIT_SHA}" ]; then
+    local attempt=1
+    while true; do
+      local sha_ok=1
+      if [ -n "${EXPECT_BUILD_ID}" ] && ! grep -q "^BUILD_ID=${EXPECT_BUILD_ID}$" /tmp/release_meta_parse.txt 2>/dev/null; then
+        sha_ok=0
+      fi
+      if [ -n "${EXPECT_GIT_SHA}" ] && ! grep -q "^GIT_SHA=${EXPECT_GIT_SHA}$" /tmp/release_meta_parse.txt 2>/dev/null; then
+        sha_ok=0
+      fi
 
-  if [ -n "${EXPECT_GIT_SHA}" ]; then
-    if grep -q "^GIT_SHA=${EXPECT_GIT_SHA}$" /tmp/release_meta_parse.txt; then
-      pass "release git_sha matches ${EXPECT_GIT_SHA}"
-    else
-      fail "release git_sha mismatch"
-    fi
+      if [ "${sha_ok}" -eq 1 ]; then
+        [ -n "${EXPECT_BUILD_ID}" ] && pass "release build_id matches ${EXPECT_BUILD_ID}"
+        [ -n "${EXPECT_GIT_SHA}" ] && pass "release git_sha matches ${EXPECT_GIT_SHA}"
+        return
+      fi
+
+      if [ "${attempt}" -ge "${RELEASE_SHA_POLL_RETRIES}" ]; then
+        local actual_build_id actual_sha
+        actual_build_id=$(grep '^BUILD_ID=' /tmp/release_meta_parse.txt 2>/dev/null | cut -d= -f2- || true)
+        actual_sha=$(grep '^GIT_SHA=' /tmp/release_meta_parse.txt 2>/dev/null | cut -d= -f2- || true)
+        if [ -n "${EXPECT_BUILD_ID}" ] && [ "${actual_build_id}" != "${EXPECT_BUILD_ID}" ]; then
+          fail "release build_id mismatch after ${attempt} poll attempt(s): expected=${EXPECT_BUILD_ID} actual=${actual_build_id:-missing}"
+        fi
+        if [ -n "${EXPECT_GIT_SHA}" ] && [ "${actual_sha}" != "${EXPECT_GIT_SHA}" ]; then
+          fail "release git_sha mismatch after ${attempt} poll attempt(s): expected=${EXPECT_GIT_SHA} actual=${actual_sha:-missing}"
+        fi
+        return
+      fi
+
+      note "release SHA not yet updated (attempt ${attempt}/${RELEASE_SHA_POLL_RETRIES}), waiting ${RELEASE_SHA_POLL_INTERVAL}s..."
+      sleep "${RELEASE_SHA_POLL_INTERVAL}"
+      attempt=$((attempt + 1))
+      _fetch_release_meta_parse "$url" || true
+    done
   fi
 }
 
