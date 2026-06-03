@@ -1,8 +1,79 @@
 "use client";
 
-import { useState, useRef, useCallback, DragEvent, ChangeEvent, KeyboardEvent } from "react";
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  type DragEvent,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from "react";
 
-const recentJobColumns = ["Source / File", "Status", "Extracted", "Brains Notified", "Submitted"] as const;
+interface JobRow {
+  id: string;
+  bundleName: string;
+  status: string;
+  summary: Record<string, unknown>;
+  errorCode: string | null;
+  createdAt: string;
+}
+
+const statusConfig: Record<string, { label: string; className: string }> = {
+  completed: {
+    label: "Completed",
+    className:
+      "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#DCFCE7] text-[#166534]",
+  },
+  failed: {
+    label: "Failed",
+    className:
+      "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#FEE2E2] text-[#991B1B]",
+  },
+  running: {
+    label: "Running…",
+    className:
+      "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#DBEAFE] text-[#1D4ED8]",
+  },
+  pending: {
+    label: "Pending",
+    className:
+      "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#F1F5F9] text-[#64748B]",
+  },
+  unavailable: {
+    label: "Unavailable",
+    className:
+      "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#FEF3C7] text-[#92400E]",
+  },
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const cfg = statusConfig[status] ?? {
+    label: status,
+    className:
+      "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#F1F5F9] text-[#64748B]",
+  };
+  return <span className={cfg.className}>{cfg.label}</span>;
+}
+
+function extractedCount(job: JobRow): string {
+  const n = job.summary?.totalProductsFound;
+  return typeof n === "number" ? String(n) : "—";
+}
+
+function formatRelativeTime(isoString: string): string {
+  try {
+    const ms = Date.now() - new Date(isoString).getTime();
+    if (ms < 60_000) return "Just now";
+    if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
+    if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
+    return new Date(isoString).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  } catch {
+    return isoString;
+  }
+}
+
+const recentJobColumns = ["Source / Bundle", "Status", "Extracted", "Brains Notified", "Submitted"] as const;
 
 function UploadIcon() {
   return (
@@ -69,7 +140,29 @@ export default function FileIqWorkspaceShell() {
   const [droppedFiles, setDroppedFiles] = useState<File[]>([]);
   const [urlText, setUrlText] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [isIngesting, setIsIngesting] = useState(false);
+  const [ingestError, setIngestError] = useState<string | null>(null);
+  const [jobs, setJobs] = useState<JobRow[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadJobs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/fileiq/jobs?limit=20");
+      if (res.ok) {
+        const data = (await res.json()) as { jobs?: JobRow[] };
+        setJobs(data.jobs ?? []);
+      }
+    } catch {
+      // non-fatal — table may not be migrated yet
+    } finally {
+      setJobsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadJobs();
+  }, [loadJobs]);
 
   const addFiles = useCallback((incoming: FileList | File[]) => {
     const arr = Array.from(incoming);
@@ -134,6 +227,45 @@ export default function FileIqWorkspaceShell() {
     .filter((line) => line.length > 0);
 
   const totalQueued = droppedFiles.length + parsedUrls.length;
+
+  const handleIngest = async () => {
+    if (totalQueued === 0 || isIngesting) return;
+    setIsIngesting(true);
+    setIngestError(null);
+
+    try {
+      const fd = new FormData();
+      for (const file of droppedFiles) {
+        fd.append("file", file, file.name);
+      }
+      if (parsedUrls.length > 0) {
+        fd.append("urls", JSON.stringify(parsedUrls));
+      }
+
+      const res = await fetch("/api/fileiq/ingest", { method: "POST", body: fd });
+      const data = (await res.json()) as {
+        error?: string;
+        message?: string;
+        bundleId?: string;
+        jobId?: string;
+        status?: string;
+        totalProductsFound?: number;
+        errorCode?: string;
+      };
+
+      if (!res.ok) {
+        setIngestError(data.message ?? "Ingestion failed.");
+      } else {
+        setDroppedFiles([]);
+        setUrlText("");
+        await loadJobs();
+      }
+    } catch {
+      setIngestError("Network error. Please try again.");
+    } finally {
+      setIsIngesting(false);
+    }
+  };
 
   return (
     <div className="space-y-4" data-testid="fileiq-workspace-shell">
@@ -239,7 +371,9 @@ export default function FileIqWorkspaceShell() {
           <textarea
             id="fileiq-url-input"
             rows={3}
-            placeholder={"Paste one or more URLs to ingest, one per line…\nhttps://example.com/catalog.pdf\nhttps://example.com/specs.docx"}
+            placeholder={
+              "Paste one or more URLs to ingest, one per line…\nhttps://example.com/catalog.pdf\nhttps://example.com/specs.docx"
+            }
             value={urlText}
             onChange={(e) => setUrlText(e.target.value)}
             aria-label="URLs to ingest, one per line"
@@ -253,20 +387,40 @@ export default function FileIqWorkspaceShell() {
           )}
         </div>
 
+        {/* Error message */}
+        {ingestError && (
+          <p
+            className="mt-2 text-xs text-[#DC2626]"
+            role="alert"
+            data-testid="fileiq-ingest-error"
+          >
+            {ingestError}
+          </p>
+        )}
+
         {/* Ingest row */}
         <div className="mt-3 flex items-center justify-between gap-4">
           <p className="text-xs text-[#94A3B8]" data-testid="fileiq-ingest-status">
-            {totalQueued > 0
-              ? `${totalQueued} item${totalQueued !== 1 ? "s" : ""} queued — ingestion wires in Phase 1.2.`
-              : "Ingestion is not yet active. Live extraction wires in Phase 1.2."}
+            {isIngesting
+              ? "Ingestion running — the agent is extracting facts…"
+              : totalQueued > 0
+                ? `${totalQueued} item${totalQueued !== 1 ? "s" : ""} ready to ingest.`
+                : "Drop files or paste URLs above to get started."}
           </p>
           <button
             type="button"
-            disabled
-            aria-disabled="true"
-            className="shrink-0 rounded-lg border border-[#D9E4F0] bg-[#F1F5F9] px-4 py-2 text-sm font-medium text-[#94A3B8] disabled:cursor-not-allowed"
+            disabled={totalQueued === 0 || isIngesting}
+            aria-disabled={totalQueued === 0 || isIngesting}
+            onClick={() => void handleIngest()}
+            data-testid="fileiq-ingest-button"
+            className={[
+              "shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+              totalQueued > 0 && !isIngesting
+                ? "border border-[#1D4ED8] bg-[#1D4ED8] text-white hover:bg-[#1E40AF]"
+                : "border border-[#D9E4F0] bg-[#F1F5F9] text-[#94A3B8] cursor-not-allowed",
+            ].join(" ")}
           >
-            {totalQueued > 0 ? `Ingest (${totalQueued})` : "Ingest"}
+            {isIngesting ? "Ingesting…" : totalQueued > 0 ? `Ingest (${totalQueued})` : "Ingest"}
           </button>
         </div>
       </section>
@@ -278,6 +432,9 @@ export default function FileIqWorkspaceShell() {
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-[#0F172A]">Recent Ingestion Jobs</h2>
+          {jobs.length > 0 && (
+            <span className="text-xs text-[#94A3B8]">{jobs.length} job{jobs.length !== 1 ? "s" : ""}</span>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -296,15 +453,42 @@ export default function FileIqWorkspaceShell() {
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td
-                  colSpan={recentJobColumns.length}
-                  className="py-10 text-center text-sm text-[#94A3B8]"
-                  data-testid="fileiq-jobs-empty"
-                >
-                  No ingestion jobs yet. Drop files or paste URLs above to get started.
-                </td>
-              </tr>
+              {jobsLoading ? (
+                <tr>
+                  <td
+                    colSpan={recentJobColumns.length}
+                    className="py-8 text-center text-sm text-[#94A3B8]"
+                  >
+                    Loading…
+                  </td>
+                </tr>
+              ) : jobs.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={recentJobColumns.length}
+                    className="py-10 text-center text-sm text-[#94A3B8]"
+                    data-testid="fileiq-jobs-empty"
+                  >
+                    No ingestion jobs yet. Drop files or paste URLs above to get started.
+                  </td>
+                </tr>
+              ) : (
+                jobs.map((job) => (
+                  <tr
+                    key={job.id}
+                    className="border-b border-[#F1F5F9] last:border-0"
+                    data-testid="fileiq-job-row"
+                  >
+                    <td className="py-3 pr-4 font-medium text-[#0F172A]">{job.bundleName}</td>
+                    <td className="py-3 pr-4">
+                      <StatusBadge status={job.status} />
+                    </td>
+                    <td className="py-3 pr-4 text-[#334155]">{extractedCount(job)}</td>
+                    <td className="py-3 pr-4 text-[#94A3B8]">—</td>
+                    <td className="py-3 text-[#64748B]">{formatRelativeTime(job.createdAt)}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
