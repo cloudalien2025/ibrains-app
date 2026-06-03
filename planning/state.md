@@ -66,7 +66,7 @@ Last updated: 2026-06-03 (UTC)
 - Dead Export & Import Cleanup Sprint (EcomViper + Brains): QUEUED (planning-only, not started). Sprint pack at `planning/apps/ecomviper/sprints/sprint-dead-export-cleanup/`. Removal-only follow-up covering verified-unused exports/imports in live modules (`walmart-products`, `walmart-optimization-rules`, `serpapi-walmart-images`, `walmart-import-enrichment`, `shopify-live-hydrator`, `brainCatalog`) + 2 unused imports; all candidates verified zero-external-reference at queue time. Excludes test-only orphans and docs (separate tiers). Builder branch: `chore/ecomviper-dead-export-cleanup`.
 - Test-Only Orphan Modules Sprint (EcomViper + Brains): QUEUED (planning-only, not started). Sprint pack at `planning/apps/ecomviper/sprints/sprint-test-only-orphans/`. Wire-or-remove decision for 8 modules imported only by their own test (3 Remove-lean: pdp-intelligence-generator, product-editor-publish-workflow, google-sheets-csv; 5 Decide: supplier-intelligence-read-model, templates-playwright, walmart-docket-diagnostics, answerOrchestration, youtubeWatchDiscovery). Requires per-module owner decision; not blind removal. Builder branch: `chore/ecomviper-test-only-orphan-cleanup`.
 - Stale DirectoryIQ Docs Audit Sprint: QUEUED (planning-only, not started). Sprint pack at `planning/apps/directoryiq/sprints/sprint-stale-docs-audit/`. Docs-only audit-and-archive of 14 `directoryiq-*` migration/audit docs in `docs/`; default Archive (git mv to `planning/apps/directoryiq/history/`) over delete; requires ground-truth check that the migration shipped. Builder branch: `chore/directoryiq-stale-docs-audit`.
-- FileIQ Phase 1.0 Internal Brain Foundation: In progress (`feat-fileiq-internal-brain-foundation`, Claude Agent SDK ingestion-brain foundation at `/fileiq` — Agent SDK backbone + UI shell + internal route protection + shared-DB type/schema/planning contracts; planning-only, no migrations/OCR/live parsing).
+- FileIQ Phase 1.0 Internal Brain Foundation: Completed and merged (`feat-fileiq-internal-brain-foundation`, MR `!319`, merge SHA `ac330130`, production deployed and verified). Claude Agent SDK ingestion-brain foundation at `/fileiq` — Agent SDK backbone + UI shell + internal route protection + shared-DB type/schema/planning contracts; planning-only, no migrations/OCR/live parsing. Bundled `fix(ci)` for the `build_release` tar `public/` blocker. Post-deploy `/fileiq` 500 fixed by MR `!322` (merge SHA `c9c5efe`, production verified): explicit `app/not-found.tsx` + nav gating for unbuilt routes.
 - Current recommended sprint: `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Phase 6.5 closed and repo cleanup + hygiene MRs merged; main is clean.
 
 ## Sprint Checkpoint: FileIQ Phase 1.0 Internal Brain Foundation (Local Branch)
@@ -98,6 +98,32 @@ Last updated: 2026-06-03 (UTC)
   - change EcomViper Product Editor behavior
   - add auto-save/publish
   - start any agent session during page render / module import
+
+## Sprint Closure Update: FileIQ Phase 1.0 Internal Brain Foundation
+
+- Sprint/branch: `feat-fileiq-internal-brain-foundation`
+- Date: `2026-06-03 (UTC)`
+- Status: `DELIVERED_WITH_DEPLOY_VERIFIED`
+- MR / merge:
+  - MR: `!319` (https://gitlab.com/cloudalien-technologies/ibrains-app/-/merge_requests/319)
+  - merge commit SHA: `ac330130cd6bf6716f68d3e62d965d375e1d08fa` (short: `ac33013`)
+- Pipeline / deploy:
+  - First deploy attempt failed at `build_release`: `tar: public: Cannot stat: No such file or directory` — `public/` had no tracked files after cleanup MR `!317` removed the boilerplate SVGs, so it was absent in a fresh CI checkout. Fixed with `tar --ignore-failed-read` (`fix(ci)` commit `b154652`).
+  - Second blocker (deploy stage): the original Codex FileIQ skeleton files existed as untracked files in the production checkout `/root/ibrains-app`, blocking `git pull --ff-only`. Cleared by deleting the 7 untracked files on the server (root), then retrying `deploy_production`.
+  - Deploy pipeline `2572518753`: success; production restarted on `ac33013`.
+- Production release verification:
+  - `/api/meta/release`: `git_sha=ac330130cd6bf6716f68d3e62d965d375e1d08fa`, `build_id=2572518753`, `deployed_at=2026-06-03T07:11:04Z`, `release_metadata_complete=true`.
+  - `/api/health`: `{"ok":true,"upstream_ok":true}` — HTTP 200.
+  - `/fileiq` internal protection verified: `307 -> /sign-in?redirect_url=%2Ffileiq` (and `/fileiq/files` likewise) through the public edge.
+- Post-deploy follow-up — FileIQ `/fileiq` 500 fix (MR `!322`, merge SHA `c9c5efefe589c1404589b362eed777e918c27758`, production deployed and verified):
+  - Production smoke caught a `500` on `/fileiq` during the post-deploy cold-start window. Root cause: Next.js 16 (Turbopack) `InvariantError: client reference manifest for route "/_not-found" does not exist`, thrown on not-found render. Two triggers: (1) the FileIQ sidebar linked to 9 unbuilt subroutes (only the Command Center page exists in Phase 1.0), so signed-in navigation rendered the not-found boundary; (2) Turbopack did not reliably register the synthetic `/_not-found` manifest on first boot (12 InvariantErrors clustered between first boot and the next restart, then clean).
+  - Fix: added explicit `app/not-found.tsx` (pure server component) so the `/_not-found` manifest is registered reliably; gated FileIQ nav with a `ready` flag so only the built Command Center route is a link and the other 9 render as non-navigable "Soon" placeholders.
+  - Production verification post-restart (`07:43:51 UTC`, build `c9c5efe`): `/fileiq` returned `307` on 40/40 rapid cold-start requests; `0` `/_not-found` InvariantErrors after boot (vs 12 on the prior deploy); `/api/health` ok; not-found boundary returns clean `404`.
+  - Note: `/api/meta/release` flips to the new SHA before the service restart (the deploy writes release metadata prior to `npm run build` + `systemctl restart`), so deploy verification must confirm the actual service restart, not just the release SHA.
+- Branch cleanup: remote source branches deleted on merge; local `feat-fileiq-internal-brain-foundation` and `fix-fileiq-not-found-runtime-500` deleted; local `main` fast-forwarded to `c9c5efe`.
+- Delivered scope: see the FileIQ Phase 1.0 checkpoint block above (Agent SDK backbone, UI shell, `/fileiq` internal route protection, planning/type/schema contracts, foundation tests).
+- Boundary confirmation (held): no migrations, no live file parsing/OCR, no OpenAI/Firecrawl, no EcomViper Product Editor change, no auto-save/publish, no agent session at page render.
+- Follow-up (deferred): the recurring class of "untracked files in `/root/ibrains-app` block deploy `git pull`" warrants a deploy-script guard (e.g. `git clean`/stash of untracked before `git pull --ff-only`); not in this sprint's scope.
 
 ## Sprint Closure Update: Repo Cleanup — Zero-Risk Dead/Orphaned/Codex-Leftover Removal
 
