@@ -43,17 +43,150 @@ function slugify(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
+const PRODUCT_INTENT_KEYWORDS = [
+  "extract",
+  "sku",
+  "product",
+  "catalog",
+  "supplement",
+  "pricing",
+  "inventory",
+];
+
+function isProductCatalogIntent(params: {
+  intent?: string;
+  bundleName: string;
+  filePaths: Array<{ path: string; type: string }>;
+}): boolean {
+  const haystack = [
+    params.intent ?? "",
+    params.bundleName,
+    ...params.filePaths.map((f) => f.path),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return PRODUCT_INTENT_KEYWORDS.some((kw) => haystack.includes(kw));
+}
+
+const CATALOG_SCHEMA_EXAMPLE = JSON.stringify(
+  {
+    schemaType: "product_catalog",
+    schemaVersion: "1.0",
+    supplier: {
+      supplierId: "acme-co",
+      supplierName: "Acme Co",
+      website: null,
+      contactEmail: null,
+      contactPhone: null,
+    },
+    products: [
+      {
+        sku: "ACM-001",
+        productName: "Example Supplement",
+        productType: "supplement",
+        category: null,
+        subcategory: null,
+        brand: null,
+        upc: null,
+        asin: null,
+        inventory: {
+          status: "in_stock",
+          quantityOnHand: null,
+          reorderPoint: null,
+          leadTimeDays: null,
+          moq: null,
+        },
+        pricing: {
+          msrp: null,
+          wholesaleCost: null,
+          currency: "USD",
+          wholesaleTiers: {
+            nonMember: null,
+            standard: null,
+            vipPlus: null,
+            basic: null,
+            launch: null,
+            scale: null,
+          },
+          mapPrice: null,
+          salePrice: null,
+        },
+        physical: {
+          weightLbs: null,
+          weightOz: null,
+          heightIn: null,
+          widthIn: null,
+          depthIn: null,
+          unitCount: null,
+          unitCountType: null,
+        },
+        details: {
+          description: null,
+          shortDescription: null,
+          suggestedUse: null,
+          warnings: null,
+          storageInstructions: null,
+          countryOfOrigin: null,
+          certifications: [],
+          flavor: null,
+          form: null,
+          coaUrl: null,
+        },
+        supplementFacts: {
+          servingSize: null,
+          servingsPerContainer: null,
+          ingredients: [{ name: "Vitamin C", amount: "500", unit: "mg", dailyValue: "556%" }],
+          otherIngredients: null,
+          allergenWarning: null,
+          raw: null,
+        },
+        assets: {
+          imageUrls: [],
+          labelUrls: [],
+          coaUrls: [],
+          sheetUrls: [],
+          videoUrls: [],
+        },
+        shipping: {
+          shipsFromState: null,
+          shipsFromCountry: null,
+          freeShippingThreshold: null,
+          standardRoute: { carriers: [], fulfillmentDays: null, transitDays: null, totalEstimatedDays: null },
+          expeditedRoute: null,
+          internationalAvailable: null,
+          hazmat: null,
+        },
+        agenticVisibility: { priorityScore: null, tags: [], relatedSkus: [], bundleSuggestions: [], notes: null },
+        seo: { metaTitle: null, metaDescription: null, keywords: [], canonicalUrl: null },
+        policy: { refundWindowDays: null, refundType: null, returnShippingPaidBy: null, policyNotes: null },
+        extraction: { sourceRef: "page 1", sourceFileId: null, extractedAt: null, confidence: null, extractionNotes: null },
+      },
+    ],
+    totalProductsFound: 1,
+    sourcesProcessed: 1,
+    extractionNotes: "brief summary of what was found and any gaps",
+  },
+  null,
+  2,
+);
+
 function buildExtractionPrompt(params: {
   jobId: string;
   bundleName: string;
   filePaths: Array<{ path: string; type: string }>;
   urls: string[];
+  intent?: string;
 }): string {
   const lines: string[] = [
     `You are extracting structured product facts for FileIQ extraction job ${params.jobId}.`,
     `Bundle: ${params.bundleName}`,
-    "",
   ];
+
+  if (params.intent) {
+    lines.push(`USER INTENT: ${params.intent}`);
+  }
+
+  lines.push("");
 
   if (params.filePaths.length > 0) {
     lines.push("FILES — read each using the Read tool:");
@@ -71,52 +204,76 @@ function buildExtractionPrompt(params: {
     lines.push("");
   }
 
-  lines.push(
-    "TASK: Extract every product you can find across all sources.",
-    "",
-    "For each product extract as much as possible:",
-    "  sku                 — product code or SKU (required)",
-    "  productName         — full product name",
-    "  category            — product category",
-    "  servingSize         — serving size text",
-    "  activeIngredients   — array of {name, amount, unit}",
-    "  supplementFactsRaw  — raw supplement facts panel text",
-    "  pricing             — {msrp, wholesaleCost, currency}",
-    "  coaUrl              — Certificate of Analysis URL",
-    "  warnings            — warning or disclaimer text",
-    "  suggestedUse        — directions or suggested use",
-    "  imageUrls           — product image or label URLs",
-    "  sourceRef           — page/row/URL where this product was found",
-    "",
-    "Return ONLY valid JSON (no markdown, no code fence):",
-    JSON.stringify(
-      {
-        products: [
-          {
-            sku: "EXAMPLE-001",
-            productName: "Example Product",
-            category: null,
-            servingSize: null,
-            activeIngredients: [],
-            supplementFactsRaw: null,
-            pricing: null,
-            coaUrl: null,
-            warnings: null,
-            suggestedUse: null,
-            imageUrls: [],
-            sourceRef: "page 1",
-          },
-        ],
-        totalProductsFound: 1,
-        sourcesProcessed: 1,
-        extractionNotes: "brief summary of what was found",
-      },
-      null,
-      2,
-    ),
-    "",
-    "Ground every fact in the source. Never invent values. Mark unknowns as null.",
-  );
+  if (isProductCatalogIntent(params)) {
+    lines.push(
+      "TASK: Extract every product you can find across all sources and return a FileIQ Product Catalog (schema v1.0).",
+      "",
+      "Output ONLY valid JSON matching the exact shape below (no markdown, no code fence).",
+      "Set schemaType to \"product_catalog\" and schemaVersion to \"1.0\".",
+      "Populate every field you can find in the source. Set unknown fields to null or [].",
+      "Ground every fact in the source — never invent values.",
+    );
+
+    if (params.intent) {
+      lines.push(
+        "",
+        `PRIORITY: The user said "${params.intent}". Prioritize those fields and make sure they are as complete as possible.`,
+      );
+    }
+
+    lines.push("", "REQUIRED JSON SHAPE:", CATALOG_SCHEMA_EXAMPLE);
+  } else {
+    lines.push(
+      "TASK: Extract every product you can find across all sources.",
+      "",
+      "For each product extract as much as possible:",
+      "  sku                 — product code or SKU (required)",
+      "  productName         — full product name",
+      "  category            — product category",
+      "  servingSize         — serving size text",
+      "  activeIngredients   — array of {name, amount, unit}",
+      "  supplementFactsRaw  — raw supplement facts panel text",
+      "  pricing             — {msrp, wholesaleCost, currency}",
+      "  coaUrl              — Certificate of Analysis URL",
+      "  warnings            — warning or disclaimer text",
+      "  suggestedUse        — directions or suggested use",
+      "  imageUrls           — product image or label URLs",
+      "  sourceRef           — page/row/URL where this product was found",
+      "",
+      "Return ONLY valid JSON (no markdown, no code fence):",
+      JSON.stringify(
+        {
+          products: [
+            {
+              sku: "EXAMPLE-001",
+              productName: "Example Product",
+              category: null,
+              servingSize: null,
+              activeIngredients: [],
+              supplementFactsRaw: null,
+              pricing: null,
+              coaUrl: null,
+              warnings: null,
+              suggestedUse: null,
+              imageUrls: [],
+              sourceRef: "page 1",
+            },
+          ],
+          totalProductsFound: 1,
+          sourcesProcessed: 1,
+          extractionNotes: "brief summary of what was found",
+        },
+        null,
+        2,
+      ),
+      "",
+      "Ground every fact in the source. Never invent values. Mark unknowns as null.",
+    );
+
+    if (params.intent) {
+      lines.push(`Tailor your extraction and output structure to answer: ${params.intent}`);
+    }
+  }
 
   return lines.join("\n");
 }
@@ -134,6 +291,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 400 },
     );
   }
+
+  const intentRaw = formData.get("intent");
+  const intent =
+    typeof intentRaw === "string" && intentRaw.trim().length > 0
+      ? intentRaw.trim()
+      : undefined;
 
   const uploadedFiles = formData.getAll("file") as File[];
 
@@ -240,7 +403,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   await insertFileIqExtractionJob({
     id: jobId,
     bundleId,
-    status: "running",
+    status: "pending",
     extractorType: "claude_agent",
     summary: { fileCount: fileEntries.length, urlCount: urls.length },
   });
@@ -250,74 +413,94 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     bundleName,
     filePaths: fileEntries.map((f) => ({ path: f.filePath, type: f.type })),
     urls,
+    intent,
   });
 
-  const agentResult = await runFileIqExtractionAgent({
-    jobId,
-    bundleId,
-    prompt: agentPrompt,
-    cwd: fileEntries.length > 0 ? tempDir : undefined,
-    additionalDirectories: fileEntries.length > 0 ? [tempDir] : undefined,
-    maxTurns: 12,
-  });
-
-  let extractedPayload: Record<string, unknown> = {};
-  let totalProductsFound = 0;
-  if (agentResult.status === "completed" && agentResult.resultText) {
+  void (async () => {
     try {
-      const parsed: unknown = JSON.parse(agentResult.resultText);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        extractedPayload = parsed as Record<string, unknown>;
-        const count = (extractedPayload as { totalProductsFound?: unknown }).totalProductsFound;
-        if (typeof count === "number") totalProductsFound = count;
+      const agentResult = await runFileIqExtractionAgent({
+        jobId,
+        bundleId,
+        prompt: agentPrompt,
+        cwd: fileEntries.length > 0 ? tempDir : undefined,
+        additionalDirectories: fileEntries.length > 0 ? [tempDir] : undefined,
+        maxTurns: 12,
+      });
+
+      let extractedPayload: Record<string, unknown> = {};
+      let totalProductsFound = 0;
+      let detectedSchemaType: string | null = null;
+      let detectedSchemaVersion: string | null = null;
+
+      if (agentResult.status === "completed" && agentResult.resultText) {
+        try {
+          const parsed: unknown = JSON.parse(agentResult.resultText);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            extractedPayload = parsed as Record<string, unknown>;
+            const count = extractedPayload.totalProductsFound;
+            if (typeof count === "number") totalProductsFound = count;
+
+            if (
+              extractedPayload.schemaType === "product_catalog" &&
+              typeof extractedPayload.schemaVersion === "string" &&
+              Array.isArray(extractedPayload.products)
+            ) {
+              detectedSchemaType = "product_catalog";
+              detectedSchemaVersion = extractedPayload.schemaVersion;
+            }
+          }
+        } catch {
+          extractedPayload = { raw: agentResult.resultText };
+        }
       }
-    } catch {
-      extractedPayload = { raw: agentResult.resultText };
-    }
-  }
 
-  const extractionId = crypto.randomUUID();
-  await insertFileIqRawExtraction({
-    id: extractionId,
-    extractionJobId: jobId,
-    sourceFileId: null,
-    artifactType: "agent_result",
-    storageUri: "inline:payload",
-    payload: {
-      ...extractedPayload,
-      _meta: {
+      const extractionId = crypto.randomUUID();
+      await insertFileIqRawExtraction({
+        id: extractionId,
+        extractionJobId: jobId,
+        sourceFileId: null,
+        artifactType: "agent_result",
+        storageUri: "inline:payload",
+        payload: {
+          ...extractedPayload,
+          _meta: {
+            agentSessionId: agentResult.agentSessionId,
+            numTurns: agentResult.numTurns,
+            totalCostUsd: agentResult.totalCostUsd,
+            agentStatus: agentResult.status,
+          },
+        },
+      });
+
+      const dbStatus = agentResult.status === "completed" ? "completed" : "failed";
+      await updateFileIqExtractionJob(jobId, {
+        status: dbStatus,
         agentSessionId: agentResult.agentSessionId,
-        numTurns: agentResult.numTurns,
-        totalCostUsd: agentResult.totalCostUsd,
-        agentStatus: agentResult.status,
-      },
-    },
-  });
+        errorCode: agentResult.errorCode,
+        errorMessage: agentResult.errorMessage,
+        summary: {
+          fileCount: fileEntries.length,
+          urlCount: urls.length,
+          totalProductsFound,
+          agentStatus: agentResult.status,
+          numTurns: agentResult.numTurns,
+          ...(detectedSchemaType !== null && {
+            schemaType: detectedSchemaType,
+            schemaVersion: detectedSchemaVersion,
+          }),
+        },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      await updateFileIqExtractionJob(jobId, {
+        status: "failed",
+        agentSessionId: null,
+        errorCode: "agent_exception",
+        errorMessage: msg,
+        summary: { fileCount: fileEntries.length, urlCount: urls.length },
+      }).catch(() => {});
+    }
+  })();
 
-  const dbStatus = agentResult.status === "completed" ? "completed" : "failed";
-  await updateFileIqExtractionJob(jobId, {
-    status: dbStatus,
-    agentSessionId: agentResult.agentSessionId,
-    errorCode: agentResult.errorCode,
-    errorMessage: agentResult.errorMessage,
-    summary: {
-      fileCount: fileEntries.length,
-      urlCount: urls.length,
-      totalProductsFound,
-      agentStatus: agentResult.status,
-      numTurns: agentResult.numTurns,
-    },
-  });
-
-  return NextResponse.json({
-    bundleId,
-    jobId,
-    extractionId,
-    status: agentResult.status,
-    agentSessionId: agentResult.agentSessionId,
-    totalProductsFound,
-    fileCount: fileEntries.length,
-    urlCount: urls.length,
-    errorCode: agentResult.errorCode,
-  });
+  return NextResponse.json({ jobId, bundleId, status: "pending" });
 }

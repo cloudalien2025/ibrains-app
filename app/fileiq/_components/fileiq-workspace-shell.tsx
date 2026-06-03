@@ -143,6 +143,7 @@ export default function FileIqWorkspaceShell() {
   const [isDragging, setIsDragging] = useState(false);
   const [isIngesting, setIsIngesting] = useState(false);
   const [ingestError, setIngestError] = useState<string | null>(null);
+  const [ingestSuccess, setIngestSuccess] = useState<string | null>(null);
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [jobsLoading, setJobsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -233,6 +234,7 @@ export default function FileIqWorkspaceShell() {
     if (totalQueued === 0 || isIngesting) return;
     setIsIngesting(true);
     setIngestError(null);
+    setIngestSuccess(null);
 
     try {
       const fd = new FormData();
@@ -261,6 +263,7 @@ export default function FileIqWorkspaceShell() {
         setDroppedFiles([]);
         setUrlText("");
         setIntent("");
+        setIngestSuccess("Ingestion queued — check Recent Jobs below for results.");
         await loadJobs();
       }
     } catch {
@@ -428,12 +431,14 @@ export default function FileIqWorkspaceShell() {
         <div className="mt-3 flex items-center justify-between gap-4">
           <p className="text-xs text-[#94A3B8]" data-testid="fileiq-ingest-status">
             {isIngesting
-              ? "Ingestion running — the agent is extracting facts…"
-              : totalQueued > 0
-                ? `${totalQueued} item${totalQueued !== 1 ? "s" : ""} ready to ingest.`
-                : intent.trim().length === 0
-                  ? "Describe your goal above, then drop files or paste URLs to get started."
-                  : "Drop files or paste URLs above to get started."}
+              ? "Queuing ingestion…"
+              : ingestSuccess
+                ? ingestSuccess
+                : totalQueued > 0
+                  ? `${totalQueued} item${totalQueued !== 1 ? "s" : ""} ready to ingest.`
+                  : intent.trim().length === 0
+                    ? "Describe your goal above, then drop files or paste URLs to get started."
+                    : "Drop files or paste URLs above to get started."}
           </p>
           <button
             type="button"
@@ -448,7 +453,7 @@ export default function FileIqWorkspaceShell() {
                 : "border border-[#D9E4F0] bg-[#F1F5F9] text-[#94A3B8] cursor-not-allowed",
             ].join(" ")}
           >
-            {isIngesting ? "Ingesting…" : totalQueued > 0 ? `Ingest (${totalQueued})` : "Ingest"}
+            {isIngesting ? "Queuing…" : totalQueued > 0 ? `Ingest (${totalQueued})` : "Ingest"}
           </button>
         </div>
       </section>
