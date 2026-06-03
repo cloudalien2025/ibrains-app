@@ -8,6 +8,7 @@ const launcherBrainIds = [
   "directoryiq",
   "casaflix",
   "pagebolt",
+  "fileiq",
 ] as const;
 
 export default async function BrainsPage() {
