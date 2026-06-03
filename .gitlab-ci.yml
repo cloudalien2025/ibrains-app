@@ -98,6 +98,18 @@ deploy_production:
       export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -i /root/.ssh/gitlab_ibrains_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new}"
       git fetch --prune origin
       git checkout "${CI_DEFAULT_BRANCH}"
+
+      # Clear untracked files that the incoming pull would overwrite, so a stray
+      # scaffold in the deploy checkout cannot block `git pull --ff-only`.
+      # Bootstrap-tolerant: on the first deploy that introduces this guard it is
+      # not on the server yet, so skip it (it arrives with this pull).
+      UNTRACKED_GUARD="${DEPLOY_PATH}/scripts/guard-untracked-pull-conflicts.sh"
+      if [ -x "${UNTRACKED_GUARD}" ]; then
+        bash "${UNTRACKED_GUARD}" "${DEPLOY_PATH}" "origin/${CI_DEFAULT_BRANCH}"
+      else
+        echo "untracked-pull-conflict guard not present yet; skipping (active after this deploy)"
+      fi
+
       git pull --ff-only origin "${CI_DEFAULT_BRANCH}"
 
       current_sha="$(git rev-parse HEAD)"

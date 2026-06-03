@@ -155,6 +155,7 @@ describe("gitlab deploy pipeline contract", () => {
     expect(pipelineSource.includes("artifacts/build.tar.gz")).toBe(true);
     expect(pipelineSource.includes("scripts/guard-canonical-worktree.sh")).toBe(true);
     expect(pipelineSource.includes("canonical worktree guard script")).toBe(true);
+    expect(pipelineSource.includes("scripts/guard-untracked-pull-conflicts.sh")).toBe(true);
     expect(pipelineSource.includes("git fetch --prune origin")).toBe(true);
     expect(pipelineSource.includes("git pull --ff-only origin \"${CI_DEFAULT_BRANCH}\"")).toBe(true);
     expect(pipelineSource.includes("deployed checkout mismatch")).toBe(true);
