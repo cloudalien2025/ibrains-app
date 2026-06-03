@@ -13,6 +13,7 @@ const expectedRoutes: Record<(typeof brainIds)[number], string> = {
   pagebolt: "/pagebolt",
   reelify: "/reelify",
   ipetzo: "/ipetzo",
+  fileiq: "/fileiq",
 };
 
 describe("brains index contract", () => {
@@ -27,6 +28,7 @@ describe("brains index contract", () => {
       "SiteForge",
       "Reelify",
       "iPetzo",
+      "FileIQ",
     ]);
   });
 

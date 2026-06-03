@@ -10,6 +10,7 @@ export const brainIds = [
   "pagebolt",
   "reelify",
   "ipetzo",
+  "fileiq",
 ] as const;
 
 export type BrainId = (typeof brainIds)[number];
@@ -138,6 +139,18 @@ export const brainCatalog: BrainCatalogEntry[] = [
       "Activate iPetzo to launch pet-focused intelligence workflows in an independent brain workspace.",
     iconKey: "clapperboard",
   },
+  {
+    id: "fileiq",
+    name: "FileIQ",
+    shortDescription:
+      "Internal file-intelligence brain for ingesting supplier source files and extracting canonical product facts.",
+    tags: ["Ingestion", "Supplier Facts", "Data Provenance"],
+    primaryCtaText: "Open Brain",
+    upsellTitle: "FileIQ Internal Brain",
+    upsellMessage:
+      "Access the internal file ingestion pipeline for supplier source files and canonical product facts.",
+    iconKey: "zap",
+  },
 ];
 
 export const brainsDockCopy = aiSelectionCopy.brainsDock;
@@ -152,6 +165,7 @@ export const brainCatalogById: Record<BrainId, BrainCatalogEntry> = {
   pagebolt: brainCatalog[6],
   reelify: brainCatalog[7],
   ipetzo: brainCatalog[8],
+  fileiq: brainCatalog[9],
 };
 
 export function isBrainId(value: string): value is BrainId {
@@ -168,6 +182,7 @@ const canonicalBrainRoutes: Record<BrainId, `/${string}`> = {
   pagebolt: "/pagebolt",
   reelify: "/reelify",
   ipetzo: "/ipetzo",
+  fileiq: "/fileiq",
 };
 
 const brainRouteAliases: Record<string, BrainId> = {

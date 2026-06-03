@@ -13,7 +13,7 @@ export type FileIqNavItem = {
 
 export const fileIqNavItems: FileIqNavItem[] = [
   { label: "Command Center", href: "/fileiq", ready: true },
-  { label: "Source Bundles", href: "/fileiq/source-bundles", ready: false },
+  { label: "Source Bundles", href: "/fileiq/source-bundles", ready: true },
   { label: "Suppliers", href: "/fileiq/suppliers", ready: false },
   { label: "Files", href: "/fileiq/files", ready: false },
   { label: "Extraction Jobs", href: "/fileiq/extraction-jobs", ready: false },
