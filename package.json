@@ -30,7 +30,6 @@
     "ecomviper:rocktomic:package": "npx --yes tsx scripts/ecomviper/build_rocktomic_master_package.ts",
     "ecomviper:live-supplier-facts:parity": "npx --yes tsx scripts/ecomviper/live_supplier_facts_parity_check.ts",
     "ecomviper:live-supplier-facts:compare": "npx --yes tsx scripts/ecomviper/live_supplier_facts_parity_check.ts",
-    "codex:run": "bash scripts/codex_pipeline.sh",
     "pr:automerge": "bash scripts/gh_automerge_pr.sh",
     "postinstall": "node scripts/patch_next_route_types.mjs"
   },
