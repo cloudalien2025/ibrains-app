@@ -137,6 +137,7 @@ deploy_production:
         set +a
       fi
 
+      rm -rf node_modules
       npm ci
       BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
       bash "${DEPLOY_PATH}/scripts/write_release_metadata.sh" app/_meta/release.json "${CI_COMMIT_SHA}" "${CI_PIPELINE_ID}" "${BUILD_TIMESTAMP}" "ibrains" "production" "gitlab_ci"
