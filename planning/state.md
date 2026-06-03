@@ -62,7 +62,8 @@ Last updated: 2026-06-03 (UTC)
 - Shopify Phase 6.4 Rocktomic Master Package Builder: Completed and merged (`sprint-6-4-rocktomic-master-package-builder`, MR `!315`, pipeline `2570381373` success, merge SHA `c363135be8f521979e29af09a34b3632c60ec378`, production deployed and verified).
 - Shopify Phase 6.5 Rocktomic Package Reader + EcomViper Wiring: Completed and merged (`sprint-6-5-ecomviper-rocktomic-package-reader`, merge SHA `659133488cd4034c3f516070e8e97fff2171f986`, build `2570565864`, production deployed and verified).
 - Repo Cleanup Sprint: Zero-Risk Dead/Orphaned/Codex-Leftover Removal: Completed and merged (`chore/dead-code-zero-risk-cleanup`, MR `!317`, pipeline `2572377219` success, squash SHA `0541cf8a13933b072a50da27f0ecf64db0590390`, merge SHA `dffb1fc50d0b2d25d2a8a8ab8bac30039c70e9d2`, remote + local branch deleted).
-- Current recommended sprint: `Shopify Phase 6.6 or next EcomViper workstream` — Phase 6.5 closed and repo cleanup merged; main is clean.
+- Repo Hygiene Sprint: Untrack Committed artifacts/ui-audit Output: Completed and merged (`chore/untrack-ui-audit-artifacts`, MR `!318`, pipeline `2572390860` success, squash SHA `2cd8a1f32023f406485de591b9252f5cce491d1e`, merge SHA `c8389fe1bd8b74e1cbbb4ab19443b9aad930bbc2`, remote + local branch deleted). `git rm --cached` on the 5 previously-tracked ui-audit markdown files so the existing `artifacts/` gitignore rule takes effect; on-disk copies restored locally from history as ignored files.
+- Current recommended sprint: `Shopify Phase 6.6 or next EcomViper workstream` — Phase 6.5 closed and repo cleanup + hygiene MRs merged; main is clean.
 
 ## Sprint Closure Update: Repo Cleanup — Zero-Risk Dead/Orphaned/Codex-Leftover Removal
 
