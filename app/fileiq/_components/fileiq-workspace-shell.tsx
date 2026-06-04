@@ -9,6 +9,7 @@ import {
   type ChangeEvent,
   type KeyboardEvent,
 } from "react";
+import FileIqJobActions from "@/app/fileiq/_components/fileiq-job-actions";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,8 +47,12 @@ const STATUS: Record<string, { label: string; color: string; bg: string; border:
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function extractedCount(job: JobRow): number {
-  const n = job.summary?.totalProductsFound;
-  return typeof n === "number" ? n : 0;
+  const extracted = job.summary?.extractedCount;
+  if (typeof extracted === "number") return extracted;
+  const products = job.summary?.totalProductsFound;
+  if (typeof products === "number") return products;
+  const transactions = job.summary?.totalTransactions;
+  return typeof transactions === "number" ? transactions : 0;
 }
 
 function schemaLabel(job: JobRow): string {
@@ -55,6 +60,13 @@ function schemaLabel(job: JobRow): string {
   const v = job.summary?.schemaVersion;
   if (t !== "product_catalog") return "—";
   return `product_catalog ${typeof v === "string" ? `v${v}` : ""}`.trim();
+}
+
+function resolvedSchemaLabel(job: JobRow): string {
+  const schemaType = job.summary?.schemaType;
+  const schemaVersion = job.summary?.schemaVersion;
+  if (typeof schemaType !== "string" || !schemaType.trim()) return "â€”";
+  return `${schemaType} ${typeof schemaVersion === "string" ? `v${schemaVersion}` : ""}`.trim();
 }
 
 function supplierName(job: JobRow): string {
@@ -329,6 +341,9 @@ export default function FileIqWorkspaceShell() {
   }, []);
 
   useEffect(() => { void loadJobs(); }, [loadJobs]);
+  const removeJobFromStream = useCallback((jobId: string) => {
+    setJobs((prev) => prev.filter((job) => job.id !== jobId));
+  }, []);
 
   // ── Derived stats ─────────────────────────────────────────────────────────
 
@@ -777,7 +792,10 @@ export default function FileIqWorkspaceShell() {
                     const s         = STATUS[job.status] ?? STATUS.pending;
                     const isRunning = job.status === "running";
                     const count     = extractedCount(job);
-                    const schema    = schemaLabel(job);
+                    const schema    = (() => {
+                      const legacySchema = schemaLabel(job);
+                      return legacySchema !== "â€”" ? legacySchema : resolvedSchemaLabel(job);
+                    })();
                     const supplier  = supplierName(job);
                     const validation = validationLabel(job);
                     const dur       = jobDuration(job);
@@ -801,6 +819,16 @@ export default function FileIqWorkspaceShell() {
                               marginBottom: 1 }}>{job.bundleName}</div>
                             <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: "var(--t3)" }}>
                               {job.id.slice(0, 8)}
+                            </div>
+                            <div style={{ marginTop: 8 }}>
+                              <FileIqJobActions
+                                jobId={job.id}
+                                jobLabel={job.bundleName}
+                                status={job.status}
+                                schemaType={typeof job.summary?.schemaType === "string" ? job.summary.schemaType : null}
+                                theme="dark"
+                                onDeleted={removeJobFromStream}
+                              />
                             </div>
                           </div>
 

@@ -1,5 +1,7 @@
 export const dynamic = "force-dynamic";
 
+import FileIqJobActions from "@/app/fileiq/_components/fileiq-job-actions";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { listRecentFileIqJobs, type FileIqJobListRow } from "@/lib/fileiq/fileiq-db";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -48,6 +50,8 @@ function formatDate(isoString: string): string {
 }
 
 function extractedCount(job: FileIqJobListRow): string {
+  const extracted = (job.summary as { extractedCount?: unknown }).extractedCount;
+  if (typeof extracted === "number") return String(extracted);
   const n = (job.summary as { totalProductsFound?: unknown }).totalProductsFound;
   return typeof n === "number" ? String(n) : "—";
 }
@@ -60,6 +64,13 @@ function supplierName(job: FileIqJobListRow): string {
 function SchemaBadge({ job }: { job: FileIqJobListRow }) {
   const schemaType = job.summary?.schemaType;
   const schemaVersion = job.summary?.schemaVersion;
+  if (typeof schemaType === "string" && schemaType.trim()) {
+    return (
+      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#EDE9FE] text-[#5B21B6]">
+        {schemaType} {typeof schemaVersion === "string" ? `v${schemaVersion}` : ""}
+      </span>
+    );
+  }
   if (schemaType !== "product_catalog") return <span className="text-[#94A3B8]">—</span>;
   return (
     <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#EDE9FE] text-[#5B21B6]">
@@ -87,12 +98,17 @@ function ValidationBadge({ job }: { job: FileIqJobListRow }) {
   return <span className="text-[#94A3B8]">—</span>;
 }
 
-const tableColumns = ["Source Bundle", "Supplier", "Status", "Schema", "Products Extracted", "Validation", "Started"] as const;
+const tableColumns = ["Source Bundle", "Supplier", "Status", "Schema", "Extracted", "Validation", "Started", "Actions"] as const;
 
 export default async function FileIqExtractionJobsPage() {
+  const { userId, unauthorizedResponse } = await requireSignedInUser();
+  if (unauthorizedResponse || !userId) {
+    return null;
+  }
+
   let jobs: FileIqJobListRow[] = [];
   try {
-    jobs = await listRecentFileIqJobs(50);
+    jobs = await listRecentFileIqJobs(50, userId);
   } catch {
     // Table may not be migrated yet; show empty state.
   }
@@ -169,7 +185,16 @@ export default async function FileIqExtractionJobsPage() {
                     <td className="py-3 pr-4">
                       <ValidationBadge job={job} />
                     </td>
-                    <td className="py-3 text-[#64748B]">{formatDate(job.createdAt)}</td>
+                    <td className="py-3 pr-4 text-[#64748B]">{formatDate(job.createdAt)}</td>
+                    <td className="py-3 text-right">
+                      <FileIqJobActions
+                        jobId={job.id}
+                        jobLabel={job.bundleName}
+                        status={job.status}
+                        schemaType={typeof job.summary?.schemaType === "string" ? job.summary.schemaType : null}
+                        theme="light"
+                      />
+                    </td>
                   </tr>
                 ))
               )}

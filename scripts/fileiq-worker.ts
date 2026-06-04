@@ -23,6 +23,7 @@ import {
 import { runFileIqExtractionAgent } from "@/lib/fileiq/agent/fileiq-agent-core";
 import {
   extractJsonFromAgentResult,
+  detectFileIqStructuredSummary,
   detectProductCatalogSummary,
 } from "@/lib/fileiq/result-parser";
 import { parseRocktomicInventoryCsv } from "@/lib/fileiq/csv/rocktomic-inventory-parser";
@@ -303,6 +304,7 @@ async function storeDeterministicFallback(
       errorMessage: null,
       summary: {
         ...ctx.sourceSummary,
+        extractedCount: csvParseResult.productCount,
         totalProductsFound: csvParseResult.productCount,
         agentStatus: "fallback_deterministic",
         numTurns: 0,
@@ -512,6 +514,7 @@ export async function processFileIqJob(
           errorMessage: null,
           summary: {
             ...ctx.sourceSummary,
+            extractedCount: totalProductsFound,
             totalProductsFound,
             agentStatus: agentResult.status,
             numTurns: agentResult.numTurns,
@@ -595,7 +598,7 @@ export async function processFileIqJob(
   // ── Parse result ──────────────────────────────────────────────────────────
   const parseStartMs = Date.now();
   let extractedPayload: Record<string, unknown> = {};
-  let catalogSummary: ReturnType<typeof detectProductCatalogSummary> = null;
+  let structuredSummary: ReturnType<typeof detectFileIqStructuredSummary> = null;
   let parseMode = "none";
 
   if (agentResult.status === "completed" && agentResult.resultText) {
@@ -614,10 +617,10 @@ export async function processFileIqJob(
           },
         };
       }
-      catalogSummary = detectProductCatalogSummary(extractedPayload);
+      structuredSummary = detectFileIqStructuredSummary(extractedPayload);
     }
   }
-  const supplierName = catalogSummary !== null ? supplierNameForSummary(extractedPayload) : UNKNOWN_SUPPLIER;
+  const supplierName = structuredSummary !== null ? supplierNameForSummary(extractedPayload) : UNKNOWN_SUPPLIER;
 
   const parseDurationMs = Date.now() - parseStartMs;
   console.log(
@@ -659,14 +662,16 @@ export async function processFileIqJob(
   // ── Update job ────────────────────────────────────────────────────────────
   const totalMs = Date.now() - jobStartMs;
   const dbStatus = agentResult.status === "completed" ? "completed" : "failed";
-  const totalProductsFound =
-    catalogSummary?.totalProductsFound ??
+  const extractedCount =
+    structuredSummary?.extractedCount ??
     (typeof extractedPayload.totalProductsFound === "number"
       ? extractedPayload.totalProductsFound
-      : 0);
+      : typeof extractedPayload.totalTransactions === "number"
+        ? extractedPayload.totalTransactions
+        : 0);
 
   console.log(
-    `${LOG} jobId=${jobId} | done | status=${dbStatus} totalProductsFound=${totalProductsFound} totalMs=${totalMs}`,
+    `${LOG} jobId=${jobId} | done | status=${dbStatus} extractedCount=${extractedCount} totalMs=${totalMs}`,
   );
 
   try {
@@ -677,12 +682,18 @@ export async function processFileIqJob(
       errorMessage: agentResult.errorMessage,
       summary: {
         ...ctx.sourceSummary,
-        totalProductsFound,
+        extractedCount,
+        totalProductsFound:
+          typeof extractedPayload.totalProductsFound === "number"
+            ? extractedPayload.totalProductsFound
+            : structuredSummary?.schemaType === "product_catalog"
+              ? extractedCount
+              : 0,
         agentStatus: agentResult.status,
         numTurns: agentResult.numTurns,
-        ...(catalogSummary !== null && {
-          schemaType: catalogSummary.schemaType,
-          schemaVersion: catalogSummary.schemaVersion,
+        ...(structuredSummary !== null && {
+          schemaType: structuredSummary.schemaType,
+          schemaVersion: structuredSummary.schemaVersion,
         }),
         supplierName,
         _timing: {
