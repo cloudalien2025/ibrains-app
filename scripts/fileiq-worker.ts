@@ -2,8 +2,9 @@
 // FileIQ background extraction worker.
 //
 // Polls fileiq_extraction_jobs for pending jobs, claims each as 'running',
-// runs the extraction strategy (deterministic local parse or Claude Agent SDK),
-// then updates the job to 'completed' or 'failed' and writes the raw extraction.
+// runs the extraction strategy (deterministic local preparse + compact Claude
+// validation, or full Claude Agent SDK), then updates the job to 'completed'
+// or 'failed' and writes the raw extraction.
 //
 // Usage (dev):
 //   npx --yes tsx scripts/fileiq-worker.ts
@@ -44,6 +45,13 @@ interface WorkerContext {
   urls?: string[];
 }
 
+/** Typed result from a successful deterministic CSV preparse. */
+interface CsvPreparseResult {
+  payload: Record<string, unknown>;
+  productCount: number;
+  confidence: "high" | "low";
+}
+
 function extractWorkerContext(
   summary: Record<string, unknown>,
 ): WorkerContext | null {
@@ -75,12 +83,12 @@ function extractWorkerContext(
 
 /**
  * Attempt deterministic CSV extraction for the Rocktomic inventory format.
- * Returns the parsed payload if confidence is high, or null to fall back.
+ * Returns the parsed result if confidence is high, or null to fall back.
  */
 async function tryDeterministicCsvExtraction(
   ctx: WorkerContext,
   jobId: string,
-): Promise<Record<string, unknown> | null> {
+): Promise<CsvPreparseResult | null> {
   if (!ctx.filePaths || ctx.filePaths.length === 0) return null;
 
   const csvFiles = ctx.filePaths.filter(
@@ -90,7 +98,6 @@ async function tryDeterministicCsvExtraction(
   );
   if (csvFiles.length === 0) return null;
 
-  // Read and parse the first CSV file deterministically
   const csvFile = csvFiles[0];
   let content: string;
   try {
@@ -102,7 +109,6 @@ async function tryDeterministicCsvExtraction(
     return null;
   }
 
-  // Extract a report date from the file name if present (e.g. "inventory-2026-06-04.csv")
   const dateMatch = /(\d{4}-\d{2}-\d{2})/.exec(path.basename(csvFile.path));
   const reportDate = dateMatch ? dateMatch[1] : undefined;
 
@@ -117,10 +123,109 @@ async function tryDeterministicCsvExtraction(
         `${LOG} jobId=${jobId} | CSV parse low confidence | notes=${result.parseNotes.join("; ")}`,
       );
     }
-    return null; // fall back to agent
+    return null;
   }
 
-  return result.payload;
+  return {
+    payload: result.payload,
+    productCount: result.productCount,
+    confidence: result.confidence,
+  };
+}
+
+/**
+ * Build a compact Claude validation prompt from a pre-parsed CSV result.
+ * Does NOT include the full schema example block — the prepared evidence IS
+ * the source of truth; Claude only needs to validate and normalize.
+ */
+function buildCompactValidationPrompt(
+  jobId: string,
+  preparse: CsvPreparseResult,
+): string {
+  return [
+    `You are finalizing a FileIQ Product Catalog extraction for job ${jobId}.`,
+    ``,
+    `The source CSV has been pre-parsed locally. Below is the prepared evidence — ${preparse.productCount} products extracted with ${preparse.confidence} confidence.`,
+    ``,
+    `PREPARED EVIDENCE:`,
+    JSON.stringify(preparse.payload, null, 2),
+    ``,
+    `TASK: Validate the prepared evidence above. Normalize any field values if needed (e.g. status enums, null fields you can infer from context), fix any obvious mapping errors, and return the final product_catalog v1.1 JSON.`,
+    ``,
+    `CRITICAL OUTPUT RULES — follow exactly:`,
+    `  1. Output ONLY valid JSON. No prose before or after the JSON.`,
+    `  2. Do NOT wrap the JSON in markdown code fences (no \`\`\` or \`\`\`json).`,
+    `  3. Your entire response must be parseable by JSON.parse().`,
+    `  4. Do NOT reread the source file — use the prepared evidence as your primary source.`,
+    `  5. Set schemaType to "product_catalog" and schemaVersion to "1.1".`,
+  ].join("\n");
+}
+
+/**
+ * Store the deterministic preparse payload directly when agent validation
+ * is unavailable or has failed. Used as a fallback in the deterministic path.
+ */
+async function storeDeterministicFallback(
+  jobId: string,
+  csvParseResult: CsvPreparseResult,
+  preparseMs: number,
+  jobStartMs: number,
+  ctx: WorkerContext,
+): Promise<void> {
+  const catalogSummary = detectProductCatalogSummary(csvParseResult.payload);
+
+  const insertStartMs = Date.now();
+  try {
+    await insertFileIqRawExtraction({
+      id: randomUUID(),
+      extractionJobId: jobId,
+      sourceFileId: null,
+      artifactType: "deterministic_result",
+      storageUri: "inline:payload",
+      payload: csvParseResult.payload,
+    });
+  } catch (err) {
+    console.error(
+      `${LOG} jobId=${jobId} | raw extraction insert failed (fallback) | error=${normalizeError(err)}`,
+    );
+  }
+  const insertMs = Date.now() - insertStartMs;
+  const totalMs = Date.now() - jobStartMs;
+
+  try {
+    await updateFileIqExtractionJob(jobId, {
+      status: "completed",
+      agentSessionId: null,
+      errorCode: null,
+      errorMessage: null,
+      summary: {
+        totalProductsFound: csvParseResult.productCount,
+        agentStatus: "fallback_deterministic",
+        numTurns: 0,
+        agentOrchestration: true,
+        localPreparse: {
+          parser: "rocktomic_inventory_csv",
+          productsParsed: csvParseResult.productCount,
+          confidence: csvParseResult.confidence,
+        },
+        ...(catalogSummary !== null && {
+          schemaType: catalogSummary.schemaType,
+          schemaVersion: catalogSummary.schemaVersion,
+        }),
+        _timing: {
+          preparseMs,
+          insertMs,
+          totalMs,
+          route: ctx.route,
+          agentFallback: true,
+        },
+      },
+    });
+  } catch (err) {
+    console.error(
+      `${LOG} jobId=${jobId} | DB update failed (fallback) | error=${normalizeError(err)}`,
+    );
+  }
 }
 
 export async function processFileIqJob(
@@ -134,55 +239,157 @@ export async function processFileIqJob(
     `${LOG} jobId=${jobId} | starting | route=${ctx.route ?? "agent_unstructured"} maxTurns=${ctx.maxTurns} cwd=${ctx.cwd ?? "none"}`,
   );
 
-  // ── Deterministic fast path ────────────────────────────────────────────────
+  // ── Deterministic preparse (structured route) ──────────────────────────────
+  // For CSV jobs: parse locally first, then run Claude with a compact prompt
+  // containing the prepared evidence. Claude validates/normalizes instead of
+  // manually reading the full source row by row.
   if (ctx.route === "deterministic_structured") {
     const prepStartMs = Date.now();
-    const deterministicPayload = await tryDeterministicCsvExtraction(ctx, jobId);
-    const prepMs = Date.now() - prepStartMs;
+    const csvParseResult = await tryDeterministicCsvExtraction(ctx, jobId);
+    const preparseMs = Date.now() - prepStartMs;
 
-    if (deterministicPayload !== null) {
-      const catalogSummary = detectProductCatalogSummary(deterministicPayload);
-      const totalProductsFound = catalogSummary?.totalProductsFound ?? 0;
+    if (csvParseResult !== null) {
+      // High confidence — build compact prompt and run Claude for validation
+      const compactPrompt = buildCompactValidationPrompt(jobId, csvParseResult);
+      console.log(
+        `${LOG} jobId=${jobId} | preparse complete | productCount=${csvParseResult.productCount} preparseMs=${preparseMs} — starting agent validation maxTurns=${ctx.maxTurns}`,
+      );
 
+      const agentStartMs = Date.now();
+      let agentResult;
+      try {
+        agentResult = await runFileIqExtractionAgent({
+          jobId,
+          bundleId,
+          prompt: compactPrompt,
+          cwd: ctx.cwd ?? undefined,
+          additionalDirectories:
+            ctx.additionalDirectories.length > 0 ? ctx.additionalDirectories : undefined,
+          maxTurns: ctx.maxTurns,
+        });
+      } catch (err) {
+        const agentDurationMs = Date.now() - agentStartMs;
+        console.warn(
+          `${LOG} jobId=${jobId} | agent validation threw — using deterministic result | error=${normalizeError(err)} durationMs=${agentDurationMs}`,
+        );
+        await storeDeterministicFallback(jobId, csvParseResult, preparseMs, jobStartMs, ctx);
+        return;
+      }
+
+      const agentDurationMs = Date.now() - agentStartMs;
+      console.log(
+        `${LOG} jobId=${jobId} | agent validation returned | status=${agentResult.status} numTurns=${agentResult.numTurns} durationMs=${agentDurationMs}`,
+      );
+
+      if (agentResult.status !== "completed") {
+        console.warn(
+          `${LOG} jobId=${jobId} | agent validation status=${agentResult.status} — using deterministic result`,
+        );
+        await storeDeterministicFallback(jobId, csvParseResult, preparseMs, jobStartMs, ctx);
+        return;
+      }
+
+      // Parse agent result
+      const parseStartMs = Date.now();
+      let extractedPayload: Record<string, unknown> = {};
+      let catalogSummary: ReturnType<typeof detectProductCatalogSummary> = null;
+      let parseMode = "none";
+
+      if (agentResult.resultText) {
+        const parsed = extractJsonFromAgentResult(agentResult.resultText);
+        parseMode = parsed.parseMode;
+        extractedPayload = parsed.payload;
+        if (parsed.parseMode !== "raw") {
+          if (parsed.parseMode !== "json") {
+            extractedPayload = {
+              ...extractedPayload,
+              _meta: {
+                parseMode: parsed.parseMode,
+                parseDiagnostics: parsed.parseDiagnostics,
+                rawResultTextPreview: parsed.rawResultTextPreview,
+              },
+            };
+          }
+          catalogSummary = detectProductCatalogSummary(extractedPayload);
+        }
+      }
+
+      const parseDurationMs = Date.now() - parseStartMs;
+      console.log(
+        `${LOG} jobId=${jobId} | parsed validation result | parseMode=${parseMode} durationMs=${parseDurationMs}`,
+      );
+
+      // Insert raw extraction
       const insertStartMs = Date.now();
       try {
         await insertFileIqRawExtraction({
           id: randomUUID(),
           extractionJobId: jobId,
           sourceFileId: null,
-          artifactType: "deterministic_result",
+          artifactType: "agent_result",
           storageUri: "inline:payload",
-          payload: deterministicPayload,
+          payload: {
+            ...extractedPayload,
+            _meta: {
+              ...(typeof extractedPayload._meta === "object" && extractedPayload._meta !== null
+                ? (extractedPayload._meta as Record<string, unknown>)
+                : {}),
+              agentSessionId: agentResult.agentSessionId,
+              numTurns: agentResult.numTurns,
+              totalCostUsd: agentResult.totalCostUsd,
+              agentStatus: agentResult.status,
+              localPreparse: {
+                parser: "rocktomic_inventory_csv",
+                productsParsed: csvParseResult.productCount,
+                confidence: csvParseResult.confidence,
+              },
+            },
+          },
         });
       } catch (err) {
         console.error(
           `${LOG} jobId=${jobId} | raw extraction insert failed | error=${normalizeError(err)}`,
         );
       }
-      const insertMs = Date.now() - insertStartMs;
+      const insertDurationMs = Date.now() - insertStartMs;
 
+      // Update job
       const totalMs = Date.now() - jobStartMs;
+      const totalProductsFound =
+        catalogSummary?.totalProductsFound ??
+        (typeof extractedPayload.totalProductsFound === "number"
+          ? extractedPayload.totalProductsFound
+          : csvParseResult.productCount);
+
       console.log(
-        `${LOG} jobId=${jobId} | done (deterministic) | totalProductsFound=${totalProductsFound} prepMs=${prepMs} insertMs=${insertMs} totalMs=${totalMs}`,
+        `${LOG} jobId=${jobId} | done (deterministic+agent) | totalProductsFound=${totalProductsFound} preparseMs=${preparseMs} agentDurationMs=${agentDurationMs} totalMs=${totalMs}`,
       );
 
       try {
         await updateFileIqExtractionJob(jobId, {
           status: "completed",
-          agentSessionId: null,
+          agentSessionId: agentResult.agentSessionId,
           errorCode: null,
           errorMessage: null,
           summary: {
             totalProductsFound,
-            agentStatus: "not_required",
-            numTurns: 0,
+            agentStatus: agentResult.status,
+            numTurns: agentResult.numTurns,
+            agentOrchestration: true,
+            localPreparse: {
+              parser: "rocktomic_inventory_csv",
+              productsParsed: csvParseResult.productCount,
+              confidence: csvParseResult.confidence,
+            },
             ...(catalogSummary !== null && {
               schemaType: catalogSummary.schemaType,
               schemaVersion: catalogSummary.schemaVersion,
             }),
             _timing: {
-              prepMs,
-              insertMs,
+              preparseMs,
+              agentDurationMs,
+              parseDurationMs,
+              insertDurationMs,
               totalMs,
               route: ctx.route,
             },
@@ -190,19 +397,19 @@ export async function processFileIqJob(
         });
       } catch (err) {
         console.error(
-          `${LOG} jobId=${jobId} | DB update failed (deterministic) | error=${normalizeError(err)}`,
+          `${LOG} jobId=${jobId} | DB job update failed | error=${normalizeError(err)}`,
         );
       }
       return;
     }
 
-    // Low confidence — fall through to agent path
+    // Low confidence — fall through to standard agent path
     console.log(
       `${LOG} jobId=${jobId} | deterministic CSV low confidence — falling back to agent`,
     );
   }
 
-  // ── Agent path ────────────────────────────────────────────────────────────
+  // ── Standard agent path ───────────────────────────────────────────────────
   const agentStartMs = Date.now();
   console.log(
     `${LOG} jobId=${jobId} | starting agent | schemaType=product_catalog route=${ctx.route ?? "agent_unstructured"} maxTurns=${ctx.maxTurns}`,
@@ -256,7 +463,6 @@ export async function processFileIqJob(
     extractedPayload = parsed.payload;
 
     if (parsed.parseMode !== "raw") {
-      // Attach parse diagnostics as _meta when a fallback strategy was used
       if (parsed.parseMode !== "json") {
         extractedPayload = {
           ...extractedPayload,

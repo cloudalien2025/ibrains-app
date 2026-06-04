@@ -28,7 +28,7 @@ function fileExt(filePath: string): string {
 /**
  * Classify a FileIQ extraction job and choose the fastest safe route.
  *
- * CSV-only → deterministic_structured (maxTurns=0, no agent)
+ * CSV-only → deterministic_structured (maxTurns=3, compact Claude validation after local parse)
  * XLSX-only → hybrid_structured_agent (maxTurns=8)
  * PDF/DOCX (≤3 files) → agent_unstructured (maxTurns=20)
  * PDF/DOCX (>3 files) → chunked_agent (maxTurns=40)
@@ -100,8 +100,8 @@ export function classifyExtractionJob(params: {
   if (hasCsv && !hasPdf && !hasDocx) {
     return {
       route: "deterministic_structured",
-      maxTurns: 0,
-      rationale: "CSV-only — deterministic local parse; no agent needed",
+      maxTurns: 3,
+      rationale: "CSV pre-parsed locally; Claude validates and finalizes schema output.",
     };
   }
 
