@@ -6,7 +6,7 @@ describe("directoryiq step2 listing optimization fallback UX contract", () => {
   it("unlocks create flow for safe ready_thin and renders state-aware messaging", () => {
     const filePath = path.join(
       process.cwd(),
-      "app/apps/directoryiq/listings/[listingId]/listing-optimization-client.tsx"
+      "app/directoryiq/listings/[listingId]/listing-optimization-client.tsx"
     );
     const source = fs.readFileSync(filePath, "utf8");
 

@@ -1,0 +1,165 @@
+sku,productName,supplementFactsStatus,inventoryStatus,coaStatus,msrp,wholesaleCost,missingFields,warningCount
+ROC001,,missing,unknown,missing,,,productName|category|pricing|msrp|inventory|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts|provenance,0
+ROC002,,missing,unknown,missing,,,productName|category|pricing|msrp|inventory|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts|provenance,0
+ROC004,,missing,unknown,missing,,,productName|category|pricing|msrp|inventory|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts|provenance,0
+ROC006,,missing,unknown,missing,,,productName|category|pricing|msrp|inventory|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts|provenance,0
+ROC008,,missing,unknown,missing,,,productName|category|pricing|msrp|inventory|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts|provenance,0
+ROC009,,missing,unknown,missing,,,productName|category|pricing|msrp|inventory|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts|provenance,0
+ROC010,Pump Non-Stim Pre-Workout Cherry Blast 312g w/ Natural Flavor,partial,in_stock,available,,23.97,category|msrp,0
+ROC011,Non-Stim Pump Pre-Workout: Pineapple 312.5g w/ Natural Flavor,visual_only,in_stock,available,,23.97,category|msrp,0
+ROC012,Pump Pre-Workout Citrus Blast 312g w/ Natural Flavor,partial,out_of_stock,available,,22.97,category|msrp,0
+ROC013,Pre-Workout Blast-Off 312g w/ Natural Flavor,partial,in_stock,available,,23.97,category|msrp,0
+ROC014,BCAA + EAA Strawberry Candy 300g w/Natural Flavor,partial,out_of_stock,available,,20.67,category|msrp,0
+ROC015,All-In/One Greens & Red SuperFood + Immune 270g Mixed Berry w/Natural Flavor,partial,in_stock,available,,21.24,category|msrp,0
+ROC016,Recovery Carb + Electrolytes: Lemon Lime 1365g,partial,in_stock,available,,19.52,category|msrp,0
+ROC017,Recovery Carb + Electrolyte Summer Punch 1365g,partial,in_stock,available,,19.52,category|msrp,0
+ROC018,Pump Pre-Workout Georgia Peach Rings 312g,partial,in_stock,available,,24.97,category|msrp,0
+ROC100,,missing,in_stock,missing,,,productName|category|pricing|msrp|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts,0
+ROC102,African Mango “Ultra Burn” Drops,structured,unknown,available,,,category|pricing|msrp|inventory,0
+ROC105,Best Sellers Blend,structured,in_stock,available,,10.32,category|msrp,0
+ROC107M,BCAA Grape 325g – 50 servings,partial,in_stock,missing,,22.39,category|msrp|coaUrl,0
+ROC110M,BCAA Lemon Lime 325g – 50 servings,partial,in_stock,missing,,22.97,category|msrp|coaUrl,0
+ROC112,,missing,unknown,missing,,,productName|category|pricing|msrp|inventory|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts|provenance,0
+ROC1120,6lb Bulk Up! Mass Gainer Chocolate Milkshake w/Low Sugar,partial,in_stock,available,,37.34,category|msrp,0
+ROC1125,6lb Bulk Up! Mass Gainer Vanilla Milkshake w/Low Sugar,partial,in_stock,available,,37.34,category|msrp,0
+ROC1205,2.9lb Essential Meal Replacement Protein Chocolate Milkshake w/0% Added Sugar,partial,in_stock,available,,38.47,category|msrp,0
+ROC121,Green Coffee Bean w/GCA - 800mg,structured,in_stock,available,,10.89,category|msrp,0
+ROC1215,2.9lb Essential Meal Replacement Protein Vanilla Milkshake w/0% Added Sugar,partial,in_stock,available,,39.97,category|msrp,0
+ROC123,Oxy Burn,partial,in_stock,available,,14.92,category|msrp,0
+ROC126,Raspberry Ketone Ultra Blend,structured,in_stock,available,,10.32,category|msrp,0
+ROC210N,2lb Whey Natural Salted Caramel – 28 serv.,partial,out_of_stock,missing,,36.47,category|msrp|coaUrl,0
+ROC220,5lb Whey Protein Chocolate – 70 servings,partial,in_stock,missing,,70,category|msrp|coaUrl,0
+ROC2201N,2lb Whey Armor Natural Protein Chocolate w/Stevia & Natural Flavor Non-GMO,partial,out_of_stock,missing,,36.97,category|msrp|coaUrl,0
+ROC223,Biotin +E,partial,in_stock,available,,10.32,category|msrp,0
+ROC2232,2lb Whey Cookies and Cream – 28 servings,partial,out_of_stock,available,,36.47,category|msrp,0
+ROC224,5lb Whey Protein Vanilla – 70 servings,partial,in_stock,available,,69.97,category|msrp,0
+ROC2241N,2lb Whey Armor Natural Protein Vanilla w/Stevia & Natural Flavor Non-GMO,partial,out_of_stock,missing,,34.47,category|msrp|coaUrl,0
+ROC2251,Berberine Plus,structured,in_stock,available,,12.62,category|msrp,0
+ROC2272,2lb Whey Cinnamon Swirl – 28 servings,partial,out_of_stock,available,,36.47,category|msrp,0
+ROC2292,2lb Whey Armor Protein Birthday Cake,partial,in_stock,available,,29.97,category|msrp,0
+ROC260V,1.5lb Pure Vegan Protein Rich Chocolate,visual_only,in_stock,missing,,27.97,category|msrp|coaUrl,0
+ROC263V,1.5lb Pure Vegan Protein Vanilla,visual_only,in_stock,missing,,27.97,category|msrp|coaUrl,0
+ROC281,2lb 100% Whey Isolate Chocolate – 31 serv,partial,in_stock,available,,42.97,category|msrp,0
+ROC2811,1lb 100% Whey Armor Isolate Protein Chocolate,partial,in_stock,available,,32.47,category|msrp,0
+ROC282,2lb 100% Whey Isolate Vanilla – 30 servings,partial,low_stock,available,,42.97,category|msrp,0
+ROC2821,1lb 100% Whey Armor Isolate Protein Vanilla,partial,out_of_stock,available,,32.47,category|msrp,0
+ROC2841,1lb Whey Armor Isolate Protein Berry,partial,in_stock,available,,30.97,category|msrp,0
+ROC2851,1lb Whey Armor Isolate Protein Unflavored,partial,in_stock,available,,26.97,category|msrp,0
+ROC2861,1lb 100% Whey Armor Isolate Protein Cappuccino,partial,in_stock,available,,30.97,category|msrp,0
+ROC301,Chlorella Pure – 500mg,structured,in_stock,available,,16.97,category|msrp,0
+ROC302,Colon Sweep,structured,in_stock,available,,9.97,category|msrp,0
+ROC303,Digestive Enzyme,structured,in_stock,available,,13.97,category|msrp,0
+ROC304,Max Detox W/Acai Berry,structured,in_stock,available,,12.62,category|msrp,0
+ROC401,Female Enhancement Or Boost,partial,in_stock,available,,10.32,category|msrp,0
+ROC402,Premium Menopause Support w/Wild Yam Extract,structured,in_stock,available,,12.62,category|msrp,0
+ROC450,Collagen Type 1 & 3 Grass Fed 350g – 35 serv,partial,in_stock,available,,26.42,category|msrp,0
+ROC501,Horny Goat Weed Blend,structured,in_stock,available,,10.89,category|msrp,0
+ROC502,Male Enhancement Or Boost,missing,in_stock,available,,12.04,category|msrp|supplementFacts,0
+ROC503,Natural PCT,partial,in_stock,available,,10.32,category|msrp,0
+ROC504,Prostate Formula,structured,in_stock,available,,10.89,category|msrp,0
+ROC506,Ultra Test Natural Testosterone Support,structured,in_stock,available,,13.77,category|msrp,0
+ROC507,Ultra Multivitamin For Men,partial,in_stock,available,,13.77,category|msrp,0
+ROC507W,Ultra Vita For Women,partial,in_stock,missing,,13.97,category|msrp|coaUrl,0
+ROC508,"Grass Fed Beef Organ Complex – Ancestral Superfood – Desiccated Liver, Heart, Kidney, Pancreas, Spleen",partial,out_of_stock,available,,11.97,category|msrp,0
+ROC509,Grass Fed Desiccated Beef Liver Capsules – Pasture Raised,partial,out_of_stock,available,,11.97,category|msrp,0
+ROC601,L-Arginine Capsules,structured,in_stock,available,,10.32,category|msrp,0
+ROC603,BCAA (Fruit Punch),visual_only,out_of_stock,available,,22.39,category|msrp,0
+ROC604,BCAA (Watermelon),visual_only,in_stock,available,,22.39,category|msrp,0
+ROC605,Pre-Workout (Fruit Punch),partial,in_stock,available,,22.97,category|msrp,0
+ROC606,Pre-Workout (Watermelon),partial,in_stock,available,,22.97,category|msrp,0
+ROC607,Protein Whey 2lb Chocolate,partial,out_of_stock,available,,36.47,category|msrp,0
+ROC608,Protein Whey 2lb Vanilla,partial,out_of_stock,available,,36.47,category|msrp,0
+ROC609,Creatine Powder 300g,structured,in_stock,available,,22.97,category|msrp,0
+ROC610,Glutamine Powder 300g,structured,in_stock,missing,,19.47,category|msrp|coaUrl,0
+ROC611,Pre-Workout (Tropical Sunrise),partial,in_stock,available,,22.97,category|msrp,0
+ROC612,Energized Aminos Raspberry Iced Tea 360g – 40 serv,partial,in_stock,available,,21.82,category|msrp,0
+ROC613,Energized Aminos Peach Mango 360g – 40 serv,partial,low_stock,available,,22.97,category|msrp,0
+ROC617,ION + Select Electrolyte Formula,partial,in_stock,available,,25.27,category|msrp,0
+ROC618,Nature's Espresso Coffee w/Organic Mushroom Complex,partial,in_stock,available,,18.37,category|msrp,0
+ROC619,Pre-Workout w/Creatine 5g (Grape Annihilation),missing,in_stock,available,,22.97,category|msrp|supplementFacts,0
+ROC620,,missing,in_stock,missing,,,productName|category|pricing|msrp|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts,0
+ROC621,,missing,in_stock,missing,,,productName|category|pricing|msrp|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts,0
+ROC622,,missing,in_stock,missing,,,productName|category|pricing|msrp|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts,0
+ROC623,,missing,in_stock,missing,,,productName|category|pricing|msrp|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts,0
+ROC714,Vitamin C Serum 2oz,partial,in_stock,available,,10.32,category|msrp,0
+ROC717,Collagen (Full Spectrum),structured,in_stock,available,,11.47,category|msrp,0
+ROC720,Premium Mineral Complex 2 fl oz,partial,in_stock,available,,27.26,category|msrp,0
+ROC721,Glutathione Complex,structured,out_of_stock,available,,24.66,category|msrp,0
+ROC723,Liquid D3 Ultra 0.43 fl oz,partial,in_stock,available,,16.56,category|msrp,0
+ROC725,NAC Plus,structured,in_stock,available,,17.51,category|msrp,0
+ROC727,Betaine HCL Plus,structured,in_stock,available,,16.97,category|msrp,0
+ROC728,HCL Activator Plus,structured,in_stock,available,,16.86,category|msrp,0
+ROC729,Vitamin B Complex,structured,in_stock,available,,21.41,category|msrp,0
+ROC730,Plant-Source Vitamin C,structured,in_stock,available,,25.31,category|msrp,0
+ROC731,Fermented Vitamin B Complex 8 fl oz,visual_only,in_stock,available,,69.51,category|msrp,0
+ROC732,Fermented Vitamin B Complex 2 fl oz,visual_only,in_stock,available,,24.66,category|msrp,0
+ROC733,Fermented Melatonin 2 fl oz,partial,in_stock,available,,18.16,category|msrp,0
+ROC734,Fermented Gallbladder Support 8 fl oz,structured,in_stock,available,,33.11,category|msrp,0
+ROC735,Bone Health Plus,structured,in_stock,available,,28.47,category|msrp,0
+ROC736,Adrenal Support Plus,structured,in_stock,available,,20.76,category|msrp,0
+ROC738,Gallbladder Support Plus,visual_only,out_of_stock,available,,28.47,category|msrp,0
+ROC739,Pancreas Support Plus,structured,in_stock,available,,21.97,category|msrp,0
+ROC740,Advanced Thyroid & Hormone Support,structured,in_stock,available,,22.06,category|msrp,0
+ROC741,Thyroid Support Plus,structured,in_stock,available,,20.76,category|msrp,0
+ROC743,Bentonite Clay Detox Plus,structured,out_of_stock,available,,24.66,category|msrp,0
+ROC744,Premium Volcanic Pink Salt 12 oz,structured,in_stock,available,,16.86,category|msrp,0
+ROC745,Premium Testosterone w/ Testofen®,structured,in_stock,available,,51.96,category|msrp,0
+ROC801,Anxiety Formula,structured,in_stock,available,,10.32,category|msrp,0
+ROC802,B-12 Drops 2oz,partial,in_stock,available,,12.04,category|msrp,0
+ROC803,Blood Sugar Ultra,visual_only,in_stock,available,,9.74,category|msrp,0
+ROC805,CoQ10 (Ubiquinone),structured,in_stock,available,,13.19,category|msrp,0
+ROC808,Joint Flex,structured,in_stock,available,,9.74,category|msrp,0
+ROC812,Neuro Plus Brain and Focus,structured,in_stock,available,,10.32,category|msrp,0
+ROC814,Omega 3 Fish Oil,partial,in_stock,available,,10.89,category|msrp,0
+ROC816,Probiotic - 40 Billion CFU,visual_only,in_stock,available,,14.92,category|msrp,0
+ROC817,Sleep Formula,visual_only,in_stock,available,,10.89,category|msrp,0
+ROC818,Turmeric w/BioPerine - 650mg,structured,in_stock,available,,10.97,category|msrp,0
+ROC822,Ashwagandha,structured,in_stock,available,,11.47,category|msrp,0
+ROC823,Turmeric w/Ginger,structured,in_stock,available,,10.32,category|msrp,0
+ROC824,Magnesium Glycinate,structured,in_stock,available,,12.97,category|msrp,0
+ROC826,5-HTP,structured,in_stock,available,,10.32,category|msrp,0
+ROC830,Platinum Turmeric Joint Support Plus,structured,in_stock,available,,10.32,category|msrp,0
+ROC831,Vitamin K2 + D3,structured,in_stock,available,,11.47,category|msrp,0
+ROC835,Sea Moss Capsules,partial,in_stock,available,,14.92,category|msrp,0
+ROC840,Ultra NAD+ Support Formula,structured,in_stock,available,,,category|pricing|msrp,0
+ROC841,Ultra-Premium NMN Infinity+,structured,in_stock,missing,,,category|pricing|msrp|coaUrl,0
+ROC903M,Energy Pre-Workout Lemonade 214g – 30 serv,partial,in_stock,missing,,22.97,category|msrp|coaUrl,0
+ROC908,,visual_only,in_stock,missing,,,productName|category|pricing|msrp|coaUrl,0
+ROC910,,structured,in_stock,missing,,,productName|category|pricing|msrp|coaUrl,0
+ROC911,,visual_only,in_stock,missing,,,productName|category|pricing|msrp|coaUrl,0
+ROC914,Organic Beetroot,structured,out_of_stock,available,,9.74,category|msrp,0
+ROC915,"Mushroom Immune Booster Chaga, Cordyceps, Reishi and Lion’s Mane.",visual_only,in_stock,available,,12.04,category|msrp,0
+ROC917,,structured,unknown,missing,,,productName|category|pricing|msrp|inventory|coaUrl,0
+ROC918,Multivitamin Gummies (Adults),structured,in_stock,available,,10.89,category|msrp,0
+ROC919,Skin Glow Gummies w/ Biotin + C + E,structured,out_of_stock,missing,,12.47,category|msrp|coaUrl,0
+ROC920,Sleep Well Gummies,structured,in_stock,available,,10.89,category|msrp,0
+ROC921,,missing,unknown,available,,,productName|category|pricing|msrp|inventory|supplementFacts,0
+ROC922,Omega 3 Gummies,structured,out_of_stock,available,,11.47,category|msrp,0
+ROC923,Joint Care Gummies,structured,in_stock,available,,11.01,category|msrp,0
+ROC924,Collagen Gummies,structured,in_stock,available,,12.62,category|msrp,0
+ROC925,Hair Vitamin Gummies,structured,in_stock,available,,11.47,category|msrp,0
+ROC927,Resveratrol,structured,low_stock,available,,12.04,category|msrp,0
+ROC928,Turmeric Gummies,structured,in_stock,available,,10.89,category|msrp,0
+ROC929,Ashwagandha Gummies,structured,in_stock,available,,13.19,category|msrp,0
+ROC930,Apple Cider Vinegar Gummies,structured,out_of_stock,available,,13.77,category|msrp,0
+ROC934,MCT Oil,structured,in_stock,available,,10.32,category|msrp,0
+ROC937,Organic Super Greens - Watermelon,visual_only,in_stock,available,,20.67,category|msrp,0
+ROC939,Elderberry Immunity W/ Zinc & Vitamin C,structured,in_stock,available,,20.67,category|msrp,0
+ROC941,,partial,out_of_stock,missing,,,productName|category|pricing|msrp|coaUrl,0
+ROC943,Super Creatine Gummies 1000mg,structured,in_stock,available,,11.97,category|msrp,0
+ROC944,Super Fruit Gummies w/Essential Vitamins,structured,in_stock,available,,11.97,category|msrp,0
+ROC945,Premium Shilajit Gummies w/Ashwagandha,structured,out_of_stock,available,,12.47,category|msrp,0
+ROC946,Premium Mushroom Complex Gummies,structured,in_stock,available,,12.47,category|msrp,0
+ROC947,Premium Women's Hormonal Support Gummies,structured,out_of_stock,available,,12.47,category|msrp,0
+ROC948,Premium Nitric Oxide Gummies,structured,in_stock,available,,12.47,category|msrp,0
+ROC949,Premium Magnesium Glycinate Gummies,structured,in_stock,available,,12.47,category|msrp,0
+ROC980,Brightening Boost Exfoliator Pads,partial,in_stock,missing,,25.97,category|msrp|coaUrl,0
+ROC981,"Vitamin C, B, E + Ferulic Antioxidant Serum, USA Made",partial,in_stock,missing,,29.97,category|msrp|coaUrl,0
+ROC982,"Firming Cucumber Eye Cream w/Bakuchiol, USA Made, Clean & Vegan",partial,low_stock,missing,,21.97,category|msrp|coaUrl,0
+ROC983,"Red Tea Moisturizing + Antioxidant Serum w/Hyaluronic Acid, USA Made",partial,in_stock,missing,,26.97,category|msrp|coaUrl,0
+ROC984,"Anti-Aging Recovery Retinoid Serum w/Vitamin E, USA Made, Clean & Vegan",missing,in_stock,missing,,17.07,category|msrp|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts,0
+ROC985,"Poly Peptide Serum (Peptide Complex), USA Made, Clean & Vegan",missing,in_stock,missing,,17.07,category|msrp|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts,0
+ROC986,"Advanced Multi Peptide Cream (Peptide Complex), USA Made, Clean & Vegan",partial,in_stock,missing,,29.47,category|msrp|coaUrl,0
+ROC987,"Skin Brightening Boost Serum w/Nonapeptide-1, USA Made, Clean & Vegan",missing,in_stock,missing,,17.07,category|msrp|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts,0
+ROC988,"Face Exfoliator & Cleanser w/Honey & Bambusa Arundinacea Stem Extract, USA Made, Clean",partial,in_stock,missing,,24.97,category|msrp|coaUrl,0
+UNDEFINED,,missing,unknown,missing,,,productName|category|pricing|msrp|inventory|coaUrl|labelTemplateUrl|mockupUrl|supplementFacts|provenance,0

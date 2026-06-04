@@ -8,7 +8,17 @@ HOST_HEADER="${HOST_HEADER:-}"
 EXPECT_RELEASE_FILE="${EXPECT_RELEASE_FILE:-0}"
 EXPECT_BUILD_ID="${EXPECT_BUILD_ID:-}"
 EXPECT_GIT_SHA="${EXPECT_GIT_SHA:-}"
-SMOKE_PATHS="${SMOKE_PATHS:-/ /sign-in}"
+PUBLIC_SMOKE_PATHS="${PUBLIC_SMOKE_PATHS:-/ /sign-in}"
+PROTECTED_REDIRECT_PATHS="${PROTECTED_REDIRECT_PATHS:-/dashboard /optiwal/connect}"
+LEGACY_NOT_FOUND_PATHS="${LEGACY_NOT_FOUND_PATHS:-/apps /apps/studio /studio /siteforge /uapforge}"
+SKIP_SERVICE_CHECKS="${SKIP_SERVICE_CHECKS:-0}"
+# Retry budget for SHA/build_id comparison checks.  The service restart after a
+# deploy creates a timing window where /api/meta/release still reflects the
+# previous build.  We poll until the expected values appear or retries are
+# exhausted.  6 attempts × 10 s = up to 60 s total — well within any reasonable
+# deploy restart window.
+RELEASE_SHA_POLL_RETRIES="${RELEASE_SHA_POLL_RETRIES:-6}"
+RELEASE_SHA_POLL_INTERVAL="${RELEASE_SHA_POLL_INTERVAL:-10}"
 
 curl_host_args=()
 if [ -n "${HOST_HEADER}" ]; then
@@ -77,26 +87,178 @@ check_frontdoor_assets() {
   local path
   while IFS= read -r path; do
     [ -z "$path" ] && continue
+    local headers_file
     local code
-    code=$(curl -sS -o /dev/null -w "%{http_code}" "${curl_host_args[@]}" "${BASE_URL}${path}" || true)
+    local content_type
+    headers_file="$(mktemp)"
+    if ! curl -sS -D "$headers_file" -o /dev/null "${curl_host_args[@]}" "${BASE_URL}${path}"; then
+      fail "${route_name} asset ${path} request failed"
+      rm -f "$headers_file"
+      continue
+    fi
+    code=$(awk '/^HTTP/{code=$2} END{print code}' "$headers_file")
+    content_type=$(awk 'BEGIN{IGNORECASE=1} /^Content-Type:/{print $2}' "$headers_file" | tr -d '\r' | tail -n 1)
     if [ "$code" = "200" ]; then
       pass "${route_name} asset ${path} returned 200"
     else
       fail "${route_name} asset ${path} returned ${code}"
+      rm -f "$headers_file"
+      continue
     fi
+
+    case "$path" in
+      *.js)
+        case "$content_type" in
+          application/javascript*|text/javascript*)
+            pass "${route_name} asset ${path} served javascript content-type"
+            ;;
+          *)
+            fail "${route_name} asset ${path} unexpected content-type ${content_type:-missing}"
+            ;;
+        esac
+        ;;
+      *.css)
+        case "$content_type" in
+          text/css*)
+            pass "${route_name} asset ${path} served css content-type"
+            ;;
+          *)
+            fail "${route_name} asset ${path} unexpected content-type ${content_type:-missing}"
+            ;;
+        esac
+        ;;
+    esac
+
+    rm -f "$headers_file"
   done < "$refs_file"
+}
+
+normalize_route_path() {
+  local route_path="$1"
+  if [ "$route_path" != "/" ]; then
+    route_path="${route_path%/}"
+  fi
+  printf '%s' "$route_path"
+}
+
+check_protected_redirect() {
+  local route_path="$1"
+  local url="$2"
+  local headers_file
+  local code
+  local location
+  local validation
+  headers_file="$(mktemp)"
+  trap 'rm -f "$headers_file"' RETURN
+
+  if ! curl -sS -D "$headers_file" -o /dev/null "${curl_host_args[@]}" "$url"; then
+    fail "${route_path} protected route request failed"
+    return
+  fi
+
+  code=$(awk '/^HTTP/{code=$2} END{print code}' "$headers_file")
+  location=$(awk 'BEGIN{IGNORECASE=1} /^Location:/{sub(/\r$/,"",$0); print substr($0,10)}' "$headers_file" | tail -n 1 | sed 's/^[[:space:]]*//')
+
+  if [ "$code" != "307" ]; then
+    fail "${route_path} expected 307 protected redirect, got ${code:-missing}"
+    return
+  fi
+
+  if [ -z "$location" ]; then
+    fail "${route_path} protected redirect missing Location header"
+    return
+  fi
+
+  if printf '%s' "$location" | grep -qi 'localhost:3001'; then
+    fail "${route_path} protected redirect Location must not include localhost:3001"
+    return
+  fi
+
+  if ! validation=$(
+    python3 - "$location" "$DOMAIN" "$route_path" <<'PY'
+import sys
+from urllib.parse import parse_qs, urlparse
+
+location, domain, expected_path = sys.argv[1], sys.argv[2], sys.argv[3]
+expected = expected_path.rstrip("/") or "/"
+parsed = urlparse(location)
+
+if parsed.scheme not in ("http", "https"):
+    print("Location must be absolute http/https URL", end="")
+    sys.exit(1)
+if parsed.hostname != domain:
+    print(f"Location host must be {domain}", end="")
+    sys.exit(1)
+if parsed.path != "/sign-in":
+    print("Location path must be /sign-in", end="")
+    sys.exit(1)
+
+redirect_values = parse_qs(parsed.query, keep_blank_values=True).get("redirect_url", [])
+if not redirect_values or not redirect_values[0]:
+    print("redirect_url query param missing", end="")
+    sys.exit(1)
+
+redirect_url = redirect_values[0]
+if "localhost:3001" in redirect_url.lower():
+    print("redirect_url must not include localhost:3001", end="")
+    sys.exit(1)
+
+redirect_parsed = urlparse(redirect_url)
+if redirect_parsed.scheme in ("http", "https"):
+    if redirect_parsed.hostname != domain:
+        print(f"redirect_url host must be {domain}", end="")
+        sys.exit(1)
+    redirect_path = redirect_parsed.path or "/"
+elif redirect_url.startswith("/"):
+    redirect_path = redirect_url
+else:
+    print("redirect_url must be absolute app URL or absolute path", end="")
+    sys.exit(1)
+
+normalized_redirect_path = redirect_path.rstrip("/") or "/"
+if normalized_redirect_path != expected:
+    print(f"redirect_url path must match {expected_path}", end="")
+    sys.exit(1)
+
+print("ok", end="")
+PY
+  ); then
+    fail "${route_path} protected redirect invalid: ${validation}"
+    return
+  fi
+
+  pass "${route_path} returned expected 307 protected redirect"
+}
+
+check_not_found() {
+  local route_path="$1"
+  local url="$2"
+  local code
+  code=$(curl -sS -o /dev/null -w "%{http_code}" "${curl_host_args[@]}" "$url" || true)
+  if [ "$code" = "404" ]; then
+    pass "${route_path} returned 404 as expected"
+  else
+    fail "${route_path} expected 404, got ${code:-missing}"
+  fi
 }
 
 check_health_json() {
   local url="$1"
+  local body_file
+  local status_code
   local body
-  body=$(curl -sS "${curl_host_args[@]}" "$url" || true)
+  body_file="$(mktemp)"
+  trap 'rm -f "$body_file"' RETURN
+  status_code=$(curl -sS -o "$body_file" -w "%{http_code}" "${curl_host_args[@]}" "$url" || true)
+  body=$(cat "$body_file" 2>/dev/null || true)
   if [ -z "$body" ]; then
     fail "health check empty response"
+    note "health http status: ${status_code:-missing}"
     return
   fi
 
-  python3 - "$body" <<'PY' > /tmp/health_parse.txt 2>/dev/null || true
+  local parsed
+  parsed=$(python3 - "$body" 2>/dev/null <<'PY' || true
 import json,sys
 try:
     data=json.loads(sys.argv[1])
@@ -106,33 +268,51 @@ except Exception:
 
 ok = data.get('ok') is True
 upstream_ok = data.get('upstream_ok') is True
-print('OK' if ok else 'NOK')
-print('UPSTREAM_OK' if upstream_ok else 'UPSTREAM_BAD')
+print(f"OK={'true' if ok else 'false'}")
+print(f"UPSTREAM_OK={'true' if upstream_ok else 'false'}")
+print(f"APP_OK={data.get('app_ok')!r}")
+print(f"DEPLOY_READY={data.get('deploy_ready')!r}")
+print(f"STATUS={data.get('status')!r}")
+print(f"UPSTREAM_ERROR={data.get('upstream_error')!r}")
 PY
+)
 
-  if grep -q '^OK$' /tmp/health_parse.txt; then
+  if printf '%s\n' "$parsed" | grep -q '^BADJSON$'; then
+    fail "health check invalid JSON"
+    note "health http status: ${status_code:-missing}"
+    note "health body: ${body}"
+    return
+  fi
+
+  if printf '%s\n' "$parsed" | grep -q '^OK=true$'; then
     pass "health ok=true"
   else
     fail "health ok not true"
   fi
 
-  if grep -q '^UPSTREAM_OK$' /tmp/health_parse.txt; then
+  if printf '%s\n' "$parsed" | grep -q '^UPSTREAM_OK=true$'; then
     pass "health upstream_ok=true"
   else
     fail "health upstream_ok not true"
   fi
+
+  if ! printf '%s\n' "$parsed" | grep -q '^OK=true$' || ! printf '%s\n' "$parsed" | grep -q '^UPSTREAM_OK=true$'; then
+    note "health http status: ${status_code:-missing}"
+    note "health body: ${body}"
+    note "health parsed: $(printf '%s\n' "$parsed" | tr '\n' ';')"
+  fi
 }
 
-check_release_meta() {
+# Fetches /api/meta/release and prints parsed key=value lines to stdout.
+# Returns 1 if the response body is empty (retryable restart-window condition).
+_fetch_release_meta_parse() {
   local url="$1"
   local body
   body=$(curl -sS "${curl_host_args[@]}" "$url" || true)
   if [ -z "$body" ]; then
-    fail "release meta empty response"
-    return
+    return 1
   fi
-
-  python3 - "$body" <<'PY' > /tmp/release_meta_parse.txt 2>/dev/null || true
+  python3 - "$body" 2>/dev/null <<'PY' || true
 import json,sys
 try:
     data=json.loads(sys.argv[1])
@@ -143,35 +323,103 @@ except Exception:
 print('RELEASE_FILE_TRUE' if data.get('release_file') is True else 'RELEASE_FILE_FALSE')
 print(f"BUILD_ID={data.get('build_id') or ''}")
 print(f"GIT_SHA={data.get('git_sha') or ''}")
+print(f"DEPLOYED_AT={data.get('deployed_at') or data.get('build_timestamp') or ''}")
 PY
+  return 0
+}
 
-  if grep -q '^BADJSON$' /tmp/release_meta_parse.txt; then
+# Returns 0 if actual satisfies the expected SHA constraint:
+# exact match, short-SHA prefix match, or actual is a descendant of expected
+# (handles the case where a concurrent pipeline fast-forwarded the server past
+# the SHA this pipeline deployed).
+_sha_satisfies_expect() {
+  local expected="$1" actual="$2"
+  [ -z "$actual" ] && return 1
+  [ "$actual" = "$expected" ] && return 0
+  # Tolerate short vs full SHA (one is a prefix of the other)
+  case "$actual" in "$expected"*) return 0;; esac
+  case "$expected" in "$actual"*) return 0;; esac
+  # Descendant: expected is an ancestor of actual (server fast-forwarded)
+  if command -v git >/dev/null 2>&1; then
+    git fetch --quiet --depth=1 origin "$actual" 2>/dev/null || true
+    git merge-base --is-ancestor "$expected" "$actual" 2>/dev/null && return 0
+  fi
+  return 1
+}
+
+check_release_meta() {
+  local url="$1"
+  local parsed
+
+  if ! parsed=$(_fetch_release_meta_parse "$url"); then
+    fail "release meta empty response"
+    return
+  fi
+
+  if printf '%s\n' "$parsed" | grep -q '^BADJSON$'; then
     fail "release meta invalid JSON"
     return
   fi
 
   if [ "${EXPECT_RELEASE_FILE}" = "1" ]; then
-    if grep -q '^RELEASE_FILE_TRUE$' /tmp/release_meta_parse.txt; then
+    if printf '%s\n' "$parsed" | grep -q '^RELEASE_FILE_TRUE$'; then
       pass "release meta preserved release.json"
     else
       fail "release meta missing release.json"
     fi
   fi
 
-  if [ -n "${EXPECT_BUILD_ID}" ]; then
-    if grep -q "^BUILD_ID=${EXPECT_BUILD_ID}$" /tmp/release_meta_parse.txt; then
-      pass "release build_id matches ${EXPECT_BUILD_ID}"
-    else
-      fail "release build_id mismatch"
-    fi
+  if printf '%s\n' "$parsed" | grep -q '^BUILD_ID=$' || printf '%s\n' "$parsed" | grep -q '^BUILD_ID=unavailable$'; then
+    fail "release build_id is missing or unavailable"
+  else
+    pass "release build_id is non-null"
   fi
 
-  if [ -n "${EXPECT_GIT_SHA}" ]; then
-    if grep -q "^GIT_SHA=${EXPECT_GIT_SHA}$" /tmp/release_meta_parse.txt; then
-      pass "release git_sha matches ${EXPECT_GIT_SHA}"
-    else
-      fail "release git_sha mismatch"
-    fi
+  if printf '%s\n' "$parsed" | grep -q '^GIT_SHA=$' || printf '%s\n' "$parsed" | grep -q '^GIT_SHA=unavailable$'; then
+    fail "release git_sha is missing or unavailable"
+  else
+    pass "release git_sha is non-null"
+  fi
+
+  # SHA/build_id comparison: retry with backoff to absorb the deploy restart
+  # timing window.  SHA check uses _sha_satisfies_expect so a concurrent
+  # pipeline that fast-forwarded the server past our expected SHA does not fail.
+  if [ -n "${EXPECT_BUILD_ID}" ] || [ -n "${EXPECT_GIT_SHA}" ]; then
+    local attempt=1
+    local actual_build_id actual_sha sha_ok
+    while true; do
+      sha_ok=1
+      actual_build_id=$(printf '%s\n' "$parsed" | grep '^BUILD_ID=' | cut -d= -f2- || true)
+      actual_sha=$(printf '%s\n' "$parsed" | grep '^GIT_SHA=' | cut -d= -f2- || true)
+
+      if [ -n "${EXPECT_BUILD_ID}" ] && [ "${actual_build_id}" != "${EXPECT_BUILD_ID}" ]; then
+        sha_ok=0
+      fi
+      if [ -n "${EXPECT_GIT_SHA}" ] && ! _sha_satisfies_expect "${EXPECT_GIT_SHA}" "${actual_sha}"; then
+        sha_ok=0
+      fi
+
+      if [ "${sha_ok}" -eq 1 ]; then
+        [ -n "${EXPECT_BUILD_ID}" ] && pass "release build_id matches ${EXPECT_BUILD_ID}"
+        [ -n "${EXPECT_GIT_SHA}" ] && pass "release git_sha matches or is descendant of ${EXPECT_GIT_SHA}"
+        return
+      fi
+
+      if [ "${attempt}" -ge "${RELEASE_SHA_POLL_RETRIES}" ]; then
+        if [ -n "${EXPECT_BUILD_ID}" ] && [ "${actual_build_id}" != "${EXPECT_BUILD_ID}" ]; then
+          fail "release build_id mismatch after ${attempt} poll attempt(s): expected=${EXPECT_BUILD_ID} actual=${actual_build_id:-missing}"
+        fi
+        if [ -n "${EXPECT_GIT_SHA}" ] && ! _sha_satisfies_expect "${EXPECT_GIT_SHA}" "${actual_sha}"; then
+          fail "release git_sha mismatch after ${attempt} poll attempt(s): expected=${EXPECT_GIT_SHA} actual=${actual_sha:-missing}"
+        fi
+        return
+      fi
+
+      note "release SHA not yet updated (attempt ${attempt}/${RELEASE_SHA_POLL_RETRIES}), waiting ${RELEASE_SHA_POLL_INTERVAL}s..."
+      sleep "${RELEASE_SHA_POLL_INTERVAL}"
+      attempt=$((attempt + 1))
+      parsed=$(_fetch_release_meta_parse "$url") || true
+    done
   fi
 }
 
@@ -181,12 +429,22 @@ if [ -n "${HOST_HEADER}" ]; then
   note "Host header: ${HOST_HEADER}"
 fi
 
-check_service ibrains-app
-check_service nginx
+if [ "${SKIP_SERVICE_CHECKS}" != "1" ]; then
+  check_service ibrains-app
+  check_service nginx
+fi
 
-for route_path in ${SMOKE_PATHS}; do
+for route_path in ${PUBLIC_SMOKE_PATHS}; do
   check_http_status "${BASE_URL}${route_path}" "${route_path}"
   check_frontdoor_assets "${BASE_URL}${route_path}" "${route_path}"
+done
+
+for route_path in ${PROTECTED_REDIRECT_PATHS}; do
+  check_protected_redirect "$(normalize_route_path "$route_path")" "${BASE_URL}${route_path}"
+done
+
+for route_path in ${LEGACY_NOT_FOUND_PATHS}; do
+  check_not_found "$(normalize_route_path "$route_path")" "${BASE_URL}${route_path}"
 done
 
 check_health_json "${BASE_URL}/api/health"

@@ -1,4 +1,6 @@
 import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import path from "node:path";
 import { NextResponse } from "next/server";
 
@@ -13,6 +15,7 @@ type ReleaseFile = {
 };
 
 const releaseFilePath = path.join(process.cwd(), "app", "_meta", "release.json");
+const execFileAsync = promisify(execFile);
 
 const cleanValue = (value?: string | null) => {
   if (typeof value !== "string") {
@@ -46,7 +49,18 @@ export async function GET() {
     const envGitSha =
       cleanValue(env.RELEASE_GIT_SHA) || cleanValue(env.GIT_SHA) || cleanValue(env.GITHUB_SHA);
     const fileGitSha = cleanValue(releaseFile?.git_sha);
-    const gitSha = envGitSha || fileGitSha;
+    let gitSha = envGitSha || fileGitSha;
+    if (!gitSha) {
+      try {
+        const result = await execFileAsync("git", ["rev-parse", "HEAD"], {
+          cwd: process.cwd(),
+          timeout: 900,
+        });
+        gitSha = cleanValue(result.stdout);
+      } catch {
+        gitSha = null;
+      }
+    }
 
     const envGitShaShort = cleanValue(env.RELEASE_GIT_SHA_SHORT);
     const fileGitShaShort = cleanValue(releaseFile?.git_sha_short);
@@ -55,25 +69,46 @@ export async function GET() {
     const envBuildTimestamp =
       cleanValue(env.RELEASE_BUILD_TIMESTAMP) || cleanValue(env.BUILD_TIMESTAMP);
     const fileBuildTimestamp = cleanValue(releaseFile?.build_timestamp);
-    const buildTimestamp = envBuildTimestamp || fileBuildTimestamp || null;
+    let gitCommitTimestamp: string | null = null;
+    if (!envBuildTimestamp && !fileBuildTimestamp) {
+      try {
+        const result = await execFileAsync("git", ["log", "-1", "--format=%cI"], {
+          cwd: process.cwd(),
+          timeout: 900,
+        });
+        gitCommitTimestamp = cleanValue(result.stdout);
+      } catch {
+        gitCommitTimestamp = null;
+      }
+    }
+    const buildTimestamp = envBuildTimestamp || fileBuildTimestamp || gitCommitTimestamp || null;
 
     const envBuildId =
       cleanValue(env.RELEASE_BUILD_ID) || cleanValue(env.BUILD_ID) || cleanValue(env.GITHUB_RUN_ID);
     const fileBuildId = cleanValue(releaseFile?.build_id);
-    const buildId = envBuildId || fileBuildId || null;
+    const buildId = envBuildId || fileBuildId || gitShaShort || "unavailable";
+    const missing: string[] = [];
+    if (!gitSha) missing.push("git_sha");
+    if (!buildTimestamp) missing.push("build_timestamp");
+    if (!envBuildId && !fileBuildId) missing.push("build_id");
 
     const payload = {
       service,
       environment,
-      git_sha: gitSha,
-      git_sha_short: gitShaShort,
+      git_sha: gitSha || "unavailable",
+      git_sha_short: gitShaShort || "unavailable",
       build_timestamp: buildTimestamp,
+      deployed_at: buildTimestamp,
       build_id: buildId,
       local: environment === "local" || environment === "development" || environment === "test",
+      diagnostics: {
+        missing,
+        release_metadata_complete: missing.length === 0,
+      },
       sources: {
-        git_sha: envGitSha ? "env" : fileGitSha ? "file" : "missing",
-        build_timestamp: envBuildTimestamp ? "env" : fileBuildTimestamp ? "file" : "missing",
-        build_id: envBuildId ? "env" : fileBuildId ? "file" : "missing",
+        git_sha: envGitSha ? "env" : fileGitSha ? "file" : gitSha ? "git" : "missing",
+        build_timestamp: envBuildTimestamp ? "env" : fileBuildTimestamp ? "file" : gitCommitTimestamp ? "git" : "missing",
+        build_id: envBuildId ? "env" : fileBuildId ? "file" : gitShaShort ? "sha_fallback" : "missing",
         environment: envEnvironmentExplicit ? "env" : fileEnvironment ? "file" : envEnvironmentFallback ? "env" : "default",
         service: envService ? "env" : fileService ? "file" : "default",
       },

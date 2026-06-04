@@ -27,6 +27,9 @@ async function shouldFallbackToPublic(response: Response): Promise<boolean> {
 
 export async function GET(req: NextRequest) {
   try {
+    const { unauthorizedResponse } = await requireSignedInUser();
+    if (unauthorizedResponse) return unauthorizedResponse;
+
     const primary = await proxyToBrains(req, "/v1/brains", { requireAuth: true });
 
     if (await shouldFallbackToPublic(primary)) {

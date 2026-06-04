@@ -1,0 +1,889 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactNode } from "react";
+import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer";
+import {
+  getWalmartProductBySkuForUser,
+  importWalmartProducts,
+  isWalmartProductArchivedForUser,
+  listWalmartProducts,
+  listWalmartProductsForUser,
+  replaceWalmartProductsForUser,
+} from "@/lib/ecomviper/walmart/walmart-products";
+import { listPersistedWalmartDrafts } from "@/lib/ecomviper/walmart/walmart-draft-repository";
+import { listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
+
+const authMocks = vi.hoisted(() => ({
+  requireSignedInUser: vi.fn(),
+}));
+
+const walmartAuthMocks = vi.hoisted(() => ({
+  requestWalmartTokenForUser: vi.fn(),
+  getWalmartConnectionHealth: vi.fn(() => ({
+    connectionStatus: "not_connected",
+    summary: {
+      accountNickname: "Walmart Account",
+      environment: "production",
+      region: "US",
+      maskedClientId: "Not configured",
+      clientSecretStored: false,
+      lastSuccessfulAuth: null,
+      lastSuccessfulRead: null,
+      lastApiError: null,
+      tokenStatus: "unknown",
+      safeReadStatus: "unknown",
+      permissionChecks: [],
+      credentialStorageMode: "memory",
+      mode: "live-ready",
+      diagnostic: {
+        environment: "production",
+        baseUrl: "https://marketplace.walmartapis.com",
+        tokenStatus: "unknown",
+        safeReadStatus: "unknown",
+        httpStatus: null,
+        correlationId: null,
+        walmartErrorCode: null,
+        walmartErrorMessage: null,
+        timestamp: null,
+      },
+    },
+    lastSuccessfulApiCall: null,
+    lastApiError: null,
+  })),
+}));
+
+vi.mock("@/lib/auth/requireSignedInUser", () => ({
+  requireSignedInUser: authMocks.requireSignedInUser,
+}));
+
+vi.mock("@/lib/ecomviper/walmart/walmart-auth", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/ecomviper/walmart/walmart-auth")>(
+    "@/lib/ecomviper/walmart/walmart-auth"
+  );
+
+  return {
+    ...actual,
+    requestWalmartTokenForUser: walmartAuthMocks.requestWalmartTokenForUser,
+    getWalmartConnectionHealth: walmartAuthMocks.getWalmartConnectionHealth,
+  };
+});
+
+vi.mock("next/link", async () => {
+  const React = await import("react");
+  return {
+    default: ({ href, children, ...props }: { href: string; children?: ReactNode }) =>
+      React.createElement("a", { href, ...props }, children),
+  };
+});
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    refresh: vi.fn(),
+  }),
+}));
+
+function buildProduct(sku: string) {
+  return normalizeWalmartProduct({
+    sku,
+    title: `Product ${sku}`,
+    brand: "Walmart Brand",
+    price: 19.99,
+    inventoryQuantity: 8,
+    inventoryStatus: "known",
+    imageUrl: "",
+    imageStatus: "catalog_missing",
+    imageStatusMessage: "Image not provided by Walmart catalog",
+    imageSource: "none",
+    shortDescription: "Short description",
+    description: "Long description",
+    bulletPoints: ["Bullet 1"],
+    attributes: { size: "M" },
+  });
+}
+
+describe("walmart products persistence", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_draft_fallback__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_draft_tables_checked__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_product_fallback__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_product_tables_checked__ = undefined;
+    delete process.env.E2E_MOCK_GRAPH;
+  });
+
+  it("import writes products to durable per-user storage and survives runtime-store reset", async () => {
+    walmartAuthMocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-persist-1",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+
+        if (url.includes("/v3/items")) {
+          return new Response(
+            JSON.stringify({
+              ItemResponse: [
+                {
+                  sku: "30066-841",
+                  productName: "Durable Walmart Product",
+                  brand: "Walmart Brand",
+                  price: { amount: "18.99" },
+                  availability: "In_stock",
+                },
+              ],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+
+        if (url.includes("/v3/items/walmart/search")) {
+          return new Response(JSON.stringify({ items: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+
+        if (url.includes("/v3/inventory")) {
+          return new Response(JSON.stringify({ quantity: { amount: 11 } }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ message: "not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      })
+    );
+
+    const result = await importWalmartProducts("user_a");
+    expect(result.importedCount).toBeGreaterThan(0);
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+
+    const durable = await listWalmartProductsForUser("user_a");
+    expect(durable.some((product) => product.sku === "30066-841")).toBe(true);
+    expect(listWalmartProducts()).toHaveLength(0);
+  });
+
+  it("products API reads from the same durable repository used by import", async () => {
+    await replaceWalmartProductsForUser({
+      userId: "user_api",
+      products: [buildProduct("API-30066-841")],
+      importedAt: new Date().toISOString(),
+    });
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: "user_api", unauthorizedResponse: null });
+    const { GET } = await import("@/app/api/ecomviper/walmart/products/route");
+
+    const response = await GET(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products?search=&filter=all", {
+        method: "GET",
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.count).toBe(1);
+    expect(payload.products?.[0]?.sku).toBe("API-30066-841");
+  });
+
+  it("scopes products by signed-in user", async () => {
+    await replaceWalmartProductsForUser({
+      userId: "user_scope_a",
+      products: [buildProduct("SCOPE-A-1")],
+      importedAt: new Date().toISOString(),
+    });
+    await replaceWalmartProductsForUser({
+      userId: "user_scope_b",
+      products: [buildProduct("SCOPE-B-1")],
+      importedAt: new Date().toISOString(),
+    });
+
+    const aProducts = await listWalmartProductsForUser("user_scope_a");
+    const bProducts = await listWalmartProductsForUser("user_scope_b");
+    const aSkuFromB = await getWalmartProductBySkuForUser("user_scope_b", "SCOPE-A-1");
+
+    expect(aProducts.map((product) => product.sku)).toEqual(["SCOPE-A-1"]);
+    expect(bProducts.map((product) => product.sku)).toEqual(["SCOPE-B-1"]);
+    expect(aSkuFromB).toBeNull();
+  });
+
+  it("sanitizes malformed persisted product fields before returning products list", async () => {
+    const malformed = {
+      ...buildProduct("MALFORMED-1"),
+      price: "bad-number",
+      issues: { broken: true },
+      imageUrl: { href: "https://images.example.com/not-a-string.jpg" },
+      imageStatusMessage: { detail: "bad" },
+      inventoryQuantity: "17",
+      attributes: ["bad"],
+      bulletPoints: { value: "bad" },
+      shortDescription: 99,
+      longDescription: null,
+    } as unknown as ReturnType<typeof buildProduct>;
+
+    await replaceWalmartProductsForUser({
+      userId: "user_malformed",
+      products: [malformed],
+      importedAt: new Date().toISOString(),
+    });
+
+    const products = await listWalmartProductsForUser("user_malformed");
+    expect(products).toHaveLength(1);
+    expect(products[0]?.sku).toBe("MALFORMED-1");
+    expect(products[0]?.price).toBe(0);
+    expect(products[0]?.issues).toEqual([]);
+    expect(products[0]?.imageUrl).toBe("");
+    expect(products[0]?.imageStatusMessage).toBeUndefined();
+    expect(products[0]?.inventoryQuantity).toBe(17);
+    expect(products[0]?.attributes).toEqual({});
+    expect(products[0]?.bulletPoints).toEqual([]);
+    expect(products[0]?.shortDescription).toBe("99");
+    expect(products[0]?.longDescription).toBe("");
+  });
+
+  it("persists Item Search image fields across repository reload", async () => {
+    const product = buildProduct("IMG-PERSIST-1");
+    product.imageUrl = "https://images.example.com/img-persist-1.jpg";
+    product.imageStatus = "image_available";
+    product.imageStatusMessage = "Image available";
+    product.imageSource = "walmart_item_search";
+    product.imageSyncStatus = "found";
+    product.imageMatchMethod = "gtin";
+    product.matchedItemId = "WM-IMG-1";
+    product.galleryImageUrls = [
+      "https://images.example.com/img-persist-1.jpg",
+      "https://images.example.com/img-persist-1-gallery.jpg",
+    ];
+    product.variantImageUrls = ["https://images.example.com/img-persist-1-variant.jpg"];
+    product.lastImageSyncedAt = "2026-05-09T12:00:00.000Z";
+    product.issues = [];
+
+    await replaceWalmartProductsForUser({
+      userId: "user_image_persist",
+      products: [product],
+      importedAt: new Date().toISOString(),
+    });
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+
+    const reloaded = await getWalmartProductBySkuForUser("user_image_persist", "IMG-PERSIST-1");
+    expect(reloaded?.imageUrl).toBe("https://images.example.com/img-persist-1.jpg");
+    expect(reloaded?.imageSyncStatus).toBe("found");
+    expect(reloaded?.imageMatchMethod).toBe("gtin");
+    expect(reloaded?.matchedItemId).toBe("WM-IMG-1");
+    expect(reloaded?.galleryImageUrls).toEqual([
+      "https://images.example.com/img-persist-1.jpg",
+      "https://images.example.com/img-persist-1-gallery.jpg",
+    ]);
+    expect(reloaded?.variantImageUrls).toEqual(["https://images.example.com/img-persist-1-variant.jpg"]);
+  });
+
+  it("persists Item Report image fields across repository reload", async () => {
+    const product = buildProduct("IMG-REPORT-1");
+    product.imageUrl = "https://images.example.com/report-primary.jpg";
+    product.imageStatus = "image_available";
+    product.imageStatusMessage = "Image found in Walmart Item Report.";
+    product.imageSource = "walmart_item_report";
+    product.imageSyncStatus = "found";
+    product.imageMatchMethod = "item_report_sku";
+    product.matchedItemId = "REPORT-ITEM-1";
+    product.galleryImageUrls = [
+      "https://images.example.com/report-primary.jpg",
+      "https://images.example.com/report-gallery.jpg",
+    ];
+    product.variantImageUrls = ["https://images.example.com/report-variant.jpg"];
+    product.lastImageSyncedAt = "2026-05-09T13:00:00.000Z";
+    product.issues = [];
+
+    await replaceWalmartProductsForUser({
+      userId: "user_image_report_persist",
+      products: [product],
+      importedAt: new Date().toISOString(),
+    });
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+
+    const reloaded = await getWalmartProductBySkuForUser("user_image_report_persist", "IMG-REPORT-1");
+    expect(reloaded?.imageSource).toBe("walmart_item_report");
+    expect(reloaded?.imageSyncStatus).toBe("found");
+    expect(reloaded?.imageMatchMethod).toBe("item_report_sku");
+    expect(reloaded?.imageStatusMessage).toBe("Image found in Walmart Item Report.");
+    expect(reloaded?.matchedItemId).toBe("REPORT-ITEM-1");
+  });
+
+  it("test seed route stays disabled in normal mode and cannot shadow production products", async () => {
+    await replaceWalmartProductsForUser({
+      userId: "prod_user",
+      products: [buildProduct("PROD-SKU-1")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: "prod_user", unauthorizedResponse: null });
+    const { POST } = await import("@/app/api/ecomviper/walmart/test-seed/route");
+
+    const disabledResponse = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/test-seed", { method: "POST" })
+    );
+    expect(disabledResponse.status).toBe(404);
+
+    const prodProductsAfterDisabledSeed = await listWalmartProductsForUser("prod_user");
+    expect(prodProductsAfterDisabledSeed.map((product) => product.sku)).toEqual(["PROD-SKU-1"]);
+
+    process.env.E2E_MOCK_GRAPH = "1";
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: "e2e-admin", unauthorizedResponse: null });
+
+    const enabledResponse = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/test-seed", {
+        method: "POST",
+        body: JSON.stringify({ sku: "E2E-SKU-1" }),
+      })
+    );
+
+    expect(enabledResponse.status).toBe(200);
+    const prodProductsAfterEnabledSeed = await listWalmartProductsForUser("prod_user");
+    const e2eProducts = await listWalmartProductsForUser("e2e-admin");
+
+    expect(prodProductsAfterEnabledSeed.map((product) => product.sku)).toEqual(["PROD-SKU-1"]);
+    expect(e2eProducts.some((product) => product.sku === "E2E-SKU-1")).toBe(true);
+  });
+
+  it("saves a draft for a persisted SKU even when runtime product cache is empty", async () => {
+    const userId = "user_save_after_ai";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const response = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: {
+            title: "ROC808 Daily Wellness Formula | Optimized",
+            shortDescription: "Daily mobility support summary.",
+            longDescription: "Detailed compliant listing description.",
+            bulletPoints: ["Optimized bullet 1", "Optimized bullet 2", "Optimized bullet 3"],
+            brand: "Walmart Brand",
+            attributes: { form: "Capsule" },
+            imageUrl: "",
+            additionalImageUrls: [],
+            price: 29.99,
+            inventoryQuantity: 9,
+          },
+        }),
+      })
+    );
+
+    const payload = await response.json();
+    expect(response.status).toBe(201);
+    expect(payload.ok).toBe(true);
+    expect(payload.draft?.sku).toBe("ROC808");
+    expect(payload.draftMeta?.draftId).toBeTypeOf("string");
+    expect(payload.draftMeta?.sku).toBe("ROC808");
+    expect(payload.draftMeta?.updatedAt).toBeTypeOf("string");
+    expect(payload.draftMeta?.validationStatus).toBe("validated");
+    expect(payload.draftMeta?.publishStatus).toBe("pending");
+    expect(payload.draft?.draftPayload?.title).toBe(
+      "ROC808 Daily Wellness Formula | Optimized"
+    );
+  });
+
+  it("lists newly saved draft through drafts route after runtime-store reset", async () => {
+    const userId = "user_draft_roundtrip";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const { POST: createDraftRoute, GET: listDraftsRoute } = await import(
+      "@/app/api/ecomviper/walmart/drafts/route"
+    );
+
+    const saveResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: {
+            title: "ROC808 Optimized Title",
+            shortDescription: "Optimized short description",
+            longDescription: "Optimized long description",
+            bulletPoints: ["Bullet 1", "Bullet 2", "Bullet 3"],
+            brand: "OPA Nutrition",
+            attributes: { form: "Capsule" },
+            price: 29.99,
+            inventoryQuantity: 9,
+          },
+        }),
+      })
+    );
+
+    expect(saveResponse.status).toBe(201);
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+
+    const listResponse = await listDraftsRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "GET",
+      })
+    );
+    const listPayload = await listResponse.json();
+
+    expect(listResponse.status).toBe(200);
+    expect(Array.isArray(listPayload.drafts)).toBe(true);
+    expect(listPayload.drafts).toHaveLength(1);
+    expect(listPayload.drafts[0]?.sku).toBe("ROC808");
+    expect(listPayload.drafts[0]?.productTitle).toContain("ROC808");
+    expect(listPayload.drafts[0]?.changeSummary).toContain("staged field");
+    expect(listPayload.drafts[0]?.validationResult?.valid).toBe(true);
+    expect(listPayload.drafts[0]?.publishStatus).toBe("pending");
+  });
+
+  it("scopes saved drafts to the signed-in user", async () => {
+    const userA = "user_draft_scope_a";
+    const userB = "user_draft_scope_b";
+    await replaceWalmartProductsForUser({
+      userId: userA,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+    await replaceWalmartProductsForUser({
+      userId: userB,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+
+    const { POST: createDraftRoute, GET: listDraftsRoute } = await import(
+      "@/app/api/ecomviper/walmart/drafts/route"
+    );
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: userA, unauthorizedResponse: null });
+    const saveResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: {
+            title: "User A draft title",
+            price: 29.99,
+            inventoryQuantity: 9,
+          },
+        }),
+      })
+    );
+    expect(saveResponse.status).toBe(201);
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: userB, unauthorizedResponse: null });
+    const userBListResponse = await listDraftsRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "GET",
+      })
+    );
+    const userBPayload = await userBListResponse.json();
+    expect(userBListResponse.status).toBe(200);
+    expect(userBPayload.drafts).toHaveLength(0);
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: userA, unauthorizedResponse: null });
+    const userAListResponse = await listDraftsRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "GET",
+      })
+    );
+    const userAPayload = await userAListResponse.json();
+    expect(userAListResponse.status).toBe(200);
+    expect(userAPayload.drafts).toHaveLength(1);
+    expect(userAPayload.drafts[0]?.draftPayload?.title).toBe("User A draft title");
+  });
+
+  it("returns product-not-found when draft save SKU is missing from persisted and runtime products", async () => {
+    const userId = "user_save_missing";
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const response = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "MISSING-SKU",
+          draftPayload: {
+            title: "Missing SKU",
+            price: 12.5,
+            inventoryQuantity: 5,
+          },
+        }),
+      })
+    );
+
+    const payload = await response.json();
+    expect(response.status).toBe(404);
+    expect(payload.error?.code).toBe("PRODUCT_NOT_FOUND");
+    expect(payload.error?.message).toContain("product record was not found");
+  });
+
+  it("renders products list with draft-aware brand when a saved draft overrides unknown brand", async () => {
+    const userId = "user_brand_overlay";
+    const product = buildProduct("ROC808");
+    product.brand = "Unknown";
+
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [product],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const saveDraftResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: {
+            brand: "OPA Nutrition",
+          },
+        }),
+      })
+    );
+
+    expect(saveDraftResponse.status).toBe(201);
+
+    const WalmartProductsPage = (await import("@/app/optiwal/products/page")).default;
+    const html = renderToStaticMarkup(await WalmartProductsPage());
+    expect(html).toContain("OPA Nutrition");
+    expect(html).toContain("Pending draft");
+  });
+
+  it("does not crash products page when legacy draft rows are missing validationResult", async () => {
+    const userId = "user_legacy_draft_missing_validation";
+    const product = buildProduct("ROCLEGACY1");
+    product.brand = "Unknown";
+
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [product],
+      importedAt: new Date().toISOString(),
+    });
+
+    const malformedDraft = {
+      id: "draft_legacy_1",
+      productId: product.id,
+      marketplace: "walmart",
+      sku: product.sku,
+      productTitle: product.title,
+      draftPayload: {
+        brand: "Legacy Overlay Brand",
+      },
+      changeSummary: "legacy row",
+      createdBy: userId,
+      status: "draft",
+      publishStatus: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      // validationResult intentionally omitted to mimic malformed legacy row.
+    };
+
+    const fallbackStore = new Map<string, Map<string, unknown>>();
+    fallbackStore.set(userId, new Map([["draft_legacy_1", malformedDraft]]));
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_draft_fallback__ = fallbackStore;
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const WalmartProductsPage = (await import("@/app/optiwal/products/page")).default;
+    const html = renderToStaticMarkup(await WalmartProductsPage());
+
+    expect(html).toContain("Legacy Overlay Brand");
+    expect(html).toContain("Pending draft");
+  });
+
+  it("hydrates saved draft values in product editor after reload", async () => {
+    const userId = "user_editor_hydration";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const saveDraftResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: {
+            title: "Hydrated optimized title",
+            shortDescription: "Hydrated short description",
+            longDescription: "Hydrated long description",
+            bulletPoints: ["Hydrated bullet 1", "Hydrated bullet 2"],
+            brand: "OPA Nutrition",
+            attributes: { form: "Capsule" },
+            price: 31.99,
+            inventoryQuantity: 7,
+          },
+        }),
+      })
+    );
+    expect(saveDraftResponse.status).toBe(201);
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+    const WalmartProductEditorPage = (await import("@/app/optiwal/products/[sku]/page")).default;
+    const html = renderToStaticMarkup(
+      await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC808" }) })
+    );
+
+    expect(html).toContain('value="Hydrated optimized title"');
+    expect(html).toContain("Hydrated short description");
+    expect(html).toContain("Hydrated long description");
+    expect(html).toContain("Hydrated bullet 1");
+    expect(html).toContain('value="OPA Nutrition"');
+  });
+
+  it("renders product editor safely when legacy drafts contain malformed sku values", async () => {
+    const userId = "user_editor_legacy_malformed_sku";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC822")],
+      importedAt: new Date().toISOString(),
+    });
+
+    const malformedDraft = {
+      id: "legacy_draft_bad_sku",
+      productId: "walmart_roc822",
+      marketplace: "walmart",
+      sku: null,
+      productTitle: "Legacy malformed draft",
+      draftPayload: {
+        brand: "Legacy Brand",
+      },
+      changeSummary: "legacy malformed sku",
+      createdBy: userId,
+      status: "draft",
+      publishStatus: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const fallbackStore = new Map<string, Map<string, unknown>>();
+    fallbackStore.set(userId, new Map([["legacy_draft_bad_sku", malformedDraft]]));
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_draft_fallback__ = fallbackStore;
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const WalmartProductEditorPage = (await import("@/app/optiwal/products/[sku]/page")).default;
+
+    const html = renderToStaticMarkup(
+      await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC822" }) })
+    );
+
+    expect(html).toContain("Product Editor");
+    expect(html).toContain("SKU: ROC822");
+  });
+
+  it("hydrates saved draft images in product editor and products list from primary/gallery aliases", async () => {
+    const userId = "user_editor_image_hydration";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC949")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const saveDraftResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC949",
+          draftPayload: {
+            title: "Hydrated image title",
+            shortDescription: "Hydrated short description",
+            longDescription: "Hydrated long description",
+            bulletPoints: ["Hydrated bullet 1", "Hydrated bullet 2"],
+            brand: "OPA Nutrition",
+            attributes: { form: "Gummy" },
+            price: 31.99,
+            inventoryQuantity: 7,
+            primaryImageUrl: "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+            galleryImageUrls: [
+              "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+              "https://i5.walmartimages.com/asr/18410702298-gallery-1.jpeg",
+              "https://i5.walmartimages.com/asr/18410702298-gallery-2.jpeg",
+            ],
+            imageSource: "public_walmart_listing_serpapi",
+            imageMatchMethod: "public_url_product_id",
+            imageSyncStatus: "found",
+            imageSyncReason: "Public Walmart listing images found via SerpApi.",
+            publicWalmartUrl:
+              "https://www.walmart.com/ip/OPA-Sleep-Magnesium-Glycinate-Relaxation-Gummies-60ct/18410702298",
+            publicWalmartProductId: "18410702298",
+            lastImageSyncedAt: "2026-05-10T00:00:00.000Z",
+          },
+        }),
+      })
+    );
+    expect(saveDraftResponse.status).toBe(201);
+
+    const savedDrafts = await listWalmartDraftsForUser(userId);
+    expect(savedDrafts).toHaveLength(1);
+    expect(savedDrafts[0]?.draftPayload?.primaryImageUrl).toBe(
+      "https://i5.walmartimages.com/asr/18410702298-primary.jpeg"
+    );
+    expect(savedDrafts[0]?.draftPayload?.galleryImageUrls).toEqual([
+      "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+      "https://i5.walmartimages.com/asr/18410702298-gallery-1.jpeg",
+      "https://i5.walmartimages.com/asr/18410702298-gallery-2.jpeg",
+    ]);
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+    const WalmartProductEditorPage = (await import("@/app/optiwal/products/[sku]/page")).default;
+    const editorHtml = renderToStaticMarkup(
+      await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC949" }) })
+    );
+    expect(editorHtml).toContain("https://i5.walmartimages.com/asr/18410702298-primary.jpeg");
+
+    const WalmartProductsPage = (await import("@/app/optiwal/products/page")).default;
+    const productsHtml = renderToStaticMarkup(await WalmartProductsPage());
+    expect(productsHtml).toContain('src="https://i5.walmartimages.com/asr/18410702298-primary.jpeg"');
+    expect(productsHtml).toContain("Source: Public Walmart listing via SerpApi");
+    expect(productsHtml).toContain("Pending draft image");
+  });
+
+  it("removes products from local catalog only, scoped to signed-in user", async () => {
+    await replaceWalmartProductsForUser({
+      userId: "remove_user_a",
+      products: [buildProduct("REMOVE-SKU-1")],
+      importedAt: new Date().toISOString(),
+    });
+    await replaceWalmartProductsForUser({
+      userId: "remove_user_b",
+      products: [buildProduct("REMOVE-SKU-1")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: "remove_user_a", unauthorizedResponse: null });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { DELETE: deleteProductRoute } = await import("@/app/api/ecomviper/walmart/products/[sku]/route");
+
+    const response = await deleteProductRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/REMOVE-SKU-1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ sku: "REMOVE-SKU-1" }) }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.sku).toBe("REMOVE-SKU-1");
+    expect(payload.removed).toBe(true);
+    expect(payload.archived).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const removedUserProducts = await listWalmartProductsForUser("remove_user_a");
+    const retainedUserProducts = await listWalmartProductsForUser("remove_user_b");
+    const removedLookup = await getWalmartProductBySkuForUser("remove_user_a", "REMOVE-SKU-1");
+    const retainedLookup = await getWalmartProductBySkuForUser("remove_user_b", "REMOVE-SKU-1");
+    const removedArchivedState = await isWalmartProductArchivedForUser("remove_user_a", "REMOVE-SKU-1");
+
+    expect(removedUserProducts.some((product) => product.sku === "REMOVE-SKU-1")).toBe(false);
+    expect(retainedUserProducts.some((product) => product.sku === "REMOVE-SKU-1")).toBe(true);
+    expect(removedLookup).toBeNull();
+    expect(retainedLookup?.sku).toBe("REMOVE-SKU-1");
+    expect(removedArchivedState).toBe(true);
+  });
+
+  it("does not allow user A to remove user B product", async () => {
+    await replaceWalmartProductsForUser({
+      userId: "owner_user_b",
+      products: [buildProduct("SCOPE-REMOVE-1")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: "owner_user_a", unauthorizedResponse: null });
+    const { DELETE: deleteProductRoute } = await import("@/app/api/ecomviper/walmart/products/[sku]/route");
+
+    const response = await deleteProductRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/SCOPE-REMOVE-1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ sku: "SCOPE-REMOVE-1" }) }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(payload.error?.code).toBe("PRODUCT_NOT_FOUND");
+    expect((await getWalmartProductBySkuForUser("owner_user_b", "SCOPE-REMOVE-1"))?.sku).toBe("SCOPE-REMOVE-1");
+  });
+
+  it("removing a product discards local drafts for that SKU and shows removed editor copy", async () => {
+    const userId = "remove_with_draft";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const createResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: { brand: "OPA Nutrition" },
+        }),
+      })
+    );
+    expect(createResponse.status).toBe(201);
+
+    const { DELETE: deleteProductRoute } = await import("@/app/api/ecomviper/walmart/products/[sku]/route");
+    const removeResponse = await deleteProductRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/ROC808", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ sku: "ROC808" }) }
+    );
+    const removePayload = await removeResponse.json();
+
+    expect(removeResponse.status).toBe(200);
+    expect(removePayload.affectedDraftCount).toBe(1);
+    expect(await listWalmartDraftsForUser(userId)).toHaveLength(0);
+
+    const allDrafts = await listPersistedWalmartDrafts({ userId, includeDiscarded: true });
+    expect(allDrafts).toHaveLength(1);
+    expect(allDrafts[0]?.status).toBe("discarded");
+
+    const WalmartProductEditorPage = (await import("@/app/optiwal/products/[sku]/page")).default;
+    const html = renderToStaticMarkup(
+      await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC808" }) })
+    );
+    expect(html).toContain("Product not found");
+    expect(html).toContain("was removed from your local EcomViper catalog");
+  });
+});

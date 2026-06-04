@@ -35,6 +35,7 @@ describe("GET /api/meta/release", () => {
       git_sha: "abc1234567890defabc1234567890defabc12345",
       git_sha_short: "abc1234",
       build_timestamp: "2026-03-08T00:00:00Z",
+      deployed_at: "2026-03-08T00:00:00Z",
       build_id: "run-777",
       local: false,
       sources: {
@@ -96,5 +97,31 @@ describe("GET /api/meta/release", () => {
         build_id: "env",
       },
     });
+  });
+
+  it("returns non-null metadata fields with diagnostics when env/file are missing", async () => {
+    delete process.env.APP_NAME;
+    delete process.env.SERVICE_NAME;
+    delete process.env.APP_ENV;
+    delete process.env.NODE_ENV;
+    delete process.env.RELEASE_GIT_SHA;
+    delete process.env.GIT_SHA;
+    delete process.env.GITHUB_SHA;
+    delete process.env.RELEASE_BUILD_TIMESTAMP;
+    delete process.env.BUILD_TIMESTAMP;
+    delete process.env.RELEASE_BUILD_ID;
+    delete process.env.BUILD_ID;
+    delete process.env.GITHUB_RUN_ID;
+
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(typeof payload.git_sha).toBe("string");
+    expect(payload.git_sha.length).toBeGreaterThan(0);
+    expect(typeof payload.build_id).toBe("string");
+    expect(payload.build_id.length).toBeGreaterThan(0);
+    expect(payload.diagnostics.release_metadata_complete).toBe(false);
+    expect(typeof payload.deployed_at === "string" || payload.deployed_at === null).toBe(true);
+    expect(payload.diagnostics.missing).toContain("build_id");
   });
 });

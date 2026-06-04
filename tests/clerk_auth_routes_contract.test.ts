@@ -7,6 +7,7 @@ describe("clerk auth route contract", () => {
     const signInPath = path.join(process.cwd(), "app/sign-in/[[...sign-in]]/page.tsx");
     const source = fs.readFileSync(signInPath, "utf8");
 
+    expect(source.includes("ConfiguredClerkProvider")).toBe(true);
     expect(source.includes("resolveClerkRuntimeContract")).toBe(true);
     expect(source.includes("resolveClerkRouteContract")).toBe(true);
     expect(source.includes("routing=\"path\"")).toBe(true);
@@ -20,6 +21,7 @@ describe("clerk auth route contract", () => {
     const signUpPath = path.join(process.cwd(), "app/sign-up/[[...sign-up]]/page.tsx");
     const source = fs.readFileSync(signUpPath, "utf8");
 
+    expect(source.includes("ConfiguredClerkProvider")).toBe(true);
     expect(source.includes("resolveClerkRuntimeContract")).toBe(true);
     expect(source.includes("resolveClerkRouteContract")).toBe(true);
     expect(source.includes("routing=\"path\"")).toBe(true);

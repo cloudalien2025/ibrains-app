@@ -1,0 +1,148 @@
+{
+  "supplierSlug": "rocktomic",
+  "generatedAt": "2026-05-31T21:33:49.634Z",
+  "command": "ecomviper:build-rocktomic-supplier-data",
+  "status": "success",
+  "buildId": "20260531T213345Z",
+  "totalDurationMs": 4277,
+  "stages": [
+    {
+      "name": "load_source_registry",
+      "status": "success",
+      "durationMs": 1,
+      "notes": []
+    },
+    {
+      "name": "source_catalog_pdf",
+      "status": "success",
+      "durationMs": 703,
+      "notes": []
+    },
+    {
+      "name": "source_label_mockup_templates",
+      "status": "success",
+      "durationMs": 92,
+      "notes": []
+    },
+    {
+      "name": "source_order_refund_policy",
+      "status": "success",
+      "durationMs": 43,
+      "notes": []
+    },
+    {
+      "name": "source_msrp_profit_margins_report",
+      "status": "success",
+      "durationMs": 870,
+      "notes": []
+    },
+    {
+      "name": "source_plds_catalog",
+      "status": "success",
+      "durationMs": 279,
+      "notes": []
+    },
+    {
+      "name": "source_inventory_report",
+      "status": "success",
+      "durationMs": 314,
+      "notes": []
+    },
+    {
+      "name": "load_previous_ai_evidence",
+      "status": "success",
+      "durationMs": 47,
+      "notes": []
+    },
+    {
+      "name": "ai_label_text_extraction",
+      "status": "success",
+      "durationMs": 1715,
+      "notes": []
+    },
+    {
+      "name": "load_ocr_fixture",
+      "status": "success",
+      "durationMs": 0,
+      "notes": []
+    },
+    {
+      "name": "ocr_fallback_evidence",
+      "status": "success",
+      "durationMs": 0,
+      "notes": []
+    },
+    {
+      "name": "merge_source_facts",
+      "status": "success",
+      "durationMs": 1,
+      "notes": []
+    },
+    {
+      "name": "merge_pricing",
+      "status": "success",
+      "durationMs": 0,
+      "notes": []
+    },
+    {
+      "name": "merge_inventory",
+      "status": "success",
+      "durationMs": 0,
+      "notes": []
+    },
+    {
+      "name": "merge_assets",
+      "status": "success",
+      "durationMs": 1,
+      "notes": []
+    },
+    {
+      "name": "validation_policy",
+      "status": "success",
+      "durationMs": 23,
+      "notes": []
+    },
+    {
+      "name": "audit_csv_generation",
+      "status": "success",
+      "durationMs": 5,
+      "notes": []
+    },
+    {
+      "name": "write_build_artifacts",
+      "status": "success",
+      "durationMs": 41,
+      "notes": []
+    },
+    {
+      "name": "promote_latest_artifacts",
+      "status": "success",
+      "durationMs": 44,
+      "notes": []
+    }
+  ],
+  "slowestStages": [
+    {
+      "name": "ai_label_text_extraction",
+      "durationMs": 1715
+    },
+    {
+      "name": "source_msrp_profit_margins_report",
+      "durationMs": 870
+    },
+    {
+      "name": "source_catalog_pdf",
+      "durationMs": 703
+    },
+    {
+      "name": "source_inventory_report",
+      "durationMs": 314
+    },
+    {
+      "name": "source_plds_catalog",
+      "durationMs": 279
+    }
+  ],
+  "timeouts": [],
+  "errors": []
+}

@@ -1,0 +1,22 @@
+[Unit]
+Description=FileIQ Background Extraction Worker
+After=network.target ibrains-app.service
+Wants=ibrains-app.service
+
+[Service]
+Type=simple
+WorkingDirectory=/root/ibrains-app
+EnvironmentFile=/root/ibrains-app/.env.production.local
+Environment=NODE_ENV=production
+# Extend PATH so the Claude Agent SDK can find the 'claude' CLI.
+# Adjust the path below to match wherever 'which claude' resolves on this host.
+Environment=PATH=/home/ibrains/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/bin/npm run fileiq:worker
+Restart=always
+RestartSec=10
+User=root
+StandardOutput=append:/var/log/ibrains-app/fileiq-worker.log
+StandardError=append:/var/log/ibrains-app/fileiq-worker.log
+
+[Install]
+WantedBy=multi-user.target

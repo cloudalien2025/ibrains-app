@@ -1,0 +1,100 @@
+{
+  "supplier": "rocktomic",
+  "supplierId": "rocktomic",
+  "supplierName": "Rocktomic",
+  "version": 1,
+  "sourceManifestVersion": 3,
+  "generatedBy": "manual-canonical-registry",
+  "sourceIdentityWarnings": [
+    "plds_catalog and msrp_profit_margins_report share the same Google Sheet ID (15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU). They may be different tabs of the same spreadsheet. Use gid parameter to target specific tabs.",
+    "The original user-provided URL labeled 'Supplement & Apparel Catalog' was the Inventory Report sheet (1oOjqXsaCAjSOkA1lXrasNtUVtrsxvyxcFcolD8n6YXY). This has been corrected: catalog_pdf now points to the Azure Blob PDF, and inventory_report points to the correct sheet ID."
+  ],
+  "firecrawl": {
+    "apiBaseUrl": "https://api.firecrawl.dev/v2",
+    "enabledEnvVar": "ECOMVIPER_SUPPLIER_FIRECRAWL_ENABLED",
+    "timeoutMsEnvVar": "ECOMVIPER_SUPPLIER_FIRECRAWL_TIMEOUT_MS",
+    "maxPagesEnvVar": "ECOMVIPER_SUPPLIER_FIRECRAWL_MAX_PAGES",
+    "cacheDirEnvVar": "ECOMVIPER_SUPPLIER_FIRECRAWL_CACHE_DIR",
+    "allowedModes": [
+      "fixture",
+      "cache",
+      "live"
+    ],
+    "cachePolicy": {
+      "key": "url+mode+schemaHash",
+      "allowLiveWrites": true,
+      "testsUseFixtureOnly": true
+    }
+  },
+  "sources": [
+    {
+      "id": "catalog_pdf",
+      "name": "Supplement & Apparel Catalog",
+      "url": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf?t=1780083599627",
+      "type": "pdf",
+      "notes": "Primary catalog source with SKU-level product facts and COA hyperlinks where present.",
+      "extraction": {
+        "method": "firecrawl_scrape_pdf_markdown_and_schema",
+        "firecrawlMode": "scrape",
+        "allowModes": ["fixture", "cache", "live"]
+      }
+    },
+    {
+      "id": "label_mockup_templates",
+      "name": "Label & 3D Mockup Templates",
+      "url": "https://rocktomicplatform.blob.core.windows.net/client-resources/templates.html?t=1780083599627",
+      "type": "html",
+      "notes": "Template index for label and mockup assets.",
+      "extraction": {
+        "method": "firecrawl_scrape_schema_links",
+        "firecrawlMode": "scrape",
+        "allowModes": ["fixture", "cache", "live"]
+      }
+    },
+    {
+      "id": "order_refund_policy",
+      "name": "Order Refund Policy Template",
+      "url": "https://rocktomicplatform.blob.core.windows.net/client-resources/Order-Refund-Policy-Template.docx?t=1780083599627",
+      "type": "docx",
+      "notes": "Policy template source; SKU-level mapping is not expected.",
+      "extraction": {
+        "method": "firecrawl_scrape_markdown_policy_summary",
+        "firecrawlMode": "scrape",
+        "allowModes": ["fixture", "cache", "live"]
+      }
+    },
+    {
+      "id": "msrp_profit_margins_report",
+      "name": "Full MSRP and Estimated Profit Margins Report",
+      "url": "https://docs.google.com/spreadsheets/d/15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU/edit?usp=sharing",
+      "type": "google_sheet",
+      "notes": "Pricing source expected to contain wholesale, MSRP, and estimated margin/profit context by SKU.",
+      "extraction": {
+        "method": "sheet_to_structured_table",
+        "allowModes": ["fixture", "cache", "live"]
+      }
+    },
+    {
+      "id": "plds_catalog",
+      "name": "PLDS Catalog",
+      "url": "https://docs.google.com/spreadsheets/d/15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU/edit?usp=sharing",
+      "type": "google_sheet",
+      "notes": "Catalog/pricing sheet sharing the same source document with a SKU-oriented table.",
+      "extraction": {
+        "method": "sheet_to_structured_table",
+        "allowModes": ["fixture", "cache", "live"]
+      }
+    },
+    {
+      "id": "inventory_report",
+      "name": "Inventory Report",
+      "url": "https://docs.google.com/spreadsheets/d/1oOjqXsaCAjSOkA1lXrasNtUVtrsxvyxcFcolD8n6YXY/edit?usp=sharing",
+      "type": "google_sheet",
+      "notes": "Inventory source expected to expose SKU-level stock state and/or quantity.",
+      "extraction": {
+        "method": "sheet_to_structured_table",
+        "allowModes": ["fixture", "cache", "live"]
+      }
+    }
+  ]
+}

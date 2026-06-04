@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { href: "/apps", label: "Apps" },
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/brains", label: "Brains" },
-  { href: "/runs", label: "Runs" },
-  { href: "/mission-control", label: "Mission Control" },
+  { href: "/tasks", label: "Tasks" },
+  { href: "/reports", label: "Reports" },
+  { href: "/settings", label: "Settings" },
+  { href: "/billing", label: "Billing" },
 ];
 
 export default function SideNav() {

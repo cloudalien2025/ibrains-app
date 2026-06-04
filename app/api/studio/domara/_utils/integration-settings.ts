@@ -33,6 +33,8 @@ export const STUDIO_INTEGRATION_PROVIDERS: DomaraIntegrationProviderId[] = [
   "google_maps_places",
   "idealista",
   "immobiliare",
+  "cloudinary",
+  "digitalocean_spaces",
   "youtube",
 ];
 
@@ -56,6 +58,19 @@ function relationMissingOrUnavailable(error: unknown): boolean {
 
 export function sanitizeIntegrationApiKey(input: unknown): string {
   return typeof input === "string" ? input.trim() : "";
+}
+
+export function parseStudioIntegrationSavePayload(input: unknown): { ok: true; connectionKey: string } | { ok: false; message: string } {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return { ok: false, message: "Add a connection key before saving." };
+  }
+
+  const payload = input as { connectionKey?: unknown; apiKey?: unknown };
+  const connectionKey = sanitizeIntegrationApiKey(payload.connectionKey ?? payload.apiKey);
+  if (!connectionKey) return { ok: false, message: "Add a connection key before saving." };
+  if (connectionKey.length < 6) return { ok: false, message: "Connection key looks too short. Check it and try again." };
+
+  return { ok: true, connectionKey };
 }
 
 export function isStudioIntegrationEncryptionConfigured(): boolean {
@@ -142,7 +157,7 @@ export async function saveStudioIntegrationSecret(params: {
 }): Promise<void> {
   const secret = sanitizeIntegrationApiKey(params.apiKey);
   if (!secret) {
-    throw new Error("API key is required.");
+    throw new Error("Add a connection key before saving.");
   }
 
   const encrypted = encryptSecret(secret, `${params.userId}:studio:${params.providerId}`);
@@ -168,7 +183,7 @@ export async function saveStudioIntegrationSecret(params: {
       encrypted,
       last4,
       secret.length,
-      `CasaHUD ${params.providerId}`,
+      `CasaFlix ${params.providerId}`,
       JSON.stringify({ scope: "studio_domara" }),
     ]
   );

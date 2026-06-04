@@ -116,7 +116,7 @@ test.describe("SiteForge step navigation + connect flow", () => {
       await route.fulfill({ status: 200, body: JSON.stringify({}) });
     });
 
-    await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
+    await page.goto("/pagebolt", { waitUntil: "networkidle" });
 
     await expect(page.getByText("Advanced")).toHaveCount(0);
 

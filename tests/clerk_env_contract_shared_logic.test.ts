@@ -52,4 +52,21 @@ describe("clerk shared env contract", () => {
     expect(routes.signInFallbackRedirectUrl).toBe("/runs");
     expect(routes.signUpFallbackRedirectUrl).toBe("/mission-control");
   });
+
+  it("defaults sign-in and sign-up fallback redirects to /brains", () => {
+    const routes = resolveClerkRouteContract({});
+
+    expect(routes.signInFallbackRedirectUrl).toBe("/brains");
+    expect(routes.signUpFallbackRedirectUrl).toBe("/brains");
+  });
+
+  it("sanitizes deprecated legacy fallback redirects back to /brains", () => {
+    const routes = resolveClerkRouteContract({
+      NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL: "/apps/studio",
+      NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL: "/siteforge",
+    });
+
+    expect(routes.signInFallbackRedirectUrl).toBe("/brains");
+    expect(routes.signUpFallbackRedirectUrl).toBe("/brains");
+  });
 });

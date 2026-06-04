@@ -1,0 +1,1488 @@
+[
+  {
+    "sku": "ROC001",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC002",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC004",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC006",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC008",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC009",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC010",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC011",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC012",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC013",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC014",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC015",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC016",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC017",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC018",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC100",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC102",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC105",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC107M",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC110M",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC112",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC1120",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC1125",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC1205",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC121",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC1215",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC123",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC126",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC210N",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC220",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC2201N",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC223",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC2232",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC224",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC2241N",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC2251",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC2272",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC2292",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC260V",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC263V",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC281",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC2811",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC282",
+    "rawInventoryValue": "LOW STOCK - This means that you need to immediately mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "low_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC2821",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC2841",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC2851",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC2861",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC301",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC302",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC303",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC304",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC401",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC402",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC450",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC501",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC502",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC503",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC504",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC506",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC507",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC507W",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC508",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC509",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC601",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC603",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC604",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC605",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC606",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC607",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC608",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC609",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC610",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC611",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC612",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC613",
+    "rawInventoryValue": "LOW STOCK - This means that you need to immediately mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "low_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC617",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC618",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC619",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC620",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC621",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC622",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC623",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC714",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC717",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC720",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC721",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC723",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC725",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC727",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC728",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC729",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC730",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC731",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC732",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC733",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC734",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC735",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC736",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC738",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC739",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC740",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC741",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC743",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC744",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC745",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC801",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC802",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC803",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC805",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC808",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC812",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC814",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC816",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC817",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC818",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC822",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC823",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC824",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC826",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC830",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC831",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC835",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC840",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC841",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC903M",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC908",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC910",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC911",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC914",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC915",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC917",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC918",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC919",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC920",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC921",
+    "rawInventoryValue": null,
+    "inventoryStatus": "missing",
+    "sourceReferences": [],
+    "missingFields": [
+      "rawInventoryValue",
+      "inventoryStatus"
+    ]
+  },
+  {
+    "sku": "ROC922",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC923",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC924",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC925",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC927",
+    "rawInventoryValue": "LOW STOCK - This means that you need to immediately mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "low_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC928",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC929",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC930",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC934",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC937",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC939",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC941",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC943",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC944",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC945",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC946",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC947",
+    "rawInventoryValue": "OUT OF STOCK - This means that you need to mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "out_of_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC948",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC949",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC980",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC981",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC982",
+    "rawInventoryValue": "LOW STOCK - This means that you need to immediately mark this product as OUT OF STOCK in your online store",
+    "inventoryStatus": "low_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC983",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC984",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC985",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC986",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC987",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "ROC988",
+    "rawInventoryValue": "IN STOCK - This means that you may sell this item",
+    "inventoryStatus": "in_stock",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  },
+  {
+    "sku": "UNDEFINED",
+    "rawInventoryValue": "R&D In Progress",
+    "inventoryStatus": "unknown",
+    "sourceReferences": [
+      "inventory_report"
+    ],
+    "missingFields": []
+  }
+]

@@ -5,9 +5,18 @@ const mocks = vi.hoisted(() => ({
   clerkProxyHandler: vi.fn(() => Response.json({ ok: true }, { status: 200 })),
 }));
 
+function toPathRegex(pattern: string): RegExp {
+  const prefix = pattern.replace("(.*)", "");
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^${escaped}(?:$|/)`);
+}
+
 vi.mock("@clerk/nextjs/server", () => ({
   clerkMiddleware: vi.fn(() => mocks.clerkProxyHandler),
-  createRouteMatcher: vi.fn(() => () => false),
+  createRouteMatcher: vi.fn((patterns: string[]) => {
+    const regexes = patterns.map(toPathRegex);
+    return (req: NextRequest) => regexes.some((regex) => regex.test(req.nextUrl.pathname));
+  }),
 }));
 
 describe("proxy trusted service bypass", () => {
@@ -79,7 +88,164 @@ describe("proxy trusted service bypass", () => {
     expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
-  it("keeps Clerk middleware for run-status requests without service key", async () => {
+  it("redirects unauthenticated dashboard requests without invoking Clerk middleware", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/dashboard", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/sign-in");
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("redirects unauthenticated /brains requests without invoking Clerk middleware", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/brains", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/sign-in");
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("bypasses Clerk middleware on Studio API routes so they do not self-proxy", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/studio/domara/integrations/status", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("bypasses Clerk middleware on new Studio campaign discovery routes", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest(
+      "https://app.ibrains.ai/api/studio/domara/campaigns/casahud-project-123/discover-listings",
+      {
+        method: "POST",
+      },
+    );
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("bypasses Clerk middleware on new Studio campaign validation routes", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest(
+      "https://app.ibrains.ai/api/studio/domara/campaigns/casahud-project-123/validate-listings",
+      {
+        method: "POST",
+      },
+    );
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("bypasses Clerk middleware on SiteForge API routes so they do not self-proxy", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/siteforge/admin/summary", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("bypasses Clerk middleware on DirectoryIQ API routes so they do not self-proxy", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/directoryiq/sites", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("returns CORS preflight response for allowed DirectoryIQ origin without Clerk middleware", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/directoryiq/sites", {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://app.ibrains.ai",
+        "access-control-request-headers": "content-type, authorization",
+      },
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-origin")).toBe("https://app.ibrains.ai");
+    expect(res.headers.get("access-control-allow-credentials")).toBe("true");
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("bypasses Clerk middleware on /api/brains routes so route-level auth controls responses", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/brains/public", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("bypasses Clerk middleware on release metadata health checks", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/meta/release", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("bypasses Clerk middleware on /api/health", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/health", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("keeps run-status requests without service key out of Clerk middleware", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -89,6 +255,26 @@ describe("proxy trusted service bypass", () => {
 
     const res = await handler(req);
     expect(res.status).toBe(200);
-    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for deprecated legacy app routes without invoking Clerk middleware", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const routes = [
+      "https://app.ibrains.ai/apps",
+      "https://app.ibrains.ai/apps/studio",
+      "https://app.ibrains.ai/studio",
+      "https://app.ibrains.ai/siteforge",
+      "https://app.ibrains.ai/uapforge",
+    ];
+
+    for (const route of routes) {
+      const res = await handler(new NextRequest(route, { method: "GET" }));
+      expect(res.status).toBe(404);
+    }
+
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 });

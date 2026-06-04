@@ -1,0 +1,92 @@
+{
+  "generatedAt": "2026-06-02T05:02:24.045Z",
+  "supplierManifestVersion": 3,
+  "sources": [
+    {
+      "id": "catalog_pdf",
+      "label": "Supplement & Apparel Catalog",
+      "url": "https://rocktomicplatform.blob.core.windows.net/client-resources/Supplement-&-Apparel-Catalog.pdf?t=1780083599627",
+      "detectedType": "pdf",
+      "detectedTitle": "Supplement-&-Apparel-Catalog.pdf",
+      "detectedRoles": [
+        "catalog_pdf"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "label_mockup_templates",
+      "label": "Label & 3D Mockup Templates",
+      "url": "https://rocktomicplatform.blob.core.windows.net/client-resources/templates.html?t=1780083599627",
+      "detectedType": "html",
+      "detectedTitle": "templates.html",
+      "detectedRoles": [
+        "templates_html"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "order_refund_policy",
+      "label": "Order Refund Policy Template",
+      "url": "https://rocktomicplatform.blob.core.windows.net/client-resources/Order-Refund-Policy-Template.docx?t=1780083599627",
+      "detectedType": "docx",
+      "detectedTitle": "Order-Refund-Policy-Template.docx",
+      "detectedRoles": [
+        "policy_docx"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "msrp_profit_margins_report",
+      "label": "Full MSRP and Estimated Profit Margins Report",
+      "url": "https://docs.google.com/spreadsheets/d/15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU/edit?usp=sharing",
+      "detectedType": "google_sheet",
+      "detectedTitle": "Google Spreadsheet (id=15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU)",
+      "detectedRoles": [
+        "msrp_report_sheet"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "plds_catalog",
+      "label": "PLDS Catalog",
+      "url": "https://docs.google.com/spreadsheets/d/15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU/edit?usp=sharing",
+      "detectedType": "google_sheet",
+      "detectedTitle": "Google Spreadsheet (id=15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU)",
+      "detectedRoles": [
+        "plds_catalog_sheet"
+      ],
+      "warnings": []
+    },
+    {
+      "id": "inventory_report",
+      "label": "Inventory Report",
+      "url": "https://docs.google.com/spreadsheets/d/1oOjqXsaCAjSOkA1lXrasNtUVtrsxvyxcFcolD8n6YXY/edit?usp=sharing",
+      "detectedType": "google_sheet",
+      "detectedTitle": "Google Spreadsheet (id=1oOjqXsaCAjSOkA1lXrasNtUVtrsxvyxcFcolD8n6YXY)",
+      "detectedRoles": [
+        "inventory_report_sheet"
+      ],
+      "warnings": []
+    }
+  ],
+  "duplicateUrlWarnings": [
+    {
+      "url": "https://docs.google.com/spreadsheets/d/15lz6m5sqnby_uoizzehbyen6rtlzyqmvuvf4ywzkibu/edit",
+      "assignedLabels": [
+        "Full MSRP and Estimated Profit Margins Report",
+        "PLDS Catalog"
+      ]
+    }
+  ],
+  "duplicateSheetIdWarnings": [
+    {
+      "sheetId": "15lZ6M5SqNby_uOIzZEhBYEn6rtLZYQmVUVF4yWzKIbU",
+      "assignedLabels": [
+        "Full MSRP and Estimated Profit Margins Report",
+        "PLDS Catalog"
+      ]
+    }
+  ],
+  "mislabelWarnings": [],
+  "overallValid": false
+}

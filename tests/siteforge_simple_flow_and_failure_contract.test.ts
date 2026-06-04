@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 describe("siteforge 2050 flow and failure language contract", () => {
   it("enforces the three-step flow", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("function renderConnectStep()")).toBe(true);
@@ -16,7 +16,7 @@ describe("siteforge 2050 flow and failure language contract", () => {
   });
 
   it("keeps plain-language launch states and user-friendly errors", () => {
-    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const sourcePath = path.join(process.cwd(), "app/pagebolt/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("Researching your market")).toBe(true);

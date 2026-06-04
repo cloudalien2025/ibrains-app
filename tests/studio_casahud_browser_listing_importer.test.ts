@@ -1,0 +1,457 @@
+import { describe, expect, it } from "vitest";
+import {
+  CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS,
+  parseCasaHudBrowserListingCapture,
+} from "@/lib/studio/domara/browser-listing-capture-parser";
+
+const albanellaPayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/121869400/?utm_source=share",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/121869400/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-04-30T09:00:00.000Z",
+  captureVersion: "2026-04-30",
+  title: "Single family villa via San Berardino, Albanella - immobiliare.it",
+  metaDescription:
+    "€299.000 single family villa in Albanella, Salerno, Campania with 3 bedrooms, 2 bathrooms, 150 m² interior, 1,106 m² garden, and private parking.",
+  openGraph: {
+    title: "Single family villa via San Berardino, Albanella",
+    description:
+      "Renovated independent villa with private garden, pool potential, nearby services, and about 25 minutes from the Paestum coast.",
+    image: "https://images.example.com/albanella-og.jpg",
+  },
+  twitter: {
+    title: "Single family villa via San Berardino, Albanella",
+    description:
+      "Renovated independent villa with private garden, pool potential, nearby services, and about 25 minutes from the Paestum coast.",
+    image: "https://images.example.com/albanella-twitter.jpg",
+  },
+  visibleText: `
+    Price
+    €299.000
+    Address
+    Via San Berardino, Albanella, Salerno, Campania, Italy
+    Property type
+    Single family villa
+    Rooms
+    5+
+    Bedrooms
+    3
+    Bathrooms
+    2
+    Interior size
+    150 m²
+    Commercial surface
+    260.6 m²
+    Garden
+    1.106 m²
+    Garage / Parking
+    2 garage/box spaces · 3 parking spaces
+    Balcony
+    Yes
+    Terrace
+    Yes
+    Condition
+    Excellent / renovated
+    Heating
+    Independent radiators powered by LPG
+    Air conditioning
+    Independent hot/cold
+    Energy class
+    D
+    86 photos
+    1 floor plan
+    Virtual tour
+    Yes
+    Updated on
+    October 16, 2025
+    Advertiser
+    Mirko Franco / Professionecasa Capaccio Paestum
+    Description
+    Renovated independent villa with private garden, pool potential, nearby services, and about 25 minutes from the Paestum coast.
+  `,
+  imageCandidates: [
+    {
+      url: "https://images.example.com/albanella-og.jpg",
+      source: "og",
+      width: 1600,
+      height: 900,
+    },
+    {
+      url: "javascript:alert(1)",
+      source: "visible_img",
+      width: 1400,
+      height: 900,
+    },
+    {
+      url: "https://images.example.com/albanella-gallery.jpg",
+      source: "visible_img",
+      width: 1280,
+      height: 720,
+    },
+  ],
+};
+
+const capaccioPayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-04-30T11:15:00.000Z",
+  captureVersion: "2026-04-30",
+  title: "via Capaccio-Paestum 13 Capaccio Paestum. Good condition Single family villa with Terrace - immobiliare.it",
+  metaDescription: "Don&#39;t miss this opportunity! Capaccio Paestum, panoramic detached villa, just 500 meters from th...",
+  openGraph: {
+    title: "Single family villa via Capaccio-Paestum 13, Capaccio Paestum",
+    description:
+      "Don&#39;t miss this opportunity! Capaccio Paestum detached villa close to the coast, with terrace, parking, and spacious family-ready interiors.",
+    image: "https://images.example.com/capaccio-og.jpg",
+  },
+  visibleText: `
+    Price
+    € 299.000
+    Location
+    via Capaccio-Paestum 13 Capaccio Paestum. Good condition, parking space, with terrace, independent heating,
+    Address
+    Via Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy
+    Property type
+    Single family villa
+    Bedrooms
+    4
+    Bathrooms
+    3
+    Rooms
+    4+
+    Interior size
+    200 m²
+    Garage / Parking
+    , car parking,
+    Condition
+    Good condition
+    Heating
+    Independent heating
+    Description
+    Don&#39;t miss this opportunity! Capaccio Paestum detached villa with panoramic exposure just 500 meters from the town center and close to the coast. Spacious interiors, terrace, and dedicated parking make it ideal for family living year-round.
+  `,
+  imageCandidates: [
+    { url: "https://images.example.com/capaccio-og.jpg", source: "og" as const, width: 1600, height: 900 },
+    { url: "https://images.example.com/capaccio-gallery.jpg", source: "visible_img" as const, width: 1280, height: 720 },
+  ],
+};
+
+const quarrataLandPayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/119999999/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/119999999/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-04-30T11:45:00.000Z",
+  captureVersion: "2026-04-30",
+  title: "Agricultural land in Quarrata - immobiliare.it",
+  metaDescription:
+    "Prezzo € 95.000 agricultural land in Quarrata with 12.000 m² terreno and road access.",
+  openGraph: {
+    title: "Agricultural land in Quarrata",
+    description:
+      "Agricultural land with olive trees, direct road access, and panoramic countryside views.",
+    image: "https://images.example.com/quarrata-og.jpg",
+  },
+  visibleText: `
+    Prezzo
+    € 95.000
+    Address
+    Quarrata, Pistoia, Tuscany, Italy
+    Property type
+    Agricultural land
+    Land
+    12.000 m²
+    Description
+    Agricultural land with olive trees, direct road access, and panoramic countryside views. Suitable for seasonal cultivation and weekend use.
+  `,
+  imageCandidates: [{ url: "https://images.example.com/quarrata-og.jpg", source: "og" as const, width: 1600, height: 900 }],
+};
+
+const acqualadroneImmobiliarePayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-05-01T08:20:00.000Z",
+  captureVersion: "2026-05-01",
+  title: "Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina",
+  openGraph: {
+    title: "Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina",
+    description:
+      "Detached villa in Messina with visible facts for rooms, bathrooms, and interior surface.",
+    image: "https://images.example.com/acqualadrone-og.jpg",
+  },
+  metaDescription:
+    "EUR 300,000 single family villa in Acqualadrone - Sparta, Messina with 5+ rooms, 2 bathrooms and 187 m2 surface.",
+  visibleText: `
+    Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina
+    Price
+    EUR 300,000
+    Rooms
+    5+
+    Surface
+    187 m2
+    Bathrooms
+    2
+    +8 photos
+    11 Photos
+    1/11
+    Listing ID 127142643
+    Ref. 287
+    Description
+    Detached villa with panoramic exposure and outdoor space in the Acqualadrone area of Messina.
+  `,
+  imageCandidates: [{ url: "https://images.example.com/acqualadrone-og.jpg", source: "og" as const, width: 1600, height: 900 }],
+};
+
+const immobiliareBookmarkletCapturePayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-05-01T14:30:00.000Z",
+  title: "Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina",
+  openGraph: {
+    title: "Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina",
+    description:
+      "Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of",
+    image: "https://images.example.com/acqualadrone-bookmarklet-og.jpg",
+  },
+  visibleText: `
+    Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina
+    Single family villa
+    5+ rooms
+    2 bathrooms
+    187 m²
+    +8 photos
+    11 Photos
+    1/11
+    Description
+    Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of
+  `,
+  priceCandidates: [
+    "€ 300,000",
+    "300.000 €",
+  ],
+  descriptionCandidates: [
+    "Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of living on the water. Set directly on the shoreline, it offers uninterrupted sea views, private outdoor terraces, and large living spaces designed for year-round comfort.",
+  ],
+  imageCandidates: [{ url: "https://images.example.com/acqualadrone-bookmarklet-og.jpg", source: "og" as const, width: 1600, height: 900 }],
+};
+
+describe("CasaFlix browser listing capture parser", () => {
+  it("parses an Immobiliare-like browser payload into a browser-assisted listing candidate", () => {
+    const parsed = parseCasaHudBrowserListingCapture(albanellaPayload);
+
+    expect(parsed.provider).toBe("immobiliare");
+    expect(parsed.extractionStatus).toBe("extracted");
+    expect(parsed.candidate.sourceType).toBe("browser_assisted_import");
+    expect(parsed.candidate.sourceUrl).toBe("https://www.immobiliare.it/en/annunci/121869400/");
+    expect(parsed.candidate.title).toContain("Albanella");
+    expect(parsed.candidate.price).toBe(299000);
+    expect(parsed.candidate.locationText).toContain("Albanella, Salerno, Campania, Italy");
+    expect(parsed.candidate.propertyType).toBe("Single family villa");
+    expect(parsed.candidate.bedrooms).toBe(3);
+    expect(parsed.candidate.bathrooms).toBe(2);
+    expect(parsed.candidate.sizeSqm).toBe(150);
+    expect(parsed.candidate.commercialSurfaceSqm).toBe(260.6);
+    expect(parsed.candidate.landSizeSqm).toBe(1106);
+    expect(parsed.candidate.garageParking).toContain("parking");
+    expect(parsed.candidate.energyClass).toBe("D");
+    expect(parsed.candidate.photoCount).toBe(86);
+    expect(parsed.candidate.floorPlanCount).toBe(1);
+    expect(parsed.candidate.virtualTour).toBe(true);
+    expect(parsed.candidate.featuredImageUrl).toBe("https://images.example.com/albanella-og.jpg");
+    expect(parsed.candidate.imageUrls).not.toContain("javascript:alert(1)");
+    expect(parsed.candidate.casaHudNarrationSeed).toContain("€299,000");
+    expect(parsed.candidate.casaHudNarrationSeed?.toLowerCase()).not.toContain("provider metadata");
+  });
+
+  it("drops unsafe image URLs and trims oversized visible text", () => {
+    const parsed = parseCasaHudBrowserListingCapture({
+      ...albanellaPayload,
+      visibleText: `Price\n€299.000\n${"Garden and coastal access. ".repeat(5000)}`,
+      imageCandidates: [
+        { url: "data:image/png;base64,abc", source: "visible_img" as const },
+        { url: "https://images.example.com/safe.jpg", source: "visible_img" as const, width: 1200, height: 700 },
+      ],
+    });
+
+    expect(parsed.payload.visibleText?.length).toBeLessThanOrEqual(CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS + 1);
+    expect(parsed.candidate.imageUrls).toEqual(["https://images.example.com/albanella-og.jpg", "https://images.example.com/albanella-twitter.jpg", "https://images.example.com/safe.jpg"]);
+  });
+
+  it("cleans an Immobiliare-like capaccio payload with decoded description, extracted price, and normalized location", () => {
+    const parsed = parseCasaHudBrowserListingCapture(capaccioPayload);
+
+    expect(parsed.provider).toBe("immobiliare");
+    expect(parsed.candidate.sourceUrl).toBe("https://www.immobiliare.it/en/annunci/114752041/");
+    expect(parsed.candidate.price).toBe(299000);
+    expect(parsed.candidate.priceText).toBe("€299,000");
+    expect(parsed.candidate.propertyType).toBe("Single family villa");
+    expect(parsed.candidate.bedrooms).toBe(4);
+    expect(parsed.candidate.bathrooms).toBe(3);
+    expect(parsed.candidate.rooms).toBe(4);
+    expect(parsed.candidate.sizeSqm).toBe(200);
+    expect(parsed.candidate.locationText).toBe("Via Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy");
+    expect(parsed.candidate.locationText?.toLowerCase()).not.toContain("good condition");
+    expect(parsed.candidate.locationText?.toLowerCase()).not.toContain("parking");
+    expect(parsed.candidate.garageParking).toBe("Car parking");
+    expect(parsed.candidate.title).toContain("Capaccio Paestum");
+    expect(parsed.candidate.title?.toLowerCase()).not.toContain("good condition");
+    expect(parsed.candidate.descriptionSnippet).toContain("Don't miss this opportunity!");
+    expect(parsed.candidate.descriptionSnippet).toContain("500 meters from the town center");
+    expect(parsed.candidate.descriptionSnippet).not.toContain("Don&#39;t");
+    expect(parsed.candidate.descriptionSnippet).not.toContain("th...");
+    expect(parsed.candidate.imageUrls).toContain("https://images.example.com/capaccio-og.jpg");
+    expect(parsed.candidate.needsReviewFields || []).not.toContain("price");
+    expect(parsed.candidate.casaHudNarrationSeed?.toLowerCase()).not.toContain("provider metadata");
+  });
+
+  it("extracts price from both leading and trailing currency formats", () => {
+    const euroLeading = parseCasaHudBrowserListingCapture({
+      ...capaccioPayload,
+      visibleText: "Price\n€299,000\nAddress\nVia Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy",
+    });
+    const euroTrailing = parseCasaHudBrowserListingCapture({
+      ...capaccioPayload,
+      visibleText: "Prezzo\n299.000 €\nAddress\nVia Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy",
+    });
+
+    expect(euroLeading.candidate.price).toBe(299000);
+    expect(euroTrailing.candidate.price).toBe(299000);
+  });
+
+  it("uses deterministic Immobiliare facts and avoids photo-count/concatenation corruption", () => {
+    const parsed = parseCasaHudBrowserListingCapture(acqualadroneImmobiliarePayload);
+    const keyFeaturesText = (parsed.candidate.keyFeatures || []).join(" ");
+
+    expect(parsed.provider).toBe("immobiliare");
+    expect(parsed.candidate.title).toContain("Acqualadrone");
+    expect(parsed.candidate.price).toBe(300000);
+    expect(parsed.candidate.currency).toBe("EUR");
+    expect(parsed.candidate.needsReviewFields || []).not.toContain("price");
+    expect(parsed.candidate.rooms).toBe(5);
+    expect(parsed.candidate.bathrooms).toBe(2);
+    expect(parsed.candidate.sizeSqm).toBe(187);
+    expect(parsed.candidate.sizeSqm).not.toBe(187287);
+    expect(parsed.candidate.bedrooms).toBeUndefined();
+    expect(parsed.candidate.bedrooms).not.toBe(8);
+    expect(keyFeaturesText).not.toMatch(/\b11\s*photos?\b/i);
+    expect(keyFeaturesText).not.toMatch(/\b1\s*\/\s*11\b/i);
+  });
+
+  it("prefers bookmarklet price/description candidates when visibleText is clipped", () => {
+    const parsed = parseCasaHudBrowserListingCapture(immobiliareBookmarkletCapturePayload);
+
+    expect(parsed.provider).toBe("immobiliare");
+    expect(parsed.candidate.price).toBe(300000);
+    expect(parsed.candidate.currency).toBe("EUR");
+    expect(parsed.candidate.priceText).toBe("€300,000");
+    expect(parsed.candidate.needsReviewFields || []).not.toContain("price");
+    expect(parsed.candidate.rooms).toBe(5);
+    expect(parsed.candidate.bathrooms).toBe(2);
+    expect(parsed.candidate.sizeSqm).toBe(187);
+    expect(parsed.candidate.bedrooms).toBeUndefined();
+    expect(parsed.candidate.descriptionSnippet).toContain("privilege of living on the water");
+    expect(parsed.candidate.descriptionSnippet).toContain("private outdoor terraces");
+    expect(parsed.candidate.descriptionSnippet).not.toMatch(/privilege of\\s*$/i);
+  });
+
+  it("parses thousands-separated dimensions and routes land/commercial/interior fields correctly", () => {
+    const withCommaThousands = parseCasaHudBrowserListingCapture({
+      ...capaccioPayload,
+      visibleText: `
+        Price
+        260,000 EUR
+        Address
+        Via Test 1, Capaccio Paestum, Salerno, Campania, Italy
+        Interior size
+        165 m²
+        Commercial surface
+        200 m²
+        Land
+        land of approx. 3,700 sqm
+        Description
+        Spacious family property with approx. 3700 sqm land and a separate 89 square meters annex.
+      `,
+    });
+
+    const withDotThousands = parseCasaHudBrowserListingCapture({
+      ...capaccioPayload,
+      visibleText: `
+        Price
+        € 260.000
+        Address
+        Via Test 2, Capaccio Paestum, Salerno, Campania, Italy
+        Property type
+        Single family villa
+        land of approx. 3.700 m²
+        commercial surface 200 m²
+      `,
+    });
+
+    expect(withCommaThousands.candidate.price).toBe(260000);
+    expect(withCommaThousands.candidate.sizeSqm).toBe(165);
+    expect(withCommaThousands.candidate.commercialSurfaceSqm).toBe(200);
+    expect(withCommaThousands.candidate.landSizeSqm).toBe(3700);
+    expect(withDotThousands.candidate.price).toBe(260000);
+    expect(withDotThousands.candidate.landSizeSqm).toBe(3700);
+    expect(withDotThousands.candidate.commercialSurfaceSqm).toBe(200);
+  });
+
+  it("parses an agricultural land payload with land size, clean description, and image coverage", () => {
+    const parsed = parseCasaHudBrowserListingCapture(quarrataLandPayload);
+
+    expect(parsed.provider).toBe("immobiliare");
+    expect(parsed.candidate.propertyType).toBe("Agricultural Land");
+    expect(parsed.candidate.price).toBe(95000);
+    expect(parsed.candidate.landSizeSqm).toBe(12000);
+    expect(parsed.candidate.locationText).toBe("Quarrata, Pistoia, Tuscany, Italy");
+    expect(parsed.candidate.descriptionSnippet).toContain("olive trees");
+    expect(parsed.candidate.imageUrls).toContain("https://images.example.com/quarrata-og.jpg");
+    expect(parsed.candidate.needsReviewFields || []).not.toContain("images");
+  });
+
+  it("keeps price as needs review when no price exists in payload", () => {
+    const parsed = parseCasaHudBrowserListingCapture({
+      ...capaccioPayload,
+      metaDescription: "Detached villa in Capaccio Paestum with terrace and parking.",
+      openGraph: { ...capaccioPayload.openGraph, description: "Detached villa in Capaccio Paestum with terrace and parking." },
+      visibleText: `
+        Address
+        Via Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy
+        Property type
+        Single family villa
+        Bedrooms
+        4
+        Bathrooms
+        3
+      `,
+    });
+
+    expect(parsed.candidate.price).toBeUndefined();
+    expect(parsed.candidate.needsReviewFields).toContain("price");
+  });
+
+  it("rejects unsafe protocols for the captured source URL", () => {
+    expect(() =>
+      parseCasaHudBrowserListingCapture({
+        ...albanellaPayload,
+        sourceUrl: "javascript:alert(1)",
+      }),
+    ).toThrow(/Only http\/https/i);
+  });
+
+  it("rejects payloads that include sensitive browser fields", () => {
+    expect(() =>
+      parseCasaHudBrowserListingCapture({
+        ...albanellaPayload,
+        cookies: "session=secret",
+      }),
+    ).toThrow(/visible page text, metadata, and image candidates/i);
+  });
+});

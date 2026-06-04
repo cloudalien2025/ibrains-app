@@ -1,0 +1,152 @@
+# Shopify Architecture (Sprint 010)
+
+Last updated: 2026-05-31 (UTC)
+
+## Shell/UI Contract (Global iBrains Modernization)
+
+- `/ecomviper`, `/ecomviper/products/[productId-or-handle]`, `/ecomviper/dropshipping/rocktomic`, and `/ecomviper/settings` render inside one shared shell.
+- Shell structure:
+  - global iBrains header
+  - EcomViper sidebar
+  - workspace content area
+- Header invariants:
+  - no blank space above top header
+  - iBrains logo always links to `/brains`
+  - header account controls are always present (Settings, Notifications, user identity, log out)
+- Layout migration is presentation-only for this sprint and does not change supplier/source data execution behavior.
+
+## Product Editor PDP Gallery Contract (Sprint 010)
+
+- Product Editor route `/ecomviper/products/[productId-or-handle]` keeps shared shell:
+  - global iBrains header (flush top, logo links to `/brains`)
+  - EcomViper sidebar
+  - main workspace
+- Top-of-workspace hero is mandatory:
+  - large main image
+  - selectable thumbnails
+  - adjacent product summary card and core actions
+- Old Product Rail is removed from primary route layout.
+- Deterministic image ordering helper is used before render:
+  - front/primary, facts/back, side/warnings, 3-pack, 6-pack, lifestyle, fallback original order.
+- Gallery accepts Shopify image URLs and hosted/generated asset URLs.
+- Render-time safety:
+  - no supplier sync runs
+  - no PDF/OCR extraction
+  - no OpenAI generation
+  - no heavy source parsing in UI render path
+
+## Product Editor Final Layout Contract (Sprint 010.1)
+
+- Hero-first layout is mandatory on `/ecomviper/products/[productId-or-handle]`:
+  - Product Gallery (left)
+  - Product Summary (right)
+- Product Summary includes title and shipping facts; standalone right-rail shipping card is removed.
+- Workspace Metadata and extraction/debug language are admin-only concerns and must not render in merchant Product Editor.
+- Edit area is full-width below hero and contains the primary action row:
+  - `Generate Intelligence`
+  - `Save Changes`
+  - `Publish`
+- `Preview PDP` is removed from this primary edit action row.
+- Publish semantics:
+  - target is public `ecomviper.com` content publish
+  - placeholder/disabled state is required until backend publish path is fully wired
+  - UI must not fake publish success
+- Gallery add-image UX:
+  - upload from computer (`jpeg/png/webp`, bounded size)
+  - add from `https` URL
+  - future Image Studio hook exposed as disabled entry
+
+## Core Rules
+
+- Shopify remains source of truth for listing identity and publish state.
+- Supplier intelligence augments Shopify records and must never replace Shopify authority.
+- Supplier system names and source URLs are internal-only and must not appear in public PDP outputs.
+
+## Data Flow
+
+1. Shopify listing and variants are loaded for workspace/user.
+2. Supplier catalog snapshot is resolved through internal supplier abstraction (`lib/ecomviper/suppliers/supplier-intelligence.ts`).
+3. SKU normalization + matching selects one supplier product context.
+4. Source-grounded intelligence generation maps trusted fields (ingredients, certs, COA, inventory, pricing) from source data.
+5. Public-facing content fields are sanitized to prevent internal supplier disclosure.
+6. Persisted PDP intelligence remains tenant-scoped per user/product.
+
+## Supplier Intelligence Ingestion Boundary (Hotfix 009.4)
+
+Rocktomic supplier ingestion now follows explicit deterministic boundaries:
+
+1. Source config resolution
+2. Source fetch (Google Sheets CSV + catalog PDF bytes)
+3. Parse + normalize
+4. Supplier product record mapping
+5. SKU match lookup
+6. Product Editor and PDP generator field hydration
+
+Catalog PDF parsing now uses a universal extraction engine:
+
+- page text extraction (inflated streams + raw text layer fallback)
+- SKU detection
+- product-block anchor detection
+- field-label extraction
+- hyperlink association (COA + label/mockup)
+- per-SKU diagnostics (`extractionStatus`, `extractionErrors`, `coa_link_status`, `coa_link_error`)
+
+Extraction is SKU-agnostic and no longer hardcoded to `ROC949`.
+
+## Membership Pricing Engine (Hotfix 009.4)
+
+- Pricing sheet parsing detects membership tier columns dynamically from PLDS/MSRP headers.
+- User-selected membership tier is persisted per user via settings.
+- Supplier product pricing context includes:
+  - selected membership tier
+  - selected source column
+  - detected tier list
+  - per-tier cost map
+  - pricing status label
+- Product Editor/PDP intelligence consume selected-tier wholesale cost and compute profit/margin from Shopify price without inventing values.
+
+## Hard Rules
+
+- No fake inventory quantities.
+- No fake ingredient/certification/compliance facts.
+- No fake COA claims or placeholder substitution when extraction fails.
+
+## Internal Abstraction Boundary
+
+- `getPrimarySupplierCatalogSnapshot()`
+- `matchPrimarySupplierBySkus()`
+
+Current platform implementation is Rocktomic-backed, but callers no longer couple directly to provider modules.
+
+## Hotfix 009.8 Data Scope Correction
+
+Supplier catalog/pricing/inventory/assets/COA records are global platform intelligence. Merchant-specific data remains scoped to the signed-in user/workspace.
+
+Correct Product Editor flow:
+
+1. Load current merchant Shopify product.
+2. Normalize the first Shopify variant SKU.
+3. Query global normalized supplier product/pricing/inventory/assets by SKU.
+4. Read current merchant selected membership tier.
+5. Compose Product Editor `sourceFacts`.
+6. Render saved/generated PDP intelligence separately and mark stale if supplier sync is newer.
+
+Settings and supplier diagnostics read global normalized counts and global membership tiers after auth. The selected tier save path remains merchant-scoped.
+
+## Hotfix 009.9 Deterministic All-SKU Binding
+
+- Source mapping must remain generic for all synced SKUs; no SKU-specific hardcoding.
+- Product Editor and Generate Intelligence consume the same sourceFacts contract.
+- COA link critical path is per-SKU catalog hyperlink extraction; COA repository parsing is optional.
+- Inventory `low_stock` maps to merchant action state `Action Required: Mark Out of Stock`.
+- Pricing may use an explicitly labeled default tier when merchant tier is unset and normalized pricing exists.
+
+## Admin Foundation Boundary (2026-05-31)
+
+Internal supplier operations now use `/admin/ecomviper/...` routes:
+
+- summary: `/admin/ecomviper/suppliers/rocktomic`
+- all-SKU audit: `/admin/ecomviper/suppliers/rocktomic/audit`
+- build history: `/admin/ecomviper/suppliers/rocktomic/builds`
+
+Merchant `/ecomviper` remains supplier-neutral in customer UI language while admin may expose internal supplier labels and raw diagnostics.

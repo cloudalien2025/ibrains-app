@@ -98,7 +98,7 @@ async function runComplete() {
   return { output, repository };
 }
 
-describe("CasaHUD AI channel engine orchestrator", () => {
+describe("CasaFlix AI channel engine orchestrator", () => {
   it("creates a run and project without manual project naming and uses the viral title as project name", async () => {
     const { output, repository } = await runComplete();
 
@@ -274,7 +274,7 @@ describe("CasaHUD AI channel engine orchestrator", () => {
   });
 });
 
-describe("CasaHUD production contracts", () => {
+describe("CasaFlix production contracts", () => {
   it("adds durable persistence tables for the channel engine", () => {
     const migration = fs.readFileSync(
       path.join(process.cwd(), "db/migrations/20260427_casahud_ai_channel_engine.sql"),
@@ -319,28 +319,69 @@ describe("CasaHUD production contracts", () => {
     expect(route).toContain("latestOutput");
   });
 
-  it("presents CasaHUD as a compact user-facing AI wizard instead of a manual builder", () => {
-    const source = fs.readFileSync(path.join(process.cwd(), "app/apps/studio/studio-domara-client.tsx"), "utf8");
+  it("presents CasaFlix as a compact user-facing AI wizard instead of a manual builder", () => {
+    const source = fs.readFileSync(path.join(process.cwd(), "app/brains/studio-domara-client.tsx"), "utf8");
+    const runRoute = fs.readFileSync(path.join(process.cwd(), "app/api/studio/domara/ai-channel/runs/route.ts"), "utf8");
+    const opportunityRoute = fs.readFileSync(path.join(process.cwd(), "app/api/studio/domara/opportunity/route.ts"), "utf8");
+    const connectionUi = fs.readFileSync(path.join(process.cwd(), "lib/studio/domara/integrations-ui.ts"), "utf8");
+    const combinedUi = `${source}\n${connectionUi}`;
 
-    expect(source).toContain("Generate Viral Video");
-    expect(source).toContain("Finding high-potential video ideas");
-    expect(source).toContain("Creating viral title");
-    expect(source).toContain("Finding matching properties");
-    expect(source).toContain("Checking listing accuracy");
-    expect(source).toContain("Adding maps and local highlights");
-    expect(source).toContain("Writing the story");
-    expect(source).toContain("Building the video package");
-    expect(source).toContain("Preparing for review");
-    expect(source).toContain("Ready to publish or schedule");
-    expect(source).toContain("Publish Now");
-    expect(source).toContain("Schedule to YouTube");
+    expect(source).toContain("Generate your next viral property video");
+    expect(source).toContain("Generate Viral Video Title");
+    expect(source).toContain("Connections");
+    expect(source).toContain("Manage CasaFlix connections");
+    expect(source).toContain("Recent Campaigns");
+    expect(source).toContain("No campaigns yet.");
+    expect(source).toContain("casahud-connect-wizard");
+    expect(source).toContain("/api/studio/domara/opportunity");
+    expect(source).toContain("Save Connection");
+    expect(source).toContain("Test Connection");
+    expect(source).toContain("Required to Create Videos");
+    expect(source).toContain("Required to Publish/Schedule");
+    expect(source).toContain("Optional Premium Upgrade");
+    expect(combinedUi).toContain("OpenAI");
+    expect(combinedUi).toContain("YouTube Channel");
+    expect(combinedUi).toContain("Listing Sources");
+    expect(combinedUi).toContain("Maps & Location Visuals");
+    expect(combinedUi).toContain("Local Places & POIs");
+    expect(combinedUi).toContain("Media Storage");
+    expect(combinedUi).toContain("Voice Narration");
+    expect(source).toContain("Researching YouTube opportunities");
+    expect(source).toContain("Creating viral titles");
+    expect(source).toContain("Selecting winning concept");
+    expect(source).toContain("Selected winning title");
+    expect(source).toContain("Why this title was chosen");
+    expect(source).toContain("Title Candidates");
+    expect(source).toContain("Research Brief");
+    expect(source).toContain("Campaign Type");
+    expect(source).toContain("Next Step");
+    expect(source).toContain("YouTube connection improves the research");
+    expect(source).not.toContain("Generate Mock Viral Titles");
+    expect(source).not.toContain('"Generate Viral Video"');
     expect(source).not.toContain("Create Next YouTube Property Video");
     expect(source).not.toContain("Listing Input");
     expect(source).not.toContain("<form");
     expect(source).not.toContain("Provider seam:");
     expect(source).not.toContain("Mode: Mock-first MVP");
     expect(source).not.toContain("deterministic mock listing used");
+    expect(source).not.toContain("OPENAI_API_KEY");
+    expect(source).not.toContain("YOUTUBE_API_KEY");
+    expect(source).not.toContain("environment variable");
+    expect(source).not.toContain("database");
+    expect(source).not.toContain("DATABASE_URL");
+    expect(source).not.toContain("DIRECTORYIQ_DATABASE_URL");
+    expect(source).not.toContain("provider seam");
+    expect(source).not.toContain("migration");
+    expect(source).not.toContain("raw credential");
+    expect(source).not.toContain("raw secret");
+    expect(source).not.toContain("debug");
+    expect(source).not.toContain("sample data");
     expect(source).not.toContain("<DomaraCampaignWorkflowShell");
     expect(source).not.toContain("fake connected");
+    expect(runRoute).toContain("CONNECTIONS_REQUIRED");
+    expect(opportunityRoute).toContain("OPPORTUNITY_GENERATION_FAILED");
+    expect(opportunityRoute).toContain("INVALID_INPUT");
+    expect(runRoute).toContain("getMissingCasaHudCoreConnections");
+    expect(runRoute).toContain("buildCasaHudConnectionCards");
   });
 });

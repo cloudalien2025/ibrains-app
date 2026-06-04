@@ -1,0 +1,129 @@
+# Generate Intelligence Copywriting Agent Binding (Phase 6.2)
+
+Last updated: 2026-06-01 (UTC)
+
+## Purpose
+
+Wire canonical Product Editor `Generate Intelligence` to the all-product AI copywriting agent contract in review-only mode.
+
+## Canonical Route Scope
+
+In-scope Product Editor route:
+
+- `/ecomviper/products/[productId-or-handle]`
+
+Out-of-scope route family remains removed:
+
+- `/ecomviper/shopify/products/[productId-or-handle]`
+
+## Runtime Binding
+
+Generate action path:
+
+1. merchant clicks `Generate Intelligence`
+2. server builds `ProductCopywritingInput` from current Product Editor state
+3. server invokes copywriting runner (explicit action only)
+4. runner requests structured JSON output
+5. output is schema-validated and safety-evaluated
+6. proposal is returned for review-only rendering
+
+No model call occurs during Product Editor page render.
+
+## Review-Only Contract
+
+- generated proposal is review-only
+- no auto-apply to listing fields
+- no auto-save
+- no auto-publish
+- Save/Publish remain explicit merchant actions
+
+## Missing Data Behavior
+
+Plain notices are surfaced in proposal results when applicable:
+
+- `COA missing.`
+- `Pricing missing.`
+- `Supplement Facts missing.`
+- `Supplier match not found.`
+
+Policy semantics:
+
+- missing COA does not block generation
+- missing pricing does not block generation
+- missing Supplement Facts prevents ingredient-backed highlights
+- no invented ingredients/dosages/COA/pricing/inventory/certifications
+
+## Safety/Boundary Guarantees
+
+Phase 6.2 does not introduce:
+
+- Product Editor layout redesign
+- supplier writes/import/sync/extraction/OCR
+- ecommerce supplier table writes from Generate action
+- model calls in page render path
+- duplicate route restoration
+
+`ECOMMERCE_DATABASE_URL` supplier-facts read boundary remains unchanged.
+
+## Implementation Modules
+
+- runner: `lib/ecomviper/copywriting-agent/copywriting-agent-runner.ts`
+- input builder: `lib/ecomviper/copywriting-agent/copywriting-agent-input-builder.ts`
+- prompt contract: `lib/ecomviper/copywriting-agent/copywriting-agent-prompt.ts`
+- output schema: `lib/ecomviper/copywriting-agent/copywriting-agent-types.ts`
+- eval guard: `lib/ecomviper/copywriting-agent/copywriting-agent-evals.ts`
+- action route: `app/api/ecomviper/pdp-intelligence/route.ts`
+- Product Editor client binding: `app/ecomviper/products/[productId-or-handle]/product-editor-client.tsx`
+
+## Phase 6.2.1 Production Hotfix Addendum
+
+- Signed-in production Generate Intelligence hotfix is implemented without expanding feature scope.
+- PDP intelligence API path must not rely on localhost HTTPS self-proxy behavior.
+  - Product Editor client call stays relative: `/api/ecomviper/pdp-intelligence`
+  - middleware excludes this path from Clerk proxy-context handling to prevent `https://localhost:3001` TLS proxy failures.
+- Plain user-safe failure messages are required:
+  - `AI generation is unavailable right now.`
+  - `AI generation timed out. Try again.`
+  - `Generated response could not be validated.`
+- Failed latest-attempt UX contract:
+  - latest failure message is shown as latest attempt status
+  - prior successful proposal is labeled as previous output when retained
+  - no stale content shown as current successful output
+- Runtime env boundary:
+  - server runtime `OPENAI_API_KEY` is valid fallback for explicit Generate action calls
+  - no client-side secret exposure
+  - no model call during page render
+
+## Future Phases
+
+- Phase 6.3 may add model-backed agentic visibility scoring/improvement loop.
+
+## Phase 6.2.2-B Mapping Hotfix Addendum
+
+- Input-mapping normalization now preserves supplement-facts evidence in all-product prep path.
+- Plain notices are more specific for partial-facts cases:
+  - serving size missing
+  - servings per container missing
+  - ingredient amounts missing
+  - image-only facts evidence / AI text needs-review
+- `Supplement Facts missing.` is reserved for true no-evidence conditions.
+- Review-only behavior remains unchanged:
+  - no auto-save
+  - no auto-publish
+
+## Phase 6.2.2-C Live Source Facts Addendum
+
+- Live signed-in Generate Intelligence now reuses authoritative supplier read-model facts/evidence during input build, instead of relying only on potentially stale source snapshot projection.
+- Input construction now merges:
+  - Product Editor source facts
+  - supplier facts panel (shared ecommerce DB read-model)
+  - supplier snapshot fallback
+- Runner now sanitizes internal/debug warning text before merchant render and suppresses contradictory missing-data lines when input evidence is present.
+- Product Editor source field wording is plain merchant language; OCR/dev placeholder phrasing is removed from merchant-facing displays.
+- Safe server-side trace logging was added for Generate requests with compact redacted summaries and trace IDs.
+- Boundaries remain unchanged:
+  - review-only proposal
+  - no auto-save
+  - no auto-publish
+  - no model call during page render
+  - no supplier writes/import/OCR/.ai extraction/source fetch

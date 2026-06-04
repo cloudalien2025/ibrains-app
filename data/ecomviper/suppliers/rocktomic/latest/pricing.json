@@ -1,0 +1,3194 @@
+[
+  {
+    "sku": "ROC001",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC002",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC004",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC006",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC008",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC009",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC010",
+    "productName": "Pump Non-Stim Pre-Workout Cherry Blast 312g w/ Natural Flavor",
+    "wholesaleCost": 23.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 23.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 21.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 20.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC011",
+    "productName": "Non-Stim Pump Pre-Workout: Pineapple 312.5g w/ Natural Flavor",
+    "wholesaleCost": 23.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 23.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 22.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 21.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC012",
+    "productName": "Pump Pre-Workout Citrus Blast 312g w/ Natural Flavor",
+    "wholesaleCost": 22.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 18.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC013",
+    "productName": "Pre-Workout Blast-Off 312g w/ Natural Flavor",
+    "wholesaleCost": 23.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 23.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 22.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 21.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC014",
+    "productName": "BCAA + EAA Strawberry Candy 300g w/Natural Flavor",
+    "wholesaleCost": 20.67,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 20.67,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 17.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 17.07
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC015",
+    "productName": "All-In/One Greens & Red SuperFood + Immune 270g Mixed Berry w/Natural Flavor",
+    "wholesaleCost": 21.24,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 21.24,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 18.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 17.55
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC016",
+    "productName": "Recovery Carb + Electrolytes: Lemon Lime 1365g",
+    "wholesaleCost": 19.52,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 19.52,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 16.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 16.12
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC017",
+    "productName": "Recovery Carb + Electrolyte Summer Punch 1365g",
+    "wholesaleCost": 19.52,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 19.52,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 16.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 16.12
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC018",
+    "productName": "Pump Pre-Workout Georgia Peach Rings 312g",
+    "wholesaleCost": 24.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 24.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 22.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 21.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC100",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC102",
+    "productName": "African Mango “Ultra Burn” Drops",
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC105",
+    "productName": "Best Sellers Blend",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.62
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC107M",
+    "productName": "BCAA Grape 325g – 50 servings",
+    "wholesaleCost": 22.39,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.39,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 18.5
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC110M",
+    "productName": "BCAA Lemon Lime 325g – 50 servings",
+    "wholesaleCost": 22.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 19.75
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC112",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC1120",
+    "productName": "6lb Bulk Up! Mass Gainer Chocolate Milkshake w/Low Sugar",
+    "wholesaleCost": 37.34,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 37.34,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 32.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 30.85
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC1125",
+    "productName": "6lb Bulk Up! Mass Gainer Vanilla Milkshake w/Low Sugar",
+    "wholesaleCost": 37.34,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 37.34,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 32.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 30.85
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC1205",
+    "productName": "2.9lb Essential Meal Replacement Protein Chocolate Milkshake w/0% Added Sugar",
+    "wholesaleCost": 38.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 38.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 36.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 35.96
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC121",
+    "productName": "Green Coffee Bean w/GCA - 800mg",
+    "wholesaleCost": 10.89,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.89,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.05
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC1215",
+    "productName": "2.9lb Essential Meal Replacement Protein Vanilla Milkshake w/0% Added Sugar",
+    "wholesaleCost": 39.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 39.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 37.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 36.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC123",
+    "productName": "Oxy Burn",
+    "wholesaleCost": 14.92,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 14.92,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 12.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 11.45
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC126",
+    "productName": "Raspberry Ketone Ultra Blend",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.62
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC210N",
+    "productName": "2lb Whey Natural Salted Caramel – 28 serv.",
+    "wholesaleCost": 36.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 36.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 34.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 32.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC220",
+    "productName": "5lb Whey Protein Chocolate – 70 servings",
+    "wholesaleCost": 70,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 70,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 68.45,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 67.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC2201N",
+    "productName": "2lb Whey Armor Natural Protein Chocolate w/Stevia & Natural Flavor Non-GMO",
+    "wholesaleCost": 36.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 36.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 32.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 31.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC223",
+    "productName": "Biotin +E",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.62
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC2232",
+    "productName": "2lb Whey Cookies and Cream – 28 servings",
+    "wholesaleCost": 36.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 36.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 34.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 32.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC224",
+    "productName": "5lb Whey Protein Vanilla – 70 servings",
+    "wholesaleCost": 69.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 69.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 67.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 65.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC2241N",
+    "productName": "2lb Whey Armor Natural Protein Vanilla w/Stevia & Natural Flavor Non-GMO",
+    "wholesaleCost": 34.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 34.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 32.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 29.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC2251",
+    "productName": "Berberine Plus",
+    "wholesaleCost": 12.62,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.62,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 10.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 9.32
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC2272",
+    "productName": "2lb Whey Cinnamon Swirl – 28 servings",
+    "wholesaleCost": 36.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 36.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 35.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 34.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC2292",
+    "productName": "2lb Whey Armor Protein Birthday Cake",
+    "wholesaleCost": 29.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 29.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 26.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 24.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC260V",
+    "productName": "1.5lb Pure Vegan Protein Rich Chocolate",
+    "wholesaleCost": 27.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 27.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 25.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 24.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC263V",
+    "productName": "1.5lb Pure Vegan Protein Vanilla",
+    "wholesaleCost": 27.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 27.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 25.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 24.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC281",
+    "productName": "2lb 100% Whey Isolate Chocolate – 31 serv",
+    "wholesaleCost": 42.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 42.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 40.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 40.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC2811",
+    "productName": "1lb 100% Whey Armor Isolate Protein Chocolate",
+    "wholesaleCost": 32.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 32.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 28.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 27.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC282",
+    "productName": "2lb 100% Whey Isolate Vanilla – 30 servings",
+    "wholesaleCost": 42.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 42.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 40.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 40.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC2821",
+    "productName": "1lb 100% Whey Armor Isolate Protein Vanilla",
+    "wholesaleCost": 32.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 32.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 28.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 27.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC2841",
+    "productName": "1lb Whey Armor Isolate Protein Berry",
+    "wholesaleCost": 30.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 30.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 26.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 25.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC2851",
+    "productName": "1lb Whey Armor Isolate Protein Unflavored",
+    "wholesaleCost": 26.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 26.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 24.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 24.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC2861",
+    "productName": "1lb 100% Whey Armor Isolate Protein Cappuccino",
+    "wholesaleCost": 30.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 30.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 26.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 25.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC301",
+    "productName": "Chlorella Pure – 500mg",
+    "wholesaleCost": 16.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 16.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 14.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 13.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC302",
+    "productName": "Colon Sweep",
+    "wholesaleCost": 9.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 9.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 6.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC303",
+    "productName": "Digestive Enzyme",
+    "wholesaleCost": 13.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 13.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 12.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 11.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC304",
+    "productName": "Max Detox W/Acai Berry",
+    "wholesaleCost": 12.62,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.62,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 10.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 9.32
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC401",
+    "productName": "Female Enhancement Or Boost",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.62
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC402",
+    "productName": "Premium Menopause Support w/Wild Yam Extract",
+    "wholesaleCost": 12.62,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.62,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 10.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 10.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC450",
+    "productName": "Collagen Type 1 & 3 Grass Fed 350g – 35 serv",
+    "wholesaleCost": 26.42,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 26.42,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 22.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 21.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC501",
+    "productName": "Horny Goat Weed Blend",
+    "wholesaleCost": 10.89,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.89,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.05
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC502",
+    "productName": "Male Enhancement Or Boost",
+    "wholesaleCost": 12.04,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.04,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 10.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.9
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC503",
+    "productName": "Natural PCT",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.52
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC504",
+    "productName": "Prostate Formula",
+    "wholesaleCost": 10.89,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.89,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.05
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC506",
+    "productName": "Ultra Test Natural Testosterone Support",
+    "wholesaleCost": 13.77,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 13.77,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 10.17
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC507",
+    "productName": "Ultra Multivitamin For Men",
+    "wholesaleCost": 13.77,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 13.77,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 9.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC507W",
+    "productName": "Ultra Vita For Women",
+    "wholesaleCost": 13.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 13.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 10.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC508",
+    "productName": "Grass Fed Beef Organ Complex – Ancestral Superfood – Desiccated Liver, Heart, Kidney, Pancreas, Spleen",
+    "wholesaleCost": 11.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 11.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 11.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC509",
+    "productName": "Grass Fed Desiccated Beef Liver Capsules – Pasture Raised",
+    "wholesaleCost": 11.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 11.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 11.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC601",
+    "productName": "L-Arginine Capsules",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.52
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC603",
+    "productName": "BCAA (Fruit Punch)",
+    "wholesaleCost": 22.39,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.39,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 15.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC604",
+    "productName": "BCAA (Watermelon)",
+    "wholesaleCost": 22.39,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.39,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 15.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC605",
+    "productName": "Pre-Workout (Fruit Punch)",
+    "wholesaleCost": 22.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 16.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC606",
+    "productName": "Pre-Workout (Watermelon)",
+    "wholesaleCost": 22.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 18.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC607",
+    "productName": "Protein Whey 2lb Chocolate",
+    "wholesaleCost": 36.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 36.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 34.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 32.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC608",
+    "productName": "Protein Whey 2lb Vanilla",
+    "wholesaleCost": 36.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 36.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 34.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 32.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC609",
+    "productName": "Creatine Powder 300g",
+    "wholesaleCost": 22.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 14.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC610",
+    "productName": "Glutamine Powder 300g",
+    "wholesaleCost": 19.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 19.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 16.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 16.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC611",
+    "productName": "Pre-Workout (Tropical Sunrise)",
+    "wholesaleCost": 22.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 18.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC612",
+    "productName": "Energized Aminos Raspberry Iced Tea 360g – 40 serv",
+    "wholesaleCost": 21.82,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 21.82,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 19
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC613",
+    "productName": "Energized Aminos Peach Mango 360g – 40 serv",
+    "wholesaleCost": 22.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 19.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC617",
+    "productName": "ION + Select Electrolyte Formula",
+    "wholesaleCost": 25.27,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 25.27,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 21.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 18.67
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC618",
+    "productName": "Nature's Espresso Coffee w/Organic Mushroom Complex",
+    "wholesaleCost": 18.37,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 18.37,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 16.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 16.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC619",
+    "productName": "Pre-Workout w/Creatine 5g (Grape Annihilation)",
+    "wholesaleCost": 22.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 18.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC620",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC621",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC622",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC623",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC714",
+    "productName": "Vitamin C Serum 2oz",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.62
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC717",
+    "productName": "Collagen (Full Spectrum)",
+    "wholesaleCost": 11.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 11.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC720",
+    "productName": "Premium Mineral Complex 2 fl oz",
+    "wholesaleCost": 27.26,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 27.26,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 20.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 18.87
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC721",
+    "productName": "Glutathione Complex",
+    "wholesaleCost": 24.66,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 24.66,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 18.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 17.07
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC723",
+    "productName": "Liquid D3 Ultra 0.43 fl oz",
+    "wholesaleCost": 16.56,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 16.56,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 12.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 11.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC725",
+    "productName": "NAC Plus",
+    "wholesaleCost": 17.51,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 17.51,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 13.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 12.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC727",
+    "productName": "Betaine HCL Plus",
+    "wholesaleCost": 16.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 16.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 13.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 12.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC728",
+    "productName": "HCL Activator Plus",
+    "wholesaleCost": 16.86,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 16.86,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 12.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 11.67
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC729",
+    "productName": "Vitamin B Complex",
+    "wholesaleCost": 21.41,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 21.41,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 16.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 15.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC730",
+    "productName": "Plant-Source Vitamin C",
+    "wholesaleCost": 25.31,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 25.31,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 17.52
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC731",
+    "productName": "Fermented Vitamin B Complex 8 fl oz",
+    "wholesaleCost": 69.51,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 69.51,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 53.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 50.8
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC732",
+    "productName": "Fermented Vitamin B Complex 2 fl oz",
+    "wholesaleCost": 24.66,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 24.66,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 18.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 17.07
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC733",
+    "productName": "Fermented Melatonin 2 fl oz",
+    "wholesaleCost": 18.16,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 18.16,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 13.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 12.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC734",
+    "productName": "Fermented Gallbladder Support 8 fl oz",
+    "wholesaleCost": 33.11,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 33.11,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 25.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 21.65
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC735",
+    "productName": "Bone Health Plus",
+    "wholesaleCost": 28.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 28.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 23.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 22.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC736",
+    "productName": "Adrenal Support Plus",
+    "wholesaleCost": 20.76,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 20.76,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 16.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 15.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC738",
+    "productName": "Gallbladder Support Plus",
+    "wholesaleCost": 28.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 28.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 24.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 23.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC739",
+    "productName": "Pancreas Support Plus",
+    "wholesaleCost": 21.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 21.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 18.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 17.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC740",
+    "productName": "Advanced Thyroid & Hormone Support",
+    "wholesaleCost": 22.06,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.06,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 16.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 16.12
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC741",
+    "productName": "Thyroid Support Plus",
+    "wholesaleCost": 20.76,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 20.76,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 17.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 16.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC743",
+    "productName": "Bentonite Clay Detox Plus",
+    "wholesaleCost": 24.66,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 24.66,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 18.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 18.02
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC744",
+    "productName": "Premium Volcanic Pink Salt 12 oz",
+    "wholesaleCost": 16.86,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 16.86,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 12.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 12.32
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC745",
+    "productName": "Premium Testosterone w/ Testofen®",
+    "wholesaleCost": 51.96,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 51.96,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 39.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 37.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC801",
+    "productName": "Anxiety Formula",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.62
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC802",
+    "productName": "B-12 Drops 2oz",
+    "wholesaleCost": 12.04,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.04,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 10.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.9
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC803",
+    "productName": "Blood Sugar Ultra",
+    "wholesaleCost": 9.74,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 9.74,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.2
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC805",
+    "productName": "CoQ10 (Ubiquinone)",
+    "wholesaleCost": 13.19,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 13.19,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 9.75
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC808",
+    "productName": "Joint Flex",
+    "wholesaleCost": 9.74,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 9.74,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.2
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC812",
+    "productName": "Neuro Plus Brain and Focus",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.62
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC814",
+    "productName": "Omega 3 Fish Oil",
+    "wholesaleCost": 10.89,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.89,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.05
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC816",
+    "productName": "Probiotic - 40 Billion CFU",
+    "wholesaleCost": 14.92,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 14.92,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 12.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 11.02
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC817",
+    "productName": "Sleep Formula",
+    "wholesaleCost": 10.89,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.89,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.05
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC818",
+    "productName": "Turmeric w/BioPerine - 650mg",
+    "wholesaleCost": 10.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC822",
+    "productName": "Ashwagandha",
+    "wholesaleCost": 11.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 11.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC823",
+    "productName": "Turmeric w/Ginger",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.62
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC824",
+    "productName": "Magnesium Glycinate",
+    "wholesaleCost": 12.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 10.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC826",
+    "productName": "5-HTP",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.62
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC830",
+    "productName": "Platinum Turmeric Joint Support Plus",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.62
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC831",
+    "productName": "Vitamin K2 + D3",
+    "wholesaleCost": 11.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 11.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC835",
+    "productName": "Sea Moss Capsules",
+    "wholesaleCost": 14.92,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 14.92,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 12.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 11.02
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC840",
+    "productName": "Ultra NAD+ Support Formula",
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC841",
+    "productName": "Ultra-Premium NMN Infinity+",
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC903M",
+    "productName": "Energy Pre-Workout Lemonade 214g – 30 serv",
+    "wholesaleCost": 22.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 22.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 19.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 19.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC908",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC910",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC911",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC914",
+    "productName": "Organic Beetroot",
+    "wholesaleCost": 9.74,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 9.74,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.2
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC915",
+    "productName": "Mushroom Immune Booster Chaga, Cordyceps, Reishi and Lion’s Mane.",
+    "wholesaleCost": 12.04,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.04,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 10.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 9.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC917",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC918",
+    "productName": "Multivitamin Gummies (Adults)",
+    "wholesaleCost": 10.89,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.89,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.05
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC919",
+    "productName": "Skin Glow Gummies w/ Biotin + C + E",
+    "wholesaleCost": 12.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 10.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 9.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC920",
+    "productName": "Sleep Well Gummies",
+    "wholesaleCost": 10.89,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.89,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.05
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC921",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC922",
+    "productName": "Omega 3 Gummies",
+    "wholesaleCost": 11.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 11.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC923",
+    "productName": "Joint Care Gummies",
+    "wholesaleCost": 11.01,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 11.01,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 9.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC924",
+    "productName": "Collagen Gummies",
+    "wholesaleCost": 12.62,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.62,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 10.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 9.32
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC925",
+    "productName": "Hair Vitamin Gummies",
+    "wholesaleCost": 11.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 11.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC927",
+    "productName": "Resveratrol",
+    "wholesaleCost": 12.04,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.04,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 10.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.9
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC928",
+    "productName": "Turmeric Gummies",
+    "wholesaleCost": 10.89,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.89,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 9.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 8.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC929",
+    "productName": "Ashwagandha Gummies",
+    "wholesaleCost": 13.19,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 13.19,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 9.75
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC930",
+    "productName": "Apple Cider Vinegar Gummies",
+    "wholesaleCost": 13.77,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 13.77,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 10.17
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC934",
+    "productName": "MCT Oil",
+    "wholesaleCost": 10.32,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 10.32,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 8.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 7.62
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC937",
+    "productName": "Organic Super Greens - Watermelon",
+    "wholesaleCost": 20.67,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 20.67,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 17.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 17.07
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC939",
+    "productName": "Elderberry Immunity W/ Zinc & Vitamin C",
+    "wholesaleCost": 20.67,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 20.67,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 17.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 17.07
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC941",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  },
+  {
+    "sku": "ROC943",
+    "productName": "Super Creatine Gummies 1000mg",
+    "wholesaleCost": 11.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 11.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 11.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC944",
+    "productName": "Super Fruit Gummies w/Essential Vitamins",
+    "wholesaleCost": 11.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 11.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 11.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC945",
+    "productName": "Premium Shilajit Gummies w/Ashwagandha",
+    "wholesaleCost": 12.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 10.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 9.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC946",
+    "productName": "Premium Mushroom Complex Gummies",
+    "wholesaleCost": 12.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 10.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC947",
+    "productName": "Premium Women's Hormonal Support Gummies",
+    "wholesaleCost": 12.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 10.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC948",
+    "productName": "Premium Nitric Oxide Gummies",
+    "wholesaleCost": 12.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 10.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC949",
+    "productName": "Premium Magnesium Glycinate Gummies",
+    "wholesaleCost": 12.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 12.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 11.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 10.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC980",
+    "productName": "Brightening Boost Exfoliator Pads",
+    "wholesaleCost": 25.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 25.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 22.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 22.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC981",
+    "productName": "Vitamin C, B, E + Ferulic Antioxidant Serum, USA Made",
+    "wholesaleCost": 29.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 29.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 26.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 26.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC982",
+    "productName": "Firming Cucumber Eye Cream w/Bakuchiol, USA Made, Clean & Vegan",
+    "wholesaleCost": 21.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 21.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 18.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 18.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC983",
+    "productName": "Red Tea Moisturizing + Antioxidant Serum w/Hyaluronic Acid, USA Made",
+    "wholesaleCost": 26.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 26.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 23.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 23.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC984",
+    "productName": "Anti-Aging Recovery Retinoid Serum w/Vitamin E, USA Made, Clean & Vegan",
+    "wholesaleCost": 17.07,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 17.07
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC985",
+    "productName": "Poly Peptide Serum (Peptide Complex), USA Made, Clean & Vegan",
+    "wholesaleCost": 17.07,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 17.07
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC986",
+    "productName": "Advanced Multi Peptide Cream (Peptide Complex), USA Made, Clean & Vegan",
+    "wholesaleCost": 29.47,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 29.47,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 26.47,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 25.97
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC987",
+    "productName": "Skin Brightening Boost Serum w/Nonapeptide-1, USA Made, Clean & Vegan",
+    "wholesaleCost": 17.07,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 17.07
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "ROC988",
+    "productName": "Face Exfoliator & Cleanser w/Honey & Bambusa Arundinacea Stem Extract, USA Made, Clean",
+    "wholesaleCost": 24.97,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {
+      "Non Member Pricing\n(T1)": 24.97,
+      "\"Standard & VIP\nLifetime Memberships\" (T4)": 21.97,
+      "VIP PLUS Membership &\nPremium Pricing Membership (T5)": 21.47
+    },
+    "sourceReferences": [
+      "msrp_profit_margins_report",
+      "plds_catalog"
+    ],
+    "missingFields": [
+      "msrp",
+      "estimatedProfit"
+    ]
+  },
+  {
+    "sku": "UNDEFINED",
+    "productName": null,
+    "wholesaleCost": null,
+    "msrp": null,
+    "estimatedProfit": null,
+    "membershipTierCosts": {},
+    "sourceReferences": [],
+    "missingFields": [
+      "productName",
+      "wholesaleCost",
+      "msrp",
+      "estimatedProfit",
+      "membershipTierCosts"
+    ]
+  }
+]

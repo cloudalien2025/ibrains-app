@@ -44,6 +44,10 @@ describe("Studio integration settings persistence", () => {
     delete process.env.GOOGLE_MAPS_API_KEY;
     delete process.env.IDEALISTA_API_KEY;
     delete process.env.IMMOBILIARE_API_KEY;
+    delete process.env.CLOUDINARY_URL;
+    delete process.env.DO_SPACES_ACCESS_KEY;
+    delete process.env.DO_SPACES_SECRET_KEY;
+    delete process.env.DO_SPACES_BUCKET;
     delete process.env.YOUTUBE_API_KEY;
     state.available = true;
     state.rows.clear();
@@ -154,6 +158,18 @@ describe("Studio integration settings persistence", () => {
     const beforePayload = await beforeClear.json();
     const beforeOpenAi = beforePayload.providers.find((provider: { providerId: string }) => provider.providerId === "openai");
     expect(beforeOpenAi?.configured).toBe(true);
+    expect(beforePayload.connectionCards.map((card: { title: string }) => card.title)).toEqual(
+      expect.arrayContaining([
+        "OpenAI",
+        "YouTube Channel",
+        "Listing Sources",
+        "Maps & Location Visuals",
+        "Local Places & POIs",
+        "Media Storage",
+        "Voice Narration",
+      ])
+    );
+    expect(JSON.stringify(beforePayload)).not.toMatch(/super-secret|API_KEY|DATABASE_URL|DIRECTORYIQ_DATABASE_URL|environment|provider seam|migration/i);
 
     await integrationStore.clearStudioIntegrationSecret({
       userId: "11111111-1111-4111-8111-111111111111",
@@ -210,5 +226,27 @@ describe("Studio integration settings persistence", () => {
     expect(clearResp.status).toBe(200);
     const clearPayload = await clearResp.json();
     expect(clearPayload.provider?.configuredBy === "saved").toBe(false);
+  });
+
+  it("test route validates saved connections without returning connection keys", async () => {
+    const saveRoute = await import("@/app/api/studio/domara/integrations/[provider]/route");
+    const testRoute = await import("@/app/api/studio/domara/integrations/[provider]/test/route");
+    const raw = "sk-test-openai-secret-123456";
+
+    const saveReq = new NextRequest("http://localhost/api/studio/domara/integrations/openai", {
+      method: "POST",
+      body: JSON.stringify({ connectionKey: raw }),
+    });
+    const saveResp = await saveRoute.POST(saveReq, { params: { provider: "openai" } });
+    expect(saveResp.status).toBe(200);
+
+    const testReq = new NextRequest("http://localhost/api/studio/domara/integrations/openai/test", {
+      method: "POST",
+    });
+    const testResp = await testRoute.POST(testReq, { params: { provider: "openai" } });
+    expect(testResp.status).toBe(200);
+    const testPayload = await testResp.json();
+    expect(testPayload.message).toBe("Connection looks ready.");
+    expect(JSON.stringify(testPayload).includes(raw)).toBe(false);
   });
 });

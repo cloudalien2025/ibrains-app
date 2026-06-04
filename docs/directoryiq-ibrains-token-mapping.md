@@ -30,9 +30,9 @@ Date: 2026-04-23
 
 ## Targeted Component Overrides
 
-- `app/apps/directoryiq/signal-sources/directoryiq-signal-sources-client.tsx`
+- `app/directoryiq/signal-sources/directoryiq-signal-sources-client.tsx`
   - Elevated section headings to high-contrast text.
-- `app/apps/directoryiq/authority/_components/authority-section-nav.tsx`
+- `app/directoryiq/authority/_components/authority-section-nav.tsx`
   - Active/inactive tab styles aligned to iBrains button/nav treatment.
 - `components/directoryiq/ListingHero.tsx`
   - Hero panel, gradients, chip tones, and text adapted to iBrains readability.

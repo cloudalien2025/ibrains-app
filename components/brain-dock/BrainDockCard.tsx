@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Clapperboard, Lock, Map, Zap } from "lucide-react";
 import { type BrainViewEntry, brainRoute } from "@/lib/brains/brainCatalog";
 import { brainTheme } from "@/components/brain-dock/brainTheme";
@@ -138,9 +137,9 @@ export default function BrainDockCard({
       ) : null}
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <Link href={href} className={brainTheme.glowButton}>
-          {entitled ? "Open Console" : "Unlock"}
-        </Link>
+        <a href={href} className={brainTheme.glowButton}>
+          {entitled ? brain.primaryCtaText : "Unlock"}
+        </a>
       </div>
     </article>
   );

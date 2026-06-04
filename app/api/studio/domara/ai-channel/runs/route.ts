@@ -20,7 +20,13 @@ import {
   buildDomaraIntegrationCapabilitiesFromStatuses,
   getDomaraIntegrationCapabilityMap,
   mergeDomaraIntegrationStatusesWithStored,
+  toPublicDomaraIntegrationStatuses,
 } from "@/lib/studio/domara/integrations";
+import {
+  buildCasaHudConnectionCards,
+  getCasaHudSetupMessage,
+  getMissingCasaHudCoreConnections,
+} from "@/lib/studio/domara/integrations-ui";
 
 export const runtime = "nodejs";
 
@@ -42,8 +48,8 @@ async function resolveCapabilities(userId: string) {
       openaiGeneration: capabilities.openaiGeneration,
       youtubeResearch: capabilities.youtubePublishingApi,
       listingDiscovery: capabilities.listingFetchIdealista || capabilities.listingFetchImmobiliare,
-      mapPoiEnrichment: capabilities.googleMapsVisuals || capabilities.mapboxVisuals,
-      renderJobs: true,
+      mapPoiEnrichment: capabilities.mapboxVisuals && capabilities.googleMapsVisuals,
+      renderJobs: capabilities.mediaStorage,
       youtubePublishing: capabilities.youtubePublishingApi,
     },
   };
@@ -61,7 +67,7 @@ export async function GET(request: NextRequest) {
         reqId,
         runs: [],
         storeAvailable: false,
-        message: "CasaHUD storage is not ready yet.",
+        message: "CasaFlix storage is not ready yet.",
       });
     }
 
@@ -75,7 +81,7 @@ export async function GET(request: NextRequest) {
       storeAvailable: true,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown CasaHUD run read error.";
+    const message = error instanceof Error ? error.message : "Unknown CasaFlix run read error.";
     return errorResponse(500, message, "INTERNAL_ERROR", reqId);
   }
 }
@@ -94,13 +100,33 @@ export async function POST(request: NextRequest) {
     if (!(await isCasaHudStoreAvailable())) {
       return errorResponse(
         503,
-        "CasaHUD storage is not ready yet.",
+        "CasaFlix storage is not ready yet.",
         "CASAHUD_STORE_UNAVAILABLE",
         reqId,
       );
     }
 
     const resolved = await resolveCapabilities(userId);
+    const connectionCards = buildCasaHudConnectionCards(resolved.providers);
+    const missingConnections = getMissingCasaHudCoreConnections(connectionCards);
+    if (missingConnections.length > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          reqId,
+          error: {
+            message: getCasaHudSetupMessage(connectionCards),
+            code: "CONNECTIONS_REQUIRED",
+            reqId,
+          },
+          providers: toPublicDomaraIntegrationStatuses(resolved.providers),
+          connectionCards,
+          missingConnectionIds: missingConnections.map((card) => card.id),
+        },
+        { status: 409 },
+      );
+    }
+
     const youtubeCredential = resolved.capabilities.youtubeResearch ? await getStudioIntegrationSecret(userId, "youtube") : null;
     const youtubeResearchProvider = createYouTubeResearchProvider({
       apiKey: youtubeCredential?.secret || process.env.YOUTUBE_API_KEY,
@@ -123,19 +149,19 @@ export async function POST(request: NextRequest) {
       ok: true,
       reqId,
       output,
-      providers: resolved.providers,
-      securityNote: "Provider secrets were used server-side only and were not returned.",
+      providers: toPublicDomaraIntegrationStatuses(resolved.providers),
+      securityNote: "Saved connection values were used server-side only and were not returned.",
     });
   } catch (error) {
     if (isCasaHudStoreUnavailable(error)) {
       return errorResponse(
         503,
-        "CasaHUD storage is not ready yet.",
+        "CasaFlix storage is not ready yet.",
         "CASAHUD_STORE_UNAVAILABLE",
         reqId,
       );
     }
-    const message = error instanceof Error ? error.message : "Unknown CasaHUD generation error.";
+    const message = error instanceof Error ? error.message : "Unknown CasaFlix generation error.";
     return errorResponse(500, message, "INTERNAL_ERROR", reqId);
   }
 }
