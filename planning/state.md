@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-06-03 (UTC) — CI fast-path deploy fix + concurrency lock
+Last updated: 2026-06-04 (UTC) — FileIQ worker job lifecycle fix
 
 ## Program Status
 
@@ -72,7 +72,40 @@ Last updated: 2026-06-03 (UTC) — CI fast-path deploy fix + concurrency lock
 - FileIQ Phase 1.2 Extraction Jobs (Live Agent Sessions): Completed and merged (`feat/fileiq-phase-1-2-extraction-jobs`, merge SHA `84fc3995300ac98ccec19f2b8c123ce3532e30f1`, build `2574432444`, production deployed and verified). Live Claude Agent SDK extraction pipeline wired end-to-end: `POST /api/fileiq/ingest` registers source bundle + files/URLs in DB, creates extraction job, runs `runFileIqExtractionAgent`, writes raw extraction payload, updates job status; `GET /api/fileiq/jobs` returns recent jobs for Command Center table; migration `20260604_fileiq_extraction_jobs.sql` adds `fileiq_extraction_jobs` + `fileiq_raw_extractions` tables; `lib/fileiq/fileiq-db.ts` typed DB helpers; Extraction Jobs page (`/fileiq/extraction-jobs`) added; Command Center Ingest button live; `/api/fileiq(.*)` added to proxy `isProtectedRoute`; nav advances to 3 ready items; schema `migrationState` → `extraction_jobs`; 31/31 tests pass, 0 new TS errors. **Post-deploy action required: run `pnpm ecommerce:migrate` on production server to apply `20260604_fileiq_extraction_jobs.sql`.**
 - FileIQ Phase 1.3 Canonical Product Schema v1.0 + Schema Badges: Completed (4 direct-to-main commits, HEAD `f0b7571`, production deployed). Wired `FileIqProductCatalogV1` TypeScript schema (`lib/fileiq/schema/product-catalog-v1.ts` + `index.ts`) with all nested interfaces and enums (`CURRENT_SCHEMA_VERSION = "1.0"`). Updated `buildExtractionPrompt` to detect product/catalog intent via 7 keywords and emit the full v1.0 JSON shape so the agent outputs `schemaType: "product_catalog"` / `schemaVersion: "1.0"`; non-product intents keep existing flexible format. POST handler detects and validates the catalog schema on parse; stamps `summary.schemaType` / `summary.schemaVersion` in the DB for downstream brain queries. Purple "Catalog v1.0" badge surfaces in both the Command Center job list (client) and the Extraction Jobs SSR page. Also added conversational intent field to Command Center (`21bd4ee`) and async ingest success state feedback. No DB schema changes; no frontend breaking changes.
 - CI Fast-Path Deploy Fix + Concurrency Lock: Completed (direct-to-main, commit `049ce67`). Fixed `next: not found` (exit 127) on fast-path deploys by adding `npm ci --omit=dev` after artifact extraction so `node_modules/.bin/next` is present before service restart. Added `resource_group: production-deploy` to both `deploy_production_fast` and `deploy_production` to serialize concurrent pipeline deploys. Contract test extended with 2 new assertions; 4/4 tests green.
-- Current recommended sprint: Run `pnpm ecommerce:migrate` on production to activate Phase 1.2 tables, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Main is clean at `049ce67`.
+- FileIQ Worker Job Lifecycle Fix: Completed and merged (`fix/fileiq-worker-job-lifecycle`, merge SHA `d69b50d`, remote + local branch deleted). Replaced unreliable fire-and-forget with a dedicated `fileiq-worker` process. **Post-deploy action required: install `fileiq-worker.service` on production (see Sprint Closure below).**
+- Current recommended sprint: Install `fileiq-worker.service` on production to activate FileIQ extraction, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Main is clean at `d69b50d`.
+
+## Sprint Closure Update: FileIQ Worker Job Lifecycle Fix
+
+- Branch: `fix/fileiq-worker-job-lifecycle`
+- Date: `2026-06-04 (UTC)`
+- Status: `DELIVERED` — merge SHA `d69b50d`, remote + local branch deleted
+- Root cause: `void (async () => {...})()` fire-and-forget in `app/api/fileiq/ingest/route.ts` called the Claude Agent SDK's `query()`, which spawns a `claude` subprocess. The `ibrains-app.service` systemd PATH does not include `/home/ibrains/.local/bin` so the subprocess hung indefinitely — neither the success path nor the catch block ever reached `updateFileIqExtractionJob`. Every extraction job stayed stuck at `pending` forever.
+- Delivered scope:
+  - `app/api/fileiq/ingest/route.ts`: removed fire-and-forget; stores `_worker` context (agentPrompt, cwd, additionalDirectories, maxTurns) in job summary JSONB; adds `[fileiq:ingest]` console.log markers at start and queue; returns `{status:"pending"}` immediately
+  - `lib/fileiq/fileiq-db.ts`: added `claimFileIqPendingJob()` using `FOR UPDATE SKIP LOCKED` for safe concurrent claiming; `listRecentFileIqJobs` strips `_worker` key from summary before sending to the client
+  - `scripts/fileiq-worker.ts`: new poll loop (5s) — claims pending job → logs at each stage → runs `runFileIqExtractionAgent` → inserts raw extraction → updates job to `completed` or `failed`; gracefully handles missing `_worker` context (jobs created before this fix)
+  - `fileiq-worker.service`: systemd unit with `PATH=/home/ibrains/.local/bin:...` prepended so `claude` CLI is resolved; logs to `/var/log/ibrains-app/fileiq-worker.log`; `Restart=always`
+  - `package.json`: added `fileiq:worker` script (`npx --yes tsx scripts/fileiq-worker.ts`)
+  - `tests/fileiq_phase_1_2_ingestion.test.ts`: updated — ingest now returns `{status:"pending"}`, does not call `runFileIqExtractionAgent` (worker's responsibility)
+  - `tests/fileiq_worker.test.ts`: 13 new tests covering claim, success, product-catalog schema stamp, unavailable (missing API key), failed, and exception paths
+- Test result: 44/44 FileIQ tests green (3 pre-existing source-registry failures are unrelated Phase 1.1 staleness)
+- **Post-deploy action required — install worker service on production server:**
+  ```bash
+  cp /root/ibrains-app/fileiq-worker.service /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable fileiq-worker
+  systemctl start fileiq-worker
+  journalctl -u fileiq-worker -f
+  ```
+  The worker will immediately claim the stuck `pending` job (b5d2e063). If that job predates this fix (no `_worker` in summary), it will be transitioned to `failed` with `errorCode: missing_worker_context`. New ingest requests will process correctly end-to-end.
+- Boundary confirmation:
+  - no DB schema changes
+  - no migrations
+  - no EcomViper / Walmart / Shopify / DirectoryIQ code changes
+  - no auto-save/publish
+  - no model call during page render
+  - FileIQ schema contract v1.1 unchanged
 
 ## Sprint Closure Update: CI Fast-Path Deploy Fix + Concurrency Lock
 
