@@ -324,6 +324,13 @@ function safeUrlFileName(url: string, index: number): string {
   return `url-${index + 1}-${host}.md`;
 }
 
+function sanitizeFileName(originalName: string): string {
+  const ext = path.extname(originalName);
+  const base = path.basename(originalName, ext);
+  const safe = base.replace(/[^\w.-]+/g, "_");
+  return (safe || "upload") + ext;
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const { userId, unauthorizedResponse } = await requireSignedInUser();
   if (unauthorizedResponse) return unauthorizedResponse;
@@ -331,9 +338,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let formData: FormData;
   try {
     formData = await request.formData();
-  } catch {
+  } catch (err) {
+    const parseErr = err instanceof Error ? err.message : String(err);
+    const ct = request.headers.get("content-type") ?? "none";
+    const cl = request.headers.get("content-length") ?? "unknown";
+    console.error(
+      `${LOG} formData parse failed | content-type=${ct} content-length=${cl} | error=${parseErr}`,
+    );
     return NextResponse.json(
-      { error: "invalid_request", message: "Could not parse request body." },
+      {
+        error: "invalid_request",
+        message: "File upload request could not be read. Please retry the upload.",
+      },
       { status: 400 },
     );
   }
@@ -379,7 +395,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const preparedUploads: PreparedUpload[] = [];
   for (const file of uploadedFiles) {
     const buffer = Buffer.from(await file.arrayBuffer());
-    const safeName = path.basename(file.name);
+    const safeName = sanitizeFileName(file.name);
     const type = guessFileType(safeName);
     preparedUploads.push({
       file,
