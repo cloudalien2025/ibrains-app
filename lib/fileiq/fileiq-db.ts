@@ -2,6 +2,13 @@ import "server-only";
 
 import { queryEcommerce } from "@/lib/ecommerce/database";
 
+export interface FileIqWorkerContext {
+  agentPrompt: string;
+  cwd: string | null;
+  additionalDirectories: string[];
+  maxTurns: number;
+}
+
 export interface FileIqSourceBundleInsert {
   id: string;
   supplierId: string;
@@ -137,6 +144,40 @@ export async function insertFileIqRawExtraction(row: FileIqRawExtractionInsert):
   );
 }
 
+export interface FileIqClaimedJob {
+  id: string;
+  bundleId: string;
+  summary: Record<string, unknown>;
+}
+
+/**
+ * Atomically claim one pending extraction job for the worker.
+ * Uses FOR UPDATE SKIP LOCKED so concurrent workers never double-claim.
+ * Returns null when no pending jobs exist.
+ */
+export async function claimFileIqPendingJob(): Promise<FileIqClaimedJob | null> {
+  const rows = await queryEcommerce<{ id: string; bundle_id: string; summary: unknown }>(
+    `UPDATE fileiq_extraction_jobs
+     SET status = 'running', updated_at = now()
+     WHERE id = (
+       SELECT id FROM fileiq_extraction_jobs
+       WHERE status = 'pending'
+       ORDER BY created_at ASC
+       FOR UPDATE SKIP LOCKED
+       LIMIT 1
+     )
+     RETURNING id, bundle_id, summary`,
+    [],
+  );
+  if (rows.length === 0) return null;
+  const row = rows[0];
+  return {
+    id: row.id,
+    bundleId: row.bundle_id,
+    summary: (row.summary as Record<string, unknown>) ?? {},
+  };
+}
+
 export async function listRecentFileIqJobs(limit: number): Promise<FileIqJobListRow[]> {
   const rows = await queryEcommerce<{
     id: string;
@@ -149,8 +190,9 @@ export async function listRecentFileIqJobs(limit: number): Promise<FileIqJobList
     created_at: string;
     completed_at: string | null;
   }>(
+    // Strip _worker (contains agent prompt) from summary — it's only needed by the worker process.
     `SELECT j.id, j.bundle_id, b.name AS bundle_name, j.status, j.agent_session_id,
-            j.summary, j.error_code, j.created_at, j.completed_at
+            j.summary - '_worker' AS summary, j.error_code, j.created_at, j.completed_at
      FROM fileiq_extraction_jobs j
      JOIN fileiq_source_bundles b ON b.id = j.bundle_id
      ORDER BY j.created_at DESC

@@ -19,6 +19,7 @@
     "test:ui-audit": "playwright test tests/ui-audit",
     "ecommerce:check-db": "npx --yes tsx scripts/ecommerce/check_database_connection.ts",
     "ecommerce:migrate": "npx --yes tsx scripts/ecommerce/migrate.ts",
+    "fileiq:worker": "npx --yes tsx scripts/fileiq-worker.ts",
     "ecomviper:import-rocktomic-supplier-package": "npx --yes tsx scripts/ecomviper/import_rocktomic_supplier_package.ts",
     "ecommerce:verify-rocktomic-import": "npx --yes tsx scripts/ecommerce/verify_rocktomic_supplier_import.ts",
     "ecomviper:sync-supplier-sources": "bash scripts/ecomviper_sync_supplier_sources.sh",
