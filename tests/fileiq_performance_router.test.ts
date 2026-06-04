@@ -17,7 +17,8 @@ describe("classifyExtractionJob — CSV", () => {
       urls: [],
     });
     expect(decision.route).toBe("deterministic_structured");
-    expect(decision.maxTurns).toBe(0);
+    expect(decision.maxTurns).toBeGreaterThan(0);
+    expect(decision.maxTurns).toBeLessThanOrEqual(4);
   });
 
   it("routes CSV-only (by extension when type is unknown) to deterministic_structured", () => {
@@ -26,15 +27,26 @@ describe("classifyExtractionJob — CSV", () => {
       urls: [],
     });
     expect(decision.route).toBe("deterministic_structured");
-    expect(decision.maxTurns).toBe(0);
+    expect(decision.maxTurns).toBeGreaterThan(0);
+    expect(decision.maxTurns).toBeLessThanOrEqual(4);
   });
 
-  it("CSV gets maxTurns=0 — no agent turns needed", () => {
+  it("CSV gets small maxTurns (compact Claude validation, not full agent)", () => {
     const decision = classifyExtractionJob({
       filePaths: [{ path: "/tmp/x.csv", type: "csv" }],
       urls: [],
     });
-    expect(decision.maxTurns).toBe(0);
+    expect(decision.maxTurns).toBeGreaterThan(0);
+    expect(decision.maxTurns).toBeLessThanOrEqual(4);
+  });
+
+  it("CSV rationale mentions local parse and Claude validation, not 'no agent needed'", () => {
+    const decision = classifyExtractionJob({
+      filePaths: [{ path: "/tmp/x.csv", type: "csv" }],
+      urls: [],
+    });
+    expect(decision.rationale).not.toMatch(/no agent needed/i);
+    expect(decision.rationale.toLowerCase()).toMatch(/pre-parsed|local|validates|claude/i);
   });
 });
 
@@ -176,12 +188,13 @@ describe("classifyExtractionJob — image files", () => {
 // ─── maxTurns ordering contract ───────────────────────────────────────────────
 
 describe("classifyExtractionJob — maxTurns ordering", () => {
-  it("deterministic CSV gets maxTurns=0 (no agent)", () => {
+  it("deterministic CSV gets small maxTurns (compact Claude validation, ≤4)", () => {
     const d = classifyExtractionJob({
       filePaths: [{ path: "/tmp/x.csv", type: "csv" }],
       urls: [],
     });
-    expect(d.maxTurns).toBe(0);
+    expect(d.maxTurns).toBeGreaterThan(0);
+    expect(d.maxTurns).toBeLessThanOrEqual(4);
   });
 
   it("XLSX gets maxTurns ≤ 12 (hybrid — small ambiguity)", () => {

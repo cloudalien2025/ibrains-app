@@ -456,28 +456,30 @@ describe("processFileIqJob — agent throws exception", () => {
   });
 });
 
-// ─── Deterministic CSV fast path ──────────────────────────────────────────────
+// ─── Deterministic CSV preparse + agent validation path ───────────────────────
 
-describe("processFileIqJob — deterministic CSV fast path", () => {
-  it("skips agent when route=deterministic_structured and CSV parses with high confidence", async () => {
-    const csvContent = [
-      "SKU,Product Name,Status,Access Level,MSRP,Comments/ETA",
-      "ROC001,Omega-3,IN STOCK,All Memberships,$29.99,",
-      "ROC002,Vitamin C,LOW STOCK,Scale Plan Only,$19.99,Back in stock Q3",
-    ].join("\n");
-    mocks.readFile.mockResolvedValue(csvContent);
+describe("processFileIqJob — deterministic CSV preparse + agent validation", () => {
+  const CSV_CONTENT = [
+    "SKU,Product Name,Status,Access Level,MSRP,Comments/ETA",
+    "ROC001,Omega-3,IN STOCK,All Memberships,$29.99,",
+    "ROC002,Vitamin C,LOW STOCK,Scale Plan Only,$19.99,Back in stock Q3",
+  ].join("\n");
+
+  it("invokes Claude Agent SDK even when route=deterministic_structured and CSV parses with high confidence", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccess();
 
     await processFileIqJob(
       "job_csv",
       "bundle_csv",
       makeWorkerContext({
         route: "deterministic_structured",
-        maxTurns: 0,
+        maxTurns: 3,
         filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
       }),
     );
 
-    expect(mocks.runFileIqExtractionAgent).not.toHaveBeenCalled();
+    expect(mocks.runFileIqExtractionAgent).toHaveBeenCalledTimes(1);
     expect(mocks.insertFileIqRawExtraction).toHaveBeenCalledTimes(1);
     expect(mocks.updateFileIqExtractionJob).toHaveBeenCalledTimes(1);
 
@@ -486,6 +488,162 @@ describe("processFileIqJob — deterministic CSV fast path", () => {
       { status: string; summary: { totalProductsFound: number } }
     ])[1];
     expect(updateCall.status).toBe("completed");
+  });
+
+  it("calls agent with compact prompt containing PREPARED EVIDENCE (not full schema block)", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccess();
+
+    await processFileIqJob(
+      "job_csv",
+      "bundle_csv",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const agentCall = (mocks.runFileIqExtractionAgent.mock.calls[0] as [
+      { prompt: string; maxTurns: number }
+    ])[0];
+    expect(agentCall.prompt).toContain("PREPARED EVIDENCE");
+    expect(agentCall.prompt).toContain("1.1");
+    // Compact prompt should not include the large CATALOG_SCHEMA_EXAMPLE block
+    expect(agentCall.prompt).not.toContain("CATALOG_SCHEMA_EXAMPLE");
+    expect(agentCall.prompt).not.toContain("FILES — read each using the Read tool");
+  });
+
+  it("calls agent with small maxTurns from context (≤4)", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccess();
+
+    await processFileIqJob(
+      "job_csv",
+      "bundle_csv",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const agentCall = (mocks.runFileIqExtractionAgent.mock.calls[0] as [
+      { maxTurns: number }
+    ])[0];
+    expect(agentCall.maxTurns).toBeLessThanOrEqual(4);
+    expect(agentCall.maxTurns).toBeGreaterThan(0);
+  });
+
+  it("job summary includes agentOrchestration=true", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccess();
+
+    await processFileIqJob(
+      "job_csv",
+      "bundle_csv",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { summary: Record<string, unknown> }
+    ])[1];
+    expect(updateCall.summary.agentOrchestration).toBe(true);
+  });
+
+  it("job summary includes localPreparse with productsParsed count", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccess();
+
+    await processFileIqJob(
+      "job_csv",
+      "bundle_csv",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { summary: { localPreparse?: { parser: string; productsParsed: number; confidence: string } } }
+    ])[1];
+    expect(updateCall.summary.localPreparse).toBeDefined();
+    expect(updateCall.summary.localPreparse!.parser).toBe("rocktomic_inventory_csv");
+    expect(updateCall.summary.localPreparse!.productsParsed).toBe(2);
+    expect(updateCall.summary.localPreparse!.confidence).toBe("high");
+  });
+
+  it("_timing includes preparseMs and agentDurationMs", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccess();
+
+    await processFileIqJob(
+      "job_csv",
+      "bundle_csv",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { summary: { _timing?: Record<string, unknown> } }
+    ])[1];
+    expect(updateCall.summary._timing).toBeDefined();
+    expect(typeof updateCall.summary._timing!.preparseMs).toBe("number");
+    expect(typeof updateCall.summary._timing!.agentDurationMs).toBe("number");
+    expect(typeof updateCall.summary._timing!.totalMs).toBe("number");
+  });
+
+  it("compact prompt does not tell Claude to reread source file", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccess();
+
+    await processFileIqJob(
+      "job_csv",
+      "bundle_csv",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const agentCall = (mocks.runFileIqExtractionAgent.mock.calls[0] as [
+      { prompt: string }
+    ])[0];
+    expect(agentCall.prompt).toMatch(/do not reread.*source/i);
+  });
+
+  it("falls back to deterministic result (status=completed) when agent throws during validation", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    mocks.runFileIqExtractionAgent.mockRejectedValue(new Error("agent unavailable"));
+
+    await processFileIqJob(
+      "job_csv_throw",
+      "bundle_csv_throw",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { status: string; summary: { agentOrchestration: boolean; totalProductsFound: number } }
+    ])[1];
+    expect(updateCall.status).toBe("completed");
+    expect(updateCall.summary.agentOrchestration).toBe(true);
     expect(updateCall.summary.totalProductsFound).toBe(2);
   });
 
@@ -504,7 +662,12 @@ describe("processFileIqJob — deterministic CSV fast path", () => {
       }),
     );
 
-    // Agent should have been called as fallback
+    // Agent should have been called as fallback with the stored full prompt
     expect(mocks.runFileIqExtractionAgent).toHaveBeenCalledTimes(1);
+    const agentCall = (mocks.runFileIqExtractionAgent.mock.calls[0] as [
+      { prompt: string }
+    ])[0];
+    // Low-confidence fallback uses the stored agentPrompt, not a compact prompt
+    expect(agentCall.prompt).not.toContain("PREPARED EVIDENCE");
   });
 });
