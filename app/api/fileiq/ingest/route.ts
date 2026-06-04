@@ -11,6 +11,8 @@ import {
   insertFileIqSourceFile,
 } from "@/lib/fileiq/fileiq-db";
 import { classifyExtractionJob } from "@/lib/fileiq/performance-router";
+import { fetchUrl, type UrlSourceResult } from "@/lib/fileiq/sources/url-source";
+import { detectSupplierName, supplierIdFromName } from "@/lib/fileiq/supplier-detection";
 
 function sha256(data: string | Buffer): string {
   return createHash("sha256").update(data).digest("hex");
@@ -34,13 +36,6 @@ function guessFileType(filename: string): string {
     ".tiff": "tif",
   };
   return typeMap[ext] ?? "unknown";
-}
-
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
 }
 
 const PRODUCT_INTENT_KEYWORDS = [
@@ -74,6 +69,7 @@ const CATALOG_SCHEMA_EXAMPLE = JSON.stringify(
     schemaVersion: "1.1",
     supplier: {
       supplierId: "acme-co",
+      name: "Acme Co",
       supplierName: "Acme Co",
       website: null,
       contactEmail: null,
@@ -291,6 +287,43 @@ function buildExtractionPrompt(params: {
 
 const LOG = "[fileiq:ingest]";
 
+interface PreparedUpload {
+  file: File;
+  safeName: string;
+  buffer: Buffer;
+  type: string;
+  contentHash: string;
+  contentHint: string;
+}
+
+interface PreparedUrlSource {
+  url: string;
+  fetched: UrlSourceResult;
+  safeName: string;
+  filePath: string;
+  contentHash: string;
+  sourceRef: string;
+}
+
+function textHintFromBuffer(buffer: Buffer, fileType: string): string {
+  if (!["csv", "txt", "html", "markdown", "unknown"].includes(fileType)) return "";
+  return buffer.toString("utf8", 0, Math.min(buffer.length, 8_000));
+}
+
+function sourceRefForFetchedUrl(result: UrlSourceResult): string {
+  return `${result.sourceUrl} scrapedAt=${result.scrapedAt} fetchMethod=${result.method}`;
+}
+
+function safeUrlFileName(url: string, index: number): string {
+  let host = "url";
+  try {
+    host = new URL(url).hostname.replace(/[^a-z0-9.-]+/gi, "-");
+  } catch {
+    host = "url";
+  }
+  return `url-${index + 1}-${host}.md`;
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const { userId, unauthorizedResponse } = await requireSignedInUser();
   if (unauthorizedResponse) return unauthorizedResponse;
@@ -335,15 +368,81 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const supplierNameRaw = formData.get("supplier_name");
-  const supplierName =
-    typeof supplierNameRaw === "string" && supplierNameRaw.trim().length > 0
-      ? supplierNameRaw.trim()
-      : "Unknown Supplier";
-  const supplierId = slugify(supplierName) || "unknown";
   const bundleId = crypto.randomUUID();
   const jobId = crypto.randomUUID();
+
+  // Prepare source content before creating the DB job. URL sources are fetched
+  // into markdown files so the worker can use the normal Read-based pipeline.
+  const tempDir = path.join("/tmp", `fileiq-${bundleId}`);
+  await fs.mkdir(tempDir, { recursive: true });
+
+  const preparedUploads: PreparedUpload[] = [];
+  for (const file of uploadedFiles) {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const safeName = path.basename(file.name);
+    const type = guessFileType(safeName);
+    preparedUploads.push({
+      file,
+      safeName,
+      buffer,
+      type,
+      contentHash: sha256(buffer),
+      contentHint: textHintFromBuffer(buffer, type),
+    });
+  }
+
+  const preparedUrls: PreparedUrlSource[] = [];
+  try {
+    for (const [index, url] of urls.entries()) {
+      const fetched = await fetchUrl(url);
+      const sourceRef = sourceRefForFetchedUrl(fetched);
+      const safeName = safeUrlFileName(url, index);
+      const filePath = path.join(tempDir, safeName);
+      const markdown = [
+        `# ${fetched.title ?? fetched.sourceUrl}`,
+        "",
+        `Source URL: ${fetched.sourceUrl}`,
+        `Scraped At: ${fetched.scrapedAt}`,
+        `Fetch Method: ${fetched.method}`,
+        `SourceRef: ${sourceRef}`,
+        "",
+        fetched.markdown,
+      ].join("\n");
+      await fs.writeFile(filePath, markdown, "utf8");
+      preparedUrls.push({
+        url,
+        fetched,
+        safeName,
+        filePath,
+        contentHash: sha256(markdown),
+        sourceRef,
+      });
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "URL fetch failed.";
+    return NextResponse.json(
+      { error: "url_fetch_failed", message: msg },
+      { status: msg.includes("FIRECRAWL_API_KEY") ? 503 : 502 },
+    );
+  }
+
+  const supplierNameRaw = formData.get("supplier_name");
+  const supplierName = detectSupplierName({
+    explicitSupplierName:
+      typeof supplierNameRaw === "string" && supplierNameRaw.trim().length > 0
+        ? supplierNameRaw.trim()
+        : null,
+    fileNames: preparedUploads.map((entry) => entry.safeName),
+    contentHints: [
+      ...preparedUploads.map((entry) => entry.contentHint),
+      ...preparedUrls.map((entry) => entry.fetched.markdown.slice(0, 8_000)),
+    ],
+    urls,
+  });
+  const supplierId = supplierIdFromName(supplierName);
   const bundleName = `${supplierName} – ${new Date().toISOString().slice(0, 10)}`;
+  const fetchMethod: "sdk" | "firecrawl" =
+    preparedUrls.some((entry) => entry.fetched.method === "firecrawl") ? "firecrawl" : "sdk";
 
   console.log(`${LOG} jobId=${jobId} bundleId=${bundleId} | start | supplier=${supplierId} fileCount=${uploadedFiles.length} urlCount=${urls.length}`);
 
@@ -354,7 +453,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       name: bundleName,
       status: "ingesting",
       createdBy: userId!,
-      metadata: { fileCount: uploadedFiles.length, urlCount: urls.length },
+      metadata: {
+        fileCount: uploadedFiles.length,
+        urlCount: urls.length,
+        supplierName,
+        ...(preparedUrls.length > 0 && {
+          fetchMethod,
+          sourceRefs: preparedUrls.map((entry) => entry.sourceRef),
+        }),
+      },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "DB write failed.";
@@ -371,48 +478,48 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Write uploaded files to a temp dir so the agent can read them.
-  const tempDir = path.join("/tmp", `fileiq-${bundleId}`);
-  await fs.mkdir(tempDir, { recursive: true });
-
   const fileEntries: Array<{ id: string; filePath: string; type: string }> = [];
-  for (const file of uploadedFiles) {
+  for (const upload of preparedUploads) {
     const fileId = crypto.randomUUID();
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const contentHash = sha256(buffer);
-    const safeName = path.basename(file.name);
-    const filePath = path.join(tempDir, safeName);
-    await fs.writeFile(filePath, buffer);
+    const filePath = path.join(tempDir, upload.safeName);
+    await fs.writeFile(filePath, upload.buffer);
     await insertFileIqSourceFile({
       id: fileId,
       bundleId,
       supplierId,
-      fileName: safeName,
-      fileType: guessFileType(safeName),
+      fileName: upload.safeName,
+      fileType: upload.type,
       sourceRole: "uploaded_file",
       storageUri: filePath,
-      contentHash,
+      contentHash: upload.contentHash,
       status: "registered",
-      metadata: { originalName: file.name, sizeBytes: buffer.length },
+      metadata: { originalName: upload.file.name, sizeBytes: upload.buffer.length },
     });
-    fileEntries.push({ id: fileId, filePath, type: guessFileType(safeName) });
+    fileEntries.push({ id: fileId, filePath, type: upload.type });
   }
 
-  for (const url of urls) {
+  for (const urlSource of preparedUrls) {
     const fileId = crypto.randomUUID();
-    const contentHash = sha256(url);
     await insertFileIqSourceFile({
       id: fileId,
       bundleId,
       supplierId,
-      fileName: url,
-      fileType: "url",
+      fileName: urlSource.safeName,
+      fileType: "markdown",
       sourceRole: "url_source",
-      storageUri: url,
-      contentHash,
+      storageUri: urlSource.filePath,
+      contentHash: urlSource.contentHash,
       status: "registered",
-      metadata: {},
+      metadata: {
+        originalUrl: urlSource.url,
+        sourceUrl: urlSource.fetched.sourceUrl,
+        title: urlSource.fetched.title,
+        scrapedAt: urlSource.fetched.scrapedAt,
+        fetchMethod: urlSource.fetched.method,
+        sourceRef: urlSource.sourceRef,
+      },
     });
+    fileEntries.push({ id: fileId, filePath: urlSource.filePath, type: "markdown" });
   }
 
   const filePaths = fileEntries.map((f) => ({ path: f.filePath, type: f.type }));
@@ -439,6 +546,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     summary: {
       fileCount: fileEntries.length,
       urlCount: urls.length,
+      supplierName,
+      ...(preparedUrls.length > 0 && {
+        fetchMethod,
+        sourceRef: preparedUrls[0].sourceRef,
+        sourceRefs: preparedUrls.map((entry) => entry.sourceRef),
+        urlSources: preparedUrls.map((entry) => ({
+          title: entry.fetched.title,
+          sourceUrl: entry.fetched.sourceUrl,
+          scrapedAt: entry.fetched.scrapedAt,
+          fetchMethod: entry.fetched.method,
+          sourceRef: entry.sourceRef,
+        })),
+      }),
       _worker: {
         agentPrompt,
         cwd: fileEntries.length > 0 ? tempDir : null,

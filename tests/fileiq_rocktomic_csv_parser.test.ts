@@ -39,6 +39,14 @@ describe("parseRocktomicInventoryCsv — basic parsing", () => {
     expect(result.payload.schemaVersion).toBe("1.1");
   });
 
+  it("sets Rocktomic Labs LLC as the supplier name", () => {
+    const csv = makeInventoryCsv([HEADER, "ROC001,Product A,IN STOCK,All Memberships,$19.99,"]);
+    const result = parseRocktomicInventoryCsv(csv);
+    const supplier = result.payload.supplier as Record<string, unknown>;
+    expect(supplier.name).toBe("Rocktomic Labs LLC");
+    expect(supplier.supplierName).toBe("Rocktomic Labs LLC");
+  });
+
   it("sets totalProductsFound equal to parsed product count", () => {
     const csv = makeInventoryCsv([
       HEADER,

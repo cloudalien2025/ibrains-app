@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { readFileSync } from "node:fs";
 
 // ─── Module mocks ────────────────────────────────────────────────────────────
 
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   listRecentFileIqJobs: vi.fn(),
   claimFileIqPendingJob: vi.fn(),
   runFileIqExtractionAgent: vi.fn(),
+  fetchUrl: vi.fn(),
   mkdir: vi.fn(),
   writeFile: vi.fn(),
   query: vi.fn(),
@@ -34,6 +36,10 @@ vi.mock("@/lib/fileiq/fileiq-db", () => ({
 
 vi.mock("@/lib/fileiq/agent/fileiq-agent", () => ({
   runFileIqExtractionAgent: mocks.runFileIqExtractionAgent,
+}));
+
+vi.mock("@/lib/fileiq/sources/url-source", () => ({
+  fetchUrl: mocks.fetchUrl,
 }));
 
 vi.mock("node:fs/promises", () => ({
@@ -83,6 +89,13 @@ beforeEach(() => {
   mocks.insertFileIqExtractionJob.mockResolvedValue(undefined);
   mocks.updateFileIqExtractionJob.mockResolvedValue(undefined);
   mocks.insertFileIqRawExtraction.mockResolvedValue(undefined);
+  mocks.fetchUrl.mockImplementation(async (url: string) => ({
+    markdown: `${"# Catalog\n\n"}${"Readable supplier catalog content. ".repeat(40)}`,
+    title: "Catalog",
+    sourceUrl: url,
+    scrapedAt: "2026-06-04T00:00:00.000Z",
+    method: "sdk",
+  }));
   mocks.mkdir.mockResolvedValue(undefined);
   mocks.writeFile.mockResolvedValue(undefined);
 });
@@ -176,7 +189,7 @@ describe("POST /api/fileiq/ingest — job registration and pending response", ()
     expect(mocks.insertFileIqRawExtraction).not.toHaveBeenCalled();
   });
 
-  it("creates exactly one source_file record per URL", async () => {
+  it("creates exactly one markdown source_file record per URL after fetching URL content", async () => {
     signedIn();
     const fd = makeFormData({
       urls: JSON.stringify(["https://example.com/a.pdf", "https://example.com/b.pdf", "https://example.com/c.pdf"]),
@@ -185,7 +198,55 @@ describe("POST /api/fileiq/ingest — job registration and pending response", ()
     await ingestPost(req);
     expect(mocks.insertFileIqSourceFile).toHaveBeenCalledTimes(3);
     const calls = mocks.insertFileIqSourceFile.mock.calls as Array<[{ storageUri: string; fileType: string }]>;
-    expect(calls.every((c) => c[0].fileType === "url")).toBe(true);
+    expect(calls.every((c) => c[0].fileType === "markdown")).toBe(true);
+    expect(calls.every((c) => c[0].storageUri.endsWith(".md"))).toBe(true);
+    expect(mocks.fetchUrl).toHaveBeenCalledTimes(3);
+  });
+
+  it("URL job triggers url-source path before job creation", async () => {
+    signedIn();
+    const callOrder: string[] = [];
+    mocks.fetchUrl.mockImplementation(async (url: string) => {
+      callOrder.push("fetchUrl");
+      return {
+        markdown: "Readable supplier catalog content. ".repeat(40),
+        title: "Catalog",
+        sourceUrl: url,
+        scrapedAt: "2026-06-04T00:00:00.000Z",
+        method: "sdk",
+      };
+    });
+    mocks.insertFileIqExtractionJob.mockImplementation(() => {
+      callOrder.push("job");
+      return Promise.resolve();
+    });
+
+    const fd = makeFormData({ urls: JSON.stringify(["https://example.com/catalog"]) });
+    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
+    await ingestPost(req);
+
+    expect(mocks.fetchUrl).toHaveBeenCalledWith("https://example.com/catalog");
+    expect(callOrder).toEqual(["fetchUrl", "job"]);
+  });
+
+  it("stores fetchMethod and sourceRef on the job summary for URL sources", async () => {
+    signedIn();
+    let capturedSummary: Record<string, unknown> | undefined;
+    mocks.insertFileIqExtractionJob.mockImplementation(
+      (row: { summary: Record<string, unknown> }) => {
+        capturedSummary = row.summary;
+        return Promise.resolve();
+      },
+    );
+
+    const fd = makeFormData({ urls: JSON.stringify(["https://example.com/catalog"]) });
+    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
+    await ingestPost(req);
+
+    expect(capturedSummary?.fetchMethod).toBe("sdk");
+    expect(capturedSummary?.sourceRef).toBe(
+      "https://example.com/catalog scrapedAt=2026-06-04T00:00:00.000Z fetchMethod=sdk",
+    );
   });
 });
 
@@ -350,6 +411,27 @@ describe("fileiq-db helper call contract", () => {
     const bundleCall = (mocks.insertFileIqSourceBundle.mock.calls[0] as [{ supplierId: string }])[0];
     expect(bundleCall.supplierId).toBe("acme-nutrition-co");
   });
+
+  it("detects Rocktomic supplier from CSV filename and ROC SKU prefix when supplier name is absent", async () => {
+    signedIn();
+
+    const fd = makeFormData(
+      {},
+      [{ name: "rocktomic-inventory.csv", content: "SKU,Product Name\nROC001,Omega-3" }],
+    );
+    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
+    await ingestPost(req);
+
+    const bundleCall = (mocks.insertFileIqSourceBundle.mock.calls[0] as [
+      { supplierId: string; name: string }
+    ])[0];
+    const jobCall = (mocks.insertFileIqExtractionJob.mock.calls[0] as [
+      { summary: Record<string, unknown> }
+    ])[0];
+    expect(bundleCall.supplierId).toBe("rocktomic-labs-llc");
+    expect(bundleCall.name).toContain("Rocktomic Labs LLC");
+    expect(jobCall.summary.supplierName).toBe("Rocktomic Labs LLC");
+  });
 });
 
 // ─── Nav + schema state ────────────────────────────────────────────────────────
@@ -421,7 +503,6 @@ describe("POST /api/fileiq/ingest — product catalog prompt schema version", ()
 
 describe("proxy.ts — /api/fileiq auth protection", () => {
   it("isProtectedRoute matcher source covers /api/fileiq(.*)", () => {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
     const proxySource = readFileSync(
       new URL("../proxy.ts", import.meta.url).pathname,
       "utf8",

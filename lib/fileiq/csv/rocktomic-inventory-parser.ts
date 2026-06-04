@@ -114,7 +114,8 @@ function buildEmptyProductCatalog(
     schemaVersion: "1.1",
     supplier: {
       supplierId: "rocktomic",
-      supplierName: "Rocktomic",
+      name: "Rocktomic Labs LLC",
+      supplierName: "Rocktomic Labs LLC",
       website: null,
       contactEmail: null,
       contactPhone: null,
@@ -398,7 +399,8 @@ export function parseRocktomicInventoryCsv(
     schemaVersion: "1.1",
     supplier: {
       supplierId: "rocktomic",
-      supplierName: "Rocktomic",
+      name: "Rocktomic Labs LLC",
+      supplierName: "Rocktomic Labs LLC",
       website: null,
       contactEmail: null,
       contactPhone: null,

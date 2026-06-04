@@ -44,6 +44,7 @@ export type FileIqRefundType =
 
 export interface FileIqSupplier {
   supplierId: string;
+  name?: string;
   supplierName: string;
   website: string | null;
   contactEmail: string | null;
