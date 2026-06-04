@@ -48,6 +48,25 @@ const PRODUCT_INTENT_KEYWORDS = [
   "inventory",
 ];
 
+const FINANCIAL_INTENT_KEYWORDS = [
+  "bank",
+  "statement",
+  "checking",
+  "savings",
+  "credit card",
+  "credit-card",
+  "transaction",
+  "spend",
+  "spent",
+  "spending",
+  "expense",
+  "expenses",
+  "debit",
+  "withdrawal",
+  "deposit",
+  "merchant",
+];
+
 function isProductCatalogIntent(params: {
   intent?: string;
   bundleName: string;
@@ -61,6 +80,23 @@ function isProductCatalogIntent(params: {
     .join(" ")
     .toLowerCase();
   return PRODUCT_INTENT_KEYWORDS.some((kw) => haystack.includes(kw));
+}
+
+function isFinancialStatementIntent(params: {
+  intent?: string;
+  bundleName: string;
+  filePaths: Array<{ path: string; type: string }>;
+  urls: string[];
+}): boolean {
+  const haystack = [
+    params.intent ?? "",
+    params.bundleName,
+    ...params.filePaths.map((f) => f.path),
+    ...params.urls,
+  ]
+    .join(" ")
+    .toLowerCase();
+  return FINANCIAL_INTENT_KEYWORDS.some((kw) => haystack.includes(kw));
 }
 
 const CATALOG_SCHEMA_EXAMPLE = JSON.stringify(
@@ -167,6 +203,55 @@ const CATALOG_SCHEMA_EXAMPLE = JSON.stringify(
   2,
 );
 
+const FINANCIAL_STATEMENT_SCHEMA_EXAMPLE = JSON.stringify(
+  {
+    schemaType: "financial_statement",
+    schemaVersion: "1.0",
+    institution: {
+      name: "Example Bank",
+      accountType: "checking",
+      accountLast4: "1234",
+    },
+    statementPeriod: {
+      startDate: "2026-05-01",
+      endDate: "2026-05-31",
+      statementCount: 1,
+    },
+    currency: "USD",
+    openingBalance: 4200.11,
+    closingBalance: 3987.22,
+    transactions: [
+      {
+        date: "2026-05-04",
+        description: "WHOLE FOODS MARKET",
+        merchant: "Whole Foods",
+        category: "Groceries",
+        amount: -86.42,
+        balance: 4113.69,
+        accountLabel: "Primary Checking",
+        statementRef: "statement 1 page 2",
+        confidence: 0.93,
+        notes: null,
+      },
+    ],
+    totalTransactions: 1,
+    summary: {
+      totalIncome: 0,
+      totalSpend: 86.42,
+      netCashFlow: -86.42,
+      topCategories: [
+        {
+          category: "Groceries",
+          amount: 86.42,
+        },
+      ],
+    },
+    extractionNotes: "Summarize statement coverage, missing pages, and notable caveats.",
+  },
+  null,
+  2,
+);
+
 function buildExtractionPrompt(params: {
   jobId: string;
   bundleName: string;
@@ -201,7 +286,32 @@ function buildExtractionPrompt(params: {
     lines.push("");
   }
 
-  if (isProductCatalogIntent(params)) {
+  if (isFinancialStatementIntent(params)) {
+    lines.push(
+      "TASK: Extract a normalized FileIQ financial statement report across all statements and pages.",
+      "",
+      "CRITICAL OUTPUT RULES â€” follow exactly:",
+      "  1. Output ONLY valid JSON. No prose before or after the JSON.",
+      "  2. Do NOT wrap the JSON in markdown code fences (no ``` or ```json).",
+      "  3. Your entire response must be parseable by JSON.parse().",
+      "",
+      "Set schemaType to \"financial_statement\" and schemaVersion to \"1.0\".",
+      "Capture every transaction you can identify. Preserve the sign on amount values so spending is negative and income is positive whenever the source makes that clear.",
+      "Infer a useful spending category when the merchant or source clearly supports it; otherwise set category to null.",
+      "Summarize the aggregate totals in summary.totalIncome, summary.totalSpend, and summary.netCashFlow.",
+      "If multiple statements are provided, merge them into one report and set statementPeriod.statementCount accordingly.",
+      "Ground every fact in the source â€” never invent values.",
+    );
+
+    if (params.intent) {
+      lines.push(
+        "",
+        `PRIORITY: The user said "${params.intent}". Make sure the output structure supports that request directly.`,
+      );
+    }
+
+    lines.push("", "REQUIRED JSON SHAPE:", FINANCIAL_STATEMENT_SCHEMA_EXAMPLE);
+  } else if (isProductCatalogIntent(params)) {
     lines.push(
       "TASK: Extract every product you can find across all sources and return a FileIQ Product Catalog (schema v1.1).",
       "",

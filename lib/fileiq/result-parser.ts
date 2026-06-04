@@ -21,6 +21,12 @@ export interface ProductCatalogSummary {
   totalProductsFound: number;
 }
 
+export interface FileIqStructuredSummary {
+  schemaType: string;
+  schemaVersion: string;
+  extractedCount: number;
+}
+
 function tryParseJsonObject(text: string): Record<string, unknown> | null {
   try {
     const parsed: unknown = JSON.parse(text);
@@ -151,6 +157,36 @@ export function detectProductCatalogSummary(
     schemaVersion: payload.schemaVersion,
     totalProductsFound,
   };
+}
+
+export function detectFileIqStructuredSummary(
+  payload: Record<string, unknown>,
+): FileIqStructuredSummary | null {
+  const productCatalog = detectProductCatalogSummary(payload);
+  if (productCatalog) {
+    return {
+      schemaType: productCatalog.schemaType,
+      schemaVersion: productCatalog.schemaVersion,
+      extractedCount: productCatalog.totalProductsFound,
+    };
+  }
+
+  if (
+    payload.schemaType === "financial_statement" &&
+    typeof payload.schemaVersion === "string" &&
+    Array.isArray(payload.transactions)
+  ) {
+    return {
+      schemaType: "financial_statement",
+      schemaVersion: payload.schemaVersion,
+      extractedCount:
+        typeof payload.totalTransactions === "number"
+          ? payload.totalTransactions
+          : payload.transactions.length,
+    };
+  }
+
+  return null;
 }
 
 /**

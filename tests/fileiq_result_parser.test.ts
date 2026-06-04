@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractJsonFromAgentResult,
+  detectFileIqStructuredSummary,
   detectProductCatalogSummary,
   computeExtractedCount,
 } from "@/lib/fileiq/result-parser";
@@ -214,5 +215,34 @@ describe("computeExtractedCount", () => {
   it("returns 1 when only a summary object is present", () => {
     const payload = { summary: { text: "Document summary..." } };
     expect(computeExtractedCount(payload)).toBe(1);
+  });
+});
+
+describe("detectFileIqStructuredSummary", () => {
+  it("returns product_catalog summary with extractedCount", () => {
+    const payload = {
+      schemaType: "product_catalog",
+      schemaVersion: "1.1",
+      products: [{ sku: "A" }, { sku: "B" }],
+      totalProductsFound: 2,
+    };
+    expect(detectFileIqStructuredSummary(payload)).toEqual({
+      schemaType: "product_catalog",
+      schemaVersion: "1.1",
+      extractedCount: 2,
+    });
+  });
+
+  it("returns financial_statement summary with transactions count", () => {
+    const payload = {
+      schemaType: "financial_statement",
+      schemaVersion: "1.0",
+      transactions: [{ id: "t1" }, { id: "t2" }, { id: "t3" }],
+    };
+    expect(detectFileIqStructuredSummary(payload)).toEqual({
+      schemaType: "financial_statement",
+      schemaVersion: "1.0",
+      extractedCount: 3,
+    });
   });
 });

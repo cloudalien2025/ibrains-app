@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 // ─── Module mocks ────────────────────────────────────────────────────────────
 
@@ -366,7 +367,7 @@ describe("GET /api/fileiq/jobs", () => {
     expect(res.status).toBe(200);
     expect(data.jobs).toHaveLength(1);
     expect(data.jobs[0].bundleName).toBe("Acme – 2026-06-04");
-    expect(mocks.listRecentFileIqJobs).toHaveBeenCalledWith(20);
+    expect(mocks.listRecentFileIqJobs).toHaveBeenCalledWith(20, "user_test");
   });
 
   it("caps limit at 100", async () => {
@@ -374,7 +375,7 @@ describe("GET /api/fileiq/jobs", () => {
     mocks.listRecentFileIqJobs.mockResolvedValue([]);
     const req = new NextRequest("https://app.ibrains.ai/api/fileiq/jobs?limit=999");
     await jobsGet(req);
-    expect(mocks.listRecentFileIqJobs).toHaveBeenCalledWith(100);
+    expect(mocks.listRecentFileIqJobs).toHaveBeenCalledWith(100, "user_test");
   });
 });
 
@@ -497,6 +498,21 @@ describe("POST /api/fileiq/ingest — product catalog prompt schema version", ()
     const agentPrompt = await captureAgentPrompt(fd);
     expect(agentPrompt).toContain("coaExpiryDate");
   });
+
+  it("switches to financial_statement schema when the intent is bank-statement spending analysis", async () => {
+    signedIn();
+    const fd = makeFormData(
+      {
+        intent: "Give me one PDF showing how I spend my money across these bank statements.",
+      },
+      [{ name: "bank-statement-may.pdf", content: "%PDF-1.4 bank statement" }],
+    );
+    const agentPrompt = await captureAgentPrompt(fd);
+    expect(agentPrompt).toContain('"schemaType": "financial_statement"');
+    expect(agentPrompt).toContain('"schemaVersion": "1.0"');
+    expect(agentPrompt).toContain("transactions");
+    expect(agentPrompt).toContain("summary.totalSpend");
+  });
 });
 
 // ─── Proxy route protection ───────────────────────────────────────────────────
@@ -504,7 +520,7 @@ describe("POST /api/fileiq/ingest — product catalog prompt schema version", ()
 describe("proxy.ts — /api/fileiq auth protection", () => {
   it("isProtectedRoute matcher source covers /api/fileiq(.*)", () => {
     const proxySource = readFileSync(
-      new URL("../proxy.ts", import.meta.url).pathname,
+      fileURLToPath(new URL("../proxy.ts", import.meta.url)),
       "utf8",
     );
     expect(proxySource).toContain('"/api/fileiq(.*)"');

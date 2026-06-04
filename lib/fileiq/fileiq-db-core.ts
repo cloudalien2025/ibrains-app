@@ -66,6 +66,57 @@ export interface FileIqJobListRow {
   completedAt: string | null;
 }
 
+export interface FileIqOwnedJob extends FileIqJobListRow {
+  errorMessage: string | null;
+}
+
+export interface FileIqStoredArtifact {
+  id: string;
+  extractionJobId: string;
+  artifactType: string;
+  storageUri: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface FileIqJobDeletionContext {
+  job: FileIqOwnedJob;
+  cleanupStorageUris: string[];
+}
+
+function mapFileIqJobRow(
+  row: {
+    id: string;
+    bundle_id: string;
+    bundle_name: string;
+    status: string;
+    agent_session_id: string | null;
+    summary: unknown;
+    error_code: string | null;
+    error_message?: string | null;
+    created_at: string;
+    completed_at: string | null;
+  },
+): FileIqOwnedJob {
+  return {
+    id: row.id,
+    bundleId: row.bundle_id,
+    bundleName: row.bundle_name,
+    status: row.status,
+    agentSessionId: row.agent_session_id,
+    summary: (row.summary as Record<string, unknown>) ?? {},
+    errorCode: row.error_code,
+    errorMessage: row.error_message ?? null,
+    createdAt: typeof row.created_at === "string" ? row.created_at : String(row.created_at),
+    completedAt:
+      row.completed_at == null
+        ? null
+        : typeof row.completed_at === "string"
+          ? row.completed_at
+          : String(row.completed_at),
+  };
+}
+
 export async function backfillFileIqCompletedJobSuppliers(): Promise<number> {
   const rows = await queryEcommerce<{ id: string }>(
     `WITH latest_raw AS (
@@ -208,7 +259,7 @@ export async function claimFileIqPendingJob(): Promise<FileIqClaimedJob | null> 
   };
 }
 
-export async function listRecentFileIqJobs(limit: number): Promise<FileIqJobListRow[]> {
+export async function listRecentFileIqJobs(limit: number, userId?: string | null): Promise<FileIqJobListRow[]> {
   await backfillFileIqCompletedJobSuppliers();
 
   const rows = await queryEcommerce<{
@@ -227,24 +278,123 @@ export async function listRecentFileIqJobs(limit: number): Promise<FileIqJobList
             j.summary - '_worker' AS summary, j.error_code, j.created_at, j.completed_at
      FROM fileiq_extraction_jobs j
      JOIN fileiq_source_bundles b ON b.id = j.bundle_id
+     WHERE ($2::text IS NULL OR b.created_by = $2)
      ORDER BY j.created_at DESC
      LIMIT $1`,
-    [limit],
+    [limit, userId ?? null],
   );
-  return rows.map((r) => ({
-    id: r.id,
-    bundleId: r.bundle_id,
-    bundleName: r.bundle_name,
-    status: r.status,
-    agentSessionId: r.agent_session_id,
-    summary: (r.summary as Record<string, unknown>) ?? {},
-    errorCode: r.error_code,
-    createdAt: typeof r.created_at === "string" ? r.created_at : String(r.created_at),
-    completedAt:
-      r.completed_at == null
-        ? null
-        : typeof r.completed_at === "string"
-          ? r.completed_at
-          : String(r.completed_at),
-  }));
+  return rows.map((r) => mapFileIqJobRow(r));
+}
+
+export async function getFileIqJobForUser(
+  userId: string,
+  jobId: string,
+): Promise<FileIqOwnedJob | null> {
+  const rows = await queryEcommerce<{
+    id: string;
+    bundle_id: string;
+    bundle_name: string;
+    status: string;
+    agent_session_id: string | null;
+    summary: unknown;
+    error_code: string | null;
+    error_message: string | null;
+    created_at: string;
+    completed_at: string | null;
+  }>(
+    `SELECT j.id, j.bundle_id, b.name AS bundle_name, j.status, j.agent_session_id,
+            j.summary - '_worker' AS summary, j.error_code, j.error_message, j.created_at, j.completed_at
+     FROM fileiq_extraction_jobs j
+     JOIN fileiq_source_bundles b ON b.id = j.bundle_id
+     WHERE j.id = $1
+       AND b.created_by = $2
+     LIMIT 1`,
+    [jobId, userId],
+  );
+
+  return rows.length > 0 ? mapFileIqJobRow(rows[0]) : null;
+}
+
+export async function getLatestFileIqArtifactForUser(
+  userId: string,
+  jobId: string,
+  artifactTypes: string[],
+): Promise<FileIqStoredArtifact | null> {
+  if (artifactTypes.length === 0) return null;
+
+  const rows = await queryEcommerce<{
+    id: string;
+    extraction_job_id: string;
+    artifact_type: string;
+    storage_uri: string;
+    payload: unknown;
+    created_at: string;
+  }>(
+    `SELECT r.id, r.extraction_job_id, r.artifact_type, r.storage_uri, r.payload, r.created_at
+     FROM fileiq_raw_extractions r
+     JOIN fileiq_extraction_jobs j ON j.id = r.extraction_job_id
+     JOIN fileiq_source_bundles b ON b.id = j.bundle_id
+     WHERE r.extraction_job_id = $1
+       AND b.created_by = $2
+       AND r.artifact_type = ANY($3::text[])
+     ORDER BY r.created_at DESC
+     LIMIT 1`,
+    [jobId, userId, artifactTypes],
+  );
+
+  if (rows.length === 0) return null;
+  const row = rows[0];
+  return {
+    id: row.id,
+    extractionJobId: row.extraction_job_id,
+    artifactType: row.artifact_type,
+    storageUri: row.storage_uri,
+    payload: (row.payload as Record<string, unknown>) ?? {},
+    createdAt: typeof row.created_at === "string" ? row.created_at : String(row.created_at),
+  };
+}
+
+export async function getFileIqJobDeletionContextForUser(
+  userId: string,
+  jobId: string,
+): Promise<FileIqJobDeletionContext | null> {
+  const job = await getFileIqJobForUser(userId, jobId);
+  if (!job) return null;
+
+  const sourceFileRows = await queryEcommerce<{ storage_uri: string }>(
+    `SELECT storage_uri
+     FROM fileiq_source_files
+     WHERE bundle_id = $1`,
+    [job.bundleId],
+  );
+  const artifactRows = await queryEcommerce<{ storage_uri: string }>(
+    `SELECT r.storage_uri
+     FROM fileiq_raw_extractions r
+     WHERE r.extraction_job_id = $1`,
+    [job.id],
+  );
+
+  const cleanupStorageUris = Array.from(
+    new Set(
+      [...sourceFileRows, ...artifactRows]
+        .map((row) => row.storage_uri)
+        .filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+    ),
+  );
+
+  return { job, cleanupStorageUris };
+}
+
+export async function deleteFileIqSourceBundleForUser(
+  userId: string,
+  bundleId: string,
+): Promise<boolean> {
+  const rows = await queryEcommerce<{ id: string }>(
+    `DELETE FROM fileiq_source_bundles
+     WHERE id = $1
+       AND created_by = $2
+     RETURNING id`,
+    [bundleId, userId],
+  );
+  return rows.length > 0;
 }
