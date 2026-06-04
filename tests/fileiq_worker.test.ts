@@ -289,6 +289,41 @@ describe("processFileIqJob — agent success (pure JSON result)", () => {
     expect(updateCall.summary.schemaVersion).toBe("1.1");
   });
 
+  it("persists supplier.name from product_catalog result onto the job summary", async () => {
+    agentSuccess(JSON.stringify({
+      schemaType: "product_catalog",
+      schemaVersion: "1.1",
+      supplier: { name: "Acme Labs LLC", supplierName: "Legacy Acme" },
+      products: [{ sku: "X1" }],
+      totalProductsFound: 1,
+      sourcesProcessed: 1,
+      extractionNotes: "ok",
+    }));
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { summary: { supplierName?: string } }
+    ])[1];
+    expect(updateCall.summary.supplierName).toBe("Acme Labs LLC");
+  });
+
+  it("stores Unknown Supplier when no supplier exists in parsed output", async () => {
+    agentSuccess(JSON.stringify({
+      schemaType: "product_catalog",
+      schemaVersion: "1.1",
+      products: [{ sku: "X1" }],
+      totalProductsFound: 1,
+      sourcesProcessed: 1,
+      extractionNotes: "ok",
+    }));
+    await processFileIqJob("job_unknown", "bundle_unknown", makeWorkerContext());
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { summary: { supplierName?: string } }
+    ])[1];
+    expect(updateCall.summary.supplierName).toBe("Unknown Supplier");
+  });
+
   it("job summary includes _timing object with totalMs", async () => {
     agentSuccess();
     await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
@@ -465,9 +500,19 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
     "ROC002,Vitamin C,LOW STOCK,Scale Plan Only,$19.99,Back in stock Q3",
   ].join("\n");
 
+  function agentSuccessForCsv(productCount = 2) {
+    agentSuccess(JSON.stringify({
+      schemaType: "product_catalog",
+      schemaVersion: "1.1",
+      validationStatus: "validated",
+      validatedProductCount: productCount,
+      normalizationNotes: [],
+    }));
+  }
+
   it("invokes Claude Agent SDK even when route=deterministic_structured and CSV parses with high confidence", async () => {
     mocks.readFile.mockResolvedValue(CSV_CONTENT);
-    agentSuccess();
+    agentSuccessForCsv();
 
     await processFileIqJob(
       "job_csv",
@@ -492,7 +537,7 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
 
   it("calls agent with compact prompt containing PREPARED EVIDENCE (not full schema block)", async () => {
     mocks.readFile.mockResolvedValue(CSV_CONTENT);
-    agentSuccess();
+    agentSuccessForCsv();
 
     await processFileIqJob(
       "job_csv",
@@ -508,15 +553,22 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
       { prompt: string; maxTurns: number }
     ])[0];
     expect(agentCall.prompt).toContain("PREPARED EVIDENCE");
+    expect(agentCall.prompt).toContain("END PREPARED EVIDENCE");
     expect(agentCall.prompt).toContain("1.1");
+    expect(agentCall.prompt).toContain("PREPARED EVIDENCE.products is the full product list");
+    expect(agentCall.prompt).toContain("preserve all 2 products");
+    expect(agentCall.prompt).toContain("validatedProductCount to 2");
+    expect(agentCall.prompt).toContain("Do not return the full product_catalog");
     // Compact prompt should not include the large CATALOG_SCHEMA_EXAMPLE block
     expect(agentCall.prompt).not.toContain("CATALOG_SCHEMA_EXAMPLE");
     expect(agentCall.prompt).not.toContain("FILES — read each using the Read tool");
+    expect(agentCall.prompt).not.toContain(CSV_CONTENT);
+    expect(agentCall.prompt).not.toContain("SKU,Product Name,Status,Access Level,MSRP,Comments/ETA");
   });
 
   it("calls agent with small maxTurns from context (≤4)", async () => {
     mocks.readFile.mockResolvedValue(CSV_CONTENT);
-    agentSuccess();
+    agentSuccessForCsv();
 
     await processFileIqJob(
       "job_csv",
@@ -535,9 +587,29 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
     expect(agentCall.maxTurns).toBeGreaterThan(0);
   });
 
+  it("forces maxTurns=3 for high-confidence deterministic CSV validation even when worker context has maxTurns=0", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccessForCsv();
+
+    await processFileIqJob(
+      "job_csv_maxturns_fix",
+      "bundle_csv_maxturns_fix",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 0,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const agentCall = (mocks.runFileIqExtractionAgent.mock.calls[0] as [
+      { maxTurns: number }
+    ])[0];
+    expect(agentCall.maxTurns).toBe(3);
+  });
+
   it("job summary includes agentOrchestration=true", async () => {
     mocks.readFile.mockResolvedValue(CSV_CONTENT);
-    agentSuccess();
+    agentSuccessForCsv();
 
     await processFileIqJob(
       "job_csv",
@@ -558,7 +630,7 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
 
   it("job summary includes localPreparse with productsParsed count", async () => {
     mocks.readFile.mockResolvedValue(CSV_CONTENT);
-    agentSuccess();
+    agentSuccessForCsv();
 
     await processFileIqJob(
       "job_csv",
@@ -580,9 +652,30 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
     expect(updateCall.summary.localPreparse!.confidence).toBe("high");
   });
 
+  it("Rocktomic CSV job persists supplierName=Rocktomic Labs LLC after extraction", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccessForCsv();
+
+    await processFileIqJob(
+      "job_csv_supplier",
+      "bundle_csv_supplier",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/rocktomic-inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { summary: { supplierName?: string } }
+    ])[1];
+    expect(updateCall.summary.supplierName).toBe("Rocktomic Labs LLC");
+  });
+
   it("_timing includes preparseMs and agentDurationMs", async () => {
     mocks.readFile.mockResolvedValue(CSV_CONTENT);
-    agentSuccess();
+    agentSuccessForCsv();
 
     await processFileIqJob(
       "job_csv",
@@ -606,7 +699,7 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
 
   it("compact prompt does not tell Claude to reread source file", async () => {
     mocks.readFile.mockResolvedValue(CSV_CONTENT);
-    agentSuccess();
+    agentSuccessForCsv();
 
     await processFileIqJob(
       "job_csv",
@@ -622,6 +715,112 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
       { prompt: string }
     ])[0];
     expect(agentCall.prompt).toMatch(/do not reread.*source/i);
+  });
+
+  it("sends every locally parsed product row in PREPARED EVIDENCE", async () => {
+    const csvWith164Products = [
+      "SKU,Product Name,Status,Access Level,MSRP,Comments/ETA",
+      ...Array.from({ length: 164 }, (_, i) => {
+        const n = String(i + 1).padStart(3, "0");
+        return `ROC${n},Rocktomic Product ${n},IN STOCK,All Memberships,$19.99,`;
+      }),
+    ].join("\n");
+    mocks.readFile.mockResolvedValue(csvWith164Products);
+    agentSuccessForCsv(164);
+
+    await processFileIqJob(
+      "job_csv_164",
+      "bundle_csv_164",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const agentCall = (mocks.runFileIqExtractionAgent.mock.calls[0] as [
+      { prompt: string }
+    ])[0];
+    const evidenceJson = agentCall.prompt
+      .split("PREPARED EVIDENCE:\n")[1]
+      .split("\nEND PREPARED EVIDENCE")[0];
+    const evidence = JSON.parse(evidenceJson) as { products: Array<{ sku: string }> };
+    expect(evidence.products).toHaveLength(164);
+    expect(evidence.products[0].sku).toBe("ROC001");
+    expect(evidence.products[163].sku).toBe("ROC164");
+    expect(agentCall.prompt).toContain("preserve all 164 products");
+    expect(agentCall.prompt).toContain("validatedProductCount to 164");
+  });
+
+  it("stores the full deterministic product_catalog after compact agent validation succeeds", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccessForCsv();
+
+    await processFileIqJob(
+      "job_csv_validated_full_catalog",
+      "bundle_csv_validated_full_catalog",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const rawCall = (mocks.insertFileIqRawExtraction.mock.calls[0] as [
+      {
+        artifactType: string;
+        payload: {
+          schemaType?: string;
+          schemaVersion?: string;
+          products?: unknown[];
+          totalProductsFound?: number;
+          _meta?: { agentValidation?: { validatedProductCount?: number } };
+        };
+      }
+    ])[0];
+    expect(rawCall.artifactType).toBe("agent_result");
+    expect(rawCall.payload.schemaType).toBe("product_catalog");
+    expect(rawCall.payload.schemaVersion).toBe("1.1");
+    expect(rawCall.payload.products).toHaveLength(2);
+    expect(rawCall.payload.totalProductsFound).toBe(2);
+    expect(rawCall.payload._meta?.agentValidation?.validatedProductCount).toBe(2);
+  });
+
+  it("does not let an incomplete validation response overwrite full high-confidence preparse output", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccess(JSON.stringify({
+      schemaType: "product_catalog",
+      schemaVersion: "1.1",
+      products: [{ sku: "ROC001", productName: "Only First Product" }],
+      totalProductsFound: 1,
+      sourcesProcessed: 1,
+      extractionNotes: "incomplete validation response",
+    }));
+
+    await processFileIqJob(
+      "job_csv_incomplete_validation",
+      "bundle_csv_incomplete_validation",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const rawCall = (mocks.insertFileIqRawExtraction.mock.calls[0] as [
+      { artifactType: string; payload: { products?: unknown[]; totalProductsFound?: number } }
+    ])[0];
+    expect(rawCall.artifactType).toBe("deterministic_result");
+    expect(rawCall.payload.products).toHaveLength(2);
+    expect(rawCall.payload.totalProductsFound).toBe(2);
+
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { status: string; summary: { totalProductsFound: number; agentStatus: string } }
+    ])[1];
+    expect(updateCall.status).toBe("completed");
+    expect(updateCall.summary.totalProductsFound).toBe(2);
+    expect(updateCall.summary.agentStatus).toBe("fallback_deterministic");
   });
 
   it("falls back to deterministic result (status=completed) when agent throws during validation", async () => {

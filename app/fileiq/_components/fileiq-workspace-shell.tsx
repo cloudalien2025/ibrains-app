@@ -40,6 +40,7 @@ const STATUS: Record<string, { label: string; color: string; bg: string; border:
   running:   { label: "Processing", color: "#FFAD33", bg: "rgba(255,173,51,.07)",  border: "rgba(255,173,51,.22)"  },
   failed:    { label: "Failed",     color: "#FF5070", bg: "rgba(255,80,112,.07)",   border: "rgba(255,80,112,.22)"  },
   pending:   { label: "Pending",    color: "#4A6A8A", bg: "transparent",            border: "rgba(42,58,85,.35)"    },
+  unavailable: { label: "Unavailable", color: "#FFAD33", bg: "rgba(255,173,51,.07)", border: "rgba(255,173,51,.22)" },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -54,6 +55,18 @@ function schemaLabel(job: JobRow): string {
   const v = job.summary?.schemaVersion;
   if (t !== "product_catalog") return "—";
   return `product_catalog ${typeof v === "string" ? `v${v}` : ""}`.trim();
+}
+
+function supplierName(job: JobRow): string {
+  const value = job.summary?.supplierName;
+  return typeof value === "string" && value.trim() ? value.trim() : "Unknown Supplier";
+}
+
+function validationLabel(job: JobRow): string {
+  const agentStatus = job.summary?.agentStatus;
+  if (agentStatus === "fallback_deterministic") return "Parsed only";
+  if (agentStatus === "completed") return "Validated";
+  return "—";
 }
 
 function jobDuration(job: JobRow): string {
@@ -240,23 +253,27 @@ const FILEIQ_CSS = `
 
 .fiq-job-grid {
   display: grid;
-  grid-template-columns: 10px 1fr 100px 80px;
+  grid-template-columns: 10px minmax(0,1fr) 96px 72px;
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
 }
-@media (min-width: 640px) {
+@media (min-width: 1024px) {
   .fiq-job-grid {
-    grid-template-columns: 10px 1fr 130px 160px 90px 110px;
+    grid-template-columns: 10px minmax(180px,1.6fr) minmax(120px,.9fr) 120px 130px 80px 128px 100px;
     gap: 16px;
     padding: 15px 20px;
   }
 }
+.fiq-job-supplier,
 .fiq-job-schema { display: none; }
-.fiq-job-dur    { display: none; }
-@media (min-width: 640px) {
+.fiq-job-validation,
+.fiq-job-dur { display: none; }
+@media (min-width: 1024px) {
+  .fiq-job-supplier,
   .fiq-job-schema { display: block; }
-  .fiq-job-dur    { display: block; }
+  .fiq-job-validation,
+  .fiq-job-dur { display: block; }
 }
 
 .fiq-source-item {
@@ -722,13 +739,22 @@ export default function FileIqWorkspaceShell() {
               </div>
 
               {/* Column headers */}
-              <div style={{ display: "grid", gridTemplateColumns: "10px 1fr 100px 80px",
-                padding: "8px 16px", marginBottom: 4,
+              <div className="fiq-job-grid" style={{ paddingTop: 8, paddingBottom: 8, marginBottom: 4,
                 borderBottom: "1px solid rgba(255,255,255,.04)" }}>
-                {["", "Source", "Status", "Extracted", "Schema", "Duration"].map((h, i) => (
-                  <span key={i} className={i >= 4 ? "fiq-job-schema" : ""}
+                {[
+                  ["", ""],
+                  ["Source", ""],
+                  ["Supplier", "fiq-job-supplier"],
+                  ["Status", ""],
+                  ["Schema", "fiq-job-schema"],
+                  ["Extracted", ""],
+                  ["Validation", "fiq-job-validation"],
+                  ["Submitted", "fiq-job-dur"],
+                ].map(([h, cls]) => (
+                  <span key={h || "dot"} className={cls}
                     style={{ fontFamily: "var(--display)", fontSize: 8, fontWeight: 700,
-                      letterSpacing: ".12em", textTransform: "uppercase", color: "var(--t3)" }}>
+                      letterSpacing: ".12em", textTransform: "uppercase", color: "var(--t3)",
+                      textAlign: h === "Extracted" ? "center" : h === "Submitted" ? "right" : "left" }}>
                     {h}
                   </span>
                 ))}
@@ -752,6 +778,8 @@ export default function FileIqWorkspaceShell() {
                     const isRunning = job.status === "running";
                     const count     = extractedCount(job);
                     const schema    = schemaLabel(job);
+                    const supplier  = supplierName(job);
+                    const validation = validationLabel(job);
                     const dur       = jobDuration(job);
 
                     return (
@@ -776,6 +804,14 @@ export default function FileIqWorkspaceShell() {
                             </div>
                           </div>
 
+                          {/* Supplier — desktop */}
+                          <div className="fiq-job-supplier" style={{ minWidth: 0 }}>
+                            <div style={{ fontFamily: "var(--body)", fontSize: 12, color: "var(--t2)",
+                              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {supplier}
+                            </div>
+                          </div>
+
                           {/* Status pill */}
                           <div>
                             <div style={{ display: "inline-flex", alignItems: "center", gap: 5,
@@ -785,6 +821,14 @@ export default function FileIqWorkspaceShell() {
                               whiteSpace: "nowrap", letterSpacing: ".04em" }}>
                               {s.label}
                             </div>
+                          </div>
+
+                          {/* Schema — desktop */}
+                          <div className="fiq-job-schema"
+                            style={{ fontFamily: "var(--mono)", fontSize: 10,
+                              color: schema !== "—" ? "var(--t2)" : "var(--t3)", whiteSpace: "nowrap",
+                              overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {schema}
                           </div>
 
                           {/* Extracted count */}
@@ -805,11 +849,11 @@ export default function FileIqWorkspaceShell() {
                             )}
                           </div>
 
-                          {/* Schema — desktop */}
-                          <div className="fiq-job-schema"
+                          {/* Validation — desktop */}
+                          <div className="fiq-job-validation"
                             style={{ fontFamily: "var(--mono)", fontSize: 10,
-                              color: schema !== "—" ? "var(--t2)" : "var(--t3)", whiteSpace: "nowrap" }}>
-                            {schema}
+                              color: validation !== "—" ? "var(--t2)" : "var(--t3)", whiteSpace: "nowrap" }}>
+                            {validation}
                           </div>
 
                           {/* Duration + time — desktop */}

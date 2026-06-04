@@ -26,6 +26,8 @@ import {
   detectProductCatalogSummary,
 } from "@/lib/fileiq/result-parser";
 import { parseRocktomicInventoryCsv } from "@/lib/fileiq/csv/rocktomic-inventory-parser";
+import { extractSupplierNameFromPayload, UNKNOWN_SUPPLIER } from "@/lib/fileiq/supplier-detection";
+import { warnIfFirecrawlMissing } from "@/lib/fileiq/sources/url-source";
 
 const LOG = "[fileiq:worker]";
 const POLL_INTERVAL_MS = 5_000;
@@ -43,13 +45,100 @@ interface WorkerContext {
   routeRationale?: string;
   filePaths?: Array<{ path: string; type: string }>;
   urls?: string[];
+  sourceSummary?: Record<string, unknown>;
 }
+
+const DETERMINISTIC_VALIDATION_MAX_TURNS = 3;
 
 /** Typed result from a successful deterministic CSV preparse. */
 interface CsvPreparseResult {
   payload: Record<string, unknown>;
   productCount: number;
   confidence: "high" | "low";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function pickNonEmptyFields(
+  source: unknown,
+  keys: string[],
+): Record<string, unknown> | undefined {
+  if (!isRecord(source)) return undefined;
+  const picked: Record<string, unknown> = {};
+  for (const key of keys) {
+    const value = source[key];
+    if (value === null || value === undefined) continue;
+    if (typeof value === "string" && value.trim() === "") continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    picked[key] = value;
+  }
+  return Object.keys(picked).length > 0 ? picked : undefined;
+}
+
+function buildCompactPreparedEvidence(preparse: CsvPreparseResult): Record<string, unknown> {
+  const payload = preparse.payload;
+  const products = Array.isArray(payload.products) ? payload.products : [];
+  return {
+    schemaType: "product_catalog",
+    schemaVersion: "1.1",
+    supplier: isRecord(payload.supplier) ? payload.supplier : undefined,
+    products: products.map((product) => {
+      if (!isRecord(product)) return product;
+      const compact: Record<string, unknown> = {
+        sku: product.sku,
+        productName: product.productName,
+        productType: product.productType,
+        category: product.category,
+      };
+      const inventory = pickNonEmptyFields(product.inventory, [
+        "status",
+        "quantityOnHand",
+        "replenishmentEta",
+        "accessLevel",
+        "lastUpdated",
+      ]);
+      const pricing = pickNonEmptyFields(product.pricing, [
+        "msrp",
+        "wholesaleCost",
+        "currency",
+        "mapPrice",
+        "salePrice",
+      ]);
+      const extraction = pickNonEmptyFields(product.extraction, [
+        "sourceRef",
+        "confidence",
+        "extractionNotes",
+      ]);
+      if (inventory) compact.inventory = inventory;
+      if (pricing) compact.pricing = pricing;
+      if (extraction) compact.extraction = extraction;
+      return compact;
+    }),
+    totalProductsFound: preparse.productCount,
+    sourcesProcessed: payload.sourcesProcessed ?? 1,
+  };
+}
+
+function extractValidationProductCount(payload: Record<string, unknown>): number | null {
+  if (typeof payload.validatedProductCount === "number") return payload.validatedProductCount;
+  if (typeof payload.totalProductsFound === "number") return payload.totalProductsFound;
+  if (Array.isArray(payload.productsValidated)) return payload.productsValidated.length;
+  if (Array.isArray(payload.products)) return payload.products.length;
+  return null;
+}
+
+function supplierNameForSummary(payload: Record<string, unknown>): string {
+  return extractSupplierNameFromPayload(payload) ?? UNKNOWN_SUPPLIER;
+}
+
+function resolveAgentMaxTurns(ctx: WorkerContext): number {
+  if (ctx.route === "deterministic_structured") {
+    // Defensive clamp: deterministic CSV validation must never run with 0 turns.
+    return DETERMINISTIC_VALIDATION_MAX_TURNS;
+  }
+  return ctx.maxTurns > 0 ? ctx.maxTurns : 40;
 }
 
 function extractWorkerContext(
@@ -64,6 +153,10 @@ function extractWorkerContext(
     return null;
   }
   const ctx = workerCtx as Record<string, unknown>;
+  const sourceSummary: Record<string, unknown> = {};
+  for (const key of ["fileCount", "urlCount", "supplierName", "fetchMethod", "sourceRef", "sourceRefs", "urlSources"]) {
+    if (summary[key] !== undefined) sourceSummary[key] = summary[key];
+  }
   return {
     agentPrompt: ctx["agentPrompt"] as string,
     cwd: typeof ctx["cwd"] === "string" ? ctx["cwd"] : null,
@@ -78,6 +171,7 @@ function extractWorkerContext(
       ? (ctx["filePaths"] as Array<{ path: string; type: string }>)
       : undefined,
     urls: Array.isArray(ctx["urls"]) ? (ctx["urls"] as string[]) : undefined,
+    sourceSummary,
   };
 }
 
@@ -142,22 +236,28 @@ function buildCompactValidationPrompt(
   jobId: string,
   preparse: CsvPreparseResult,
 ): string {
+  const compactEvidence = buildCompactPreparedEvidence(preparse);
   return [
     `You are finalizing a FileIQ Product Catalog extraction for job ${jobId}.`,
     ``,
-    `The source CSV has been pre-parsed locally. Below is the prepared evidence — ${preparse.productCount} products extracted with ${preparse.confidence} confidence.`,
+    `The source CSV has been pre-parsed locally. Below is the complete prepared evidence — ${preparse.productCount} products extracted with ${preparse.confidence} confidence.`,
+    `PREPARED EVIDENCE.products is the full product list. It is not a sample or summary.`,
     ``,
     `PREPARED EVIDENCE:`,
-    JSON.stringify(preparse.payload, null, 2),
+    JSON.stringify(compactEvidence, null, 2),
+    `END PREPARED EVIDENCE`,
     ``,
-    `TASK: Validate the prepared evidence above. Normalize any field values if needed (e.g. status enums, null fields you can infer from context), fix any obvious mapping errors, and return the final product_catalog v1.1 JSON.`,
+    `TASK: Validate every product row in the prepared evidence above. Normalize any field values if needed (e.g. status enums, null fields you can infer from context) and report validation status for the final product_catalog v1.1 payload.`,
+    `You must preserve all ${preparse.productCount} products from PREPARED EVIDENCE.products. Do not summarize, sample, truncate, or return only the first product.`,
+    `Set validatedProductCount to ${preparse.productCount}.`,
+    `Do not return the full product_catalog; the worker will persist the complete deterministic product_catalog v1.1 payload after your validation.`,
     ``,
     `CRITICAL OUTPUT RULES — follow exactly:`,
     `  1. Output ONLY valid JSON. No prose before or after the JSON.`,
     `  2. Do NOT wrap the JSON in markdown code fences (no \`\`\` or \`\`\`json).`,
     `  3. Your entire response must be parseable by JSON.parse().`,
     `  4. Do NOT reread the source file — use the prepared evidence as your primary source.`,
-    `  5. Set schemaType to "product_catalog" and schemaVersion to "1.1".`,
+    `  5. Return this exact JSON shape: {"schemaType":"product_catalog","schemaVersion":"1.1","validationStatus":"validated","validatedProductCount":${preparse.productCount},"normalizationNotes":[]}.`,
   ].join("\n");
 }
 
@@ -171,8 +271,11 @@ async function storeDeterministicFallback(
   preparseMs: number,
   jobStartMs: number,
   ctx: WorkerContext,
+  agentDurationMs?: number,
+  fallbackReason?: string,
 ): Promise<void> {
   const catalogSummary = detectProductCatalogSummary(csvParseResult.payload);
+  const supplierName = supplierNameForSummary(csvParseResult.payload);
 
   const insertStartMs = Date.now();
   try {
@@ -199,6 +302,7 @@ async function storeDeterministicFallback(
       errorCode: null,
       errorMessage: null,
       summary: {
+        ...ctx.sourceSummary,
         totalProductsFound: csvParseResult.productCount,
         agentStatus: "fallback_deterministic",
         numTurns: 0,
@@ -212,12 +316,15 @@ async function storeDeterministicFallback(
           schemaType: catalogSummary.schemaType,
           schemaVersion: catalogSummary.schemaVersion,
         }),
+        supplierName,
         _timing: {
           preparseMs,
+          ...(typeof agentDurationMs === "number" && { agentDurationMs }),
           insertMs,
           totalMs,
           route: ctx.route,
           agentFallback: true,
+          ...(fallbackReason && { fallbackReason }),
         },
       },
     });
@@ -234,9 +341,10 @@ export async function processFileIqJob(
   ctx: WorkerContext,
 ): Promise<void> {
   const jobStartMs = Date.now();
+  const effectiveAgentMaxTurns = resolveAgentMaxTurns(ctx);
 
   console.log(
-    `${LOG} jobId=${jobId} | starting | route=${ctx.route ?? "agent_unstructured"} maxTurns=${ctx.maxTurns} cwd=${ctx.cwd ?? "none"}`,
+    `${LOG} jobId=${jobId} | starting | route=${ctx.route ?? "agent_unstructured"} maxTurns=${effectiveAgentMaxTurns} cwd=${ctx.cwd ?? "none"}`,
   );
 
   // ── Deterministic preparse (structured route) ──────────────────────────────
@@ -252,7 +360,7 @@ export async function processFileIqJob(
       // High confidence — build compact prompt and run Claude for validation
       const compactPrompt = buildCompactValidationPrompt(jobId, csvParseResult);
       console.log(
-        `${LOG} jobId=${jobId} | preparse complete | productCount=${csvParseResult.productCount} preparseMs=${preparseMs} — starting agent validation maxTurns=${ctx.maxTurns}`,
+        `${LOG} jobId=${jobId} | preparse complete | productCount=${csvParseResult.productCount} preparseMs=${preparseMs} — starting agent validation maxTurns=${effectiveAgentMaxTurns}`,
       );
 
       const agentStartMs = Date.now();
@@ -265,14 +373,22 @@ export async function processFileIqJob(
           cwd: ctx.cwd ?? undefined,
           additionalDirectories:
             ctx.additionalDirectories.length > 0 ? ctx.additionalDirectories : undefined,
-          maxTurns: ctx.maxTurns,
+          maxTurns: effectiveAgentMaxTurns,
         });
       } catch (err) {
         const agentDurationMs = Date.now() - agentStartMs;
         console.warn(
           `${LOG} jobId=${jobId} | agent validation threw — using deterministic result | error=${normalizeError(err)} durationMs=${agentDurationMs}`,
         );
-        await storeDeterministicFallback(jobId, csvParseResult, preparseMs, jobStartMs, ctx);
+        await storeDeterministicFallback(
+          jobId,
+          csvParseResult,
+          preparseMs,
+          jobStartMs,
+          ctx,
+          agentDurationMs,
+          "agent_exception",
+        );
         return;
       }
 
@@ -285,24 +401,33 @@ export async function processFileIqJob(
         console.warn(
           `${LOG} jobId=${jobId} | agent validation status=${agentResult.status} — using deterministic result`,
         );
-        await storeDeterministicFallback(jobId, csvParseResult, preparseMs, jobStartMs, ctx);
+        await storeDeterministicFallback(
+          jobId,
+          csvParseResult,
+          preparseMs,
+          jobStartMs,
+          ctx,
+          agentDurationMs,
+          `agent_${agentResult.status}`,
+        );
         return;
       }
 
       // Parse agent result
       const parseStartMs = Date.now();
-      let extractedPayload: Record<string, unknown> = {};
-      let catalogSummary: ReturnType<typeof detectProductCatalogSummary> = null;
+      let validationPayload: Record<string, unknown> = {};
+      const catalogSummary = detectProductCatalogSummary(csvParseResult.payload);
+      const supplierName = supplierNameForSummary(csvParseResult.payload);
       let parseMode = "none";
 
       if (agentResult.resultText) {
         const parsed = extractJsonFromAgentResult(agentResult.resultText);
         parseMode = parsed.parseMode;
-        extractedPayload = parsed.payload;
+        validationPayload = parsed.payload;
         if (parsed.parseMode !== "raw") {
           if (parsed.parseMode !== "json") {
-            extractedPayload = {
-              ...extractedPayload,
+            validationPayload = {
+              ...validationPayload,
               _meta: {
                 parseMode: parsed.parseMode,
                 parseDiagnostics: parsed.parseDiagnostics,
@@ -310,7 +435,6 @@ export async function processFileIqJob(
               },
             };
           }
-          catalogSummary = detectProductCatalogSummary(extractedPayload);
         }
       }
 
@@ -318,6 +442,24 @@ export async function processFileIqJob(
       console.log(
         `${LOG} jobId=${jobId} | parsed validation result | parseMode=${parseMode} durationMs=${parseDurationMs}`,
       );
+
+      const validatedProductCount = extractValidationProductCount(validationPayload);
+
+      if (validatedProductCount !== csvParseResult.productCount) {
+        console.warn(
+          `${LOG} jobId=${jobId} | agent validation returned invalid product count (${validatedProductCount ?? "none"}/${csvParseResult.productCount}) — using deterministic result`,
+        );
+        await storeDeterministicFallback(
+          jobId,
+          csvParseResult,
+          preparseMs,
+          jobStartMs,
+          ctx,
+          agentDurationMs,
+          "invalid_agent_validation_product_count",
+        );
+        return;
+      }
 
       // Insert raw extraction
       const insertStartMs = Date.now();
@@ -329,15 +471,16 @@ export async function processFileIqJob(
           artifactType: "agent_result",
           storageUri: "inline:payload",
           payload: {
-            ...extractedPayload,
+            ...csvParseResult.payload,
             _meta: {
-              ...(typeof extractedPayload._meta === "object" && extractedPayload._meta !== null
-                ? (extractedPayload._meta as Record<string, unknown>)
+              ...(typeof csvParseResult.payload._meta === "object" && csvParseResult.payload._meta !== null
+                ? (csvParseResult.payload._meta as Record<string, unknown>)
                 : {}),
               agentSessionId: agentResult.agentSessionId,
               numTurns: agentResult.numTurns,
               totalCostUsd: agentResult.totalCostUsd,
               agentStatus: agentResult.status,
+              agentValidation: validationPayload,
               localPreparse: {
                 parser: "rocktomic_inventory_csv",
                 productsParsed: csvParseResult.productCount,
@@ -355,11 +498,7 @@ export async function processFileIqJob(
 
       // Update job
       const totalMs = Date.now() - jobStartMs;
-      const totalProductsFound =
-        catalogSummary?.totalProductsFound ??
-        (typeof extractedPayload.totalProductsFound === "number"
-          ? extractedPayload.totalProductsFound
-          : csvParseResult.productCount);
+      const totalProductsFound = csvParseResult.productCount;
 
       console.log(
         `${LOG} jobId=${jobId} | done (deterministic+agent) | totalProductsFound=${totalProductsFound} preparseMs=${preparseMs} agentDurationMs=${agentDurationMs} totalMs=${totalMs}`,
@@ -372,6 +511,7 @@ export async function processFileIqJob(
           errorCode: null,
           errorMessage: null,
           summary: {
+            ...ctx.sourceSummary,
             totalProductsFound,
             agentStatus: agentResult.status,
             numTurns: agentResult.numTurns,
@@ -385,6 +525,7 @@ export async function processFileIqJob(
               schemaType: catalogSummary.schemaType,
               schemaVersion: catalogSummary.schemaVersion,
             }),
+            supplierName,
             _timing: {
               preparseMs,
               agentDurationMs,
@@ -412,7 +553,7 @@ export async function processFileIqJob(
   // ── Standard agent path ───────────────────────────────────────────────────
   const agentStartMs = Date.now();
   console.log(
-    `${LOG} jobId=${jobId} | starting agent | schemaType=product_catalog route=${ctx.route ?? "agent_unstructured"} maxTurns=${ctx.maxTurns}`,
+    `${LOG} jobId=${jobId} | starting agent | schemaType=product_catalog route=${ctx.route ?? "agent_unstructured"} maxTurns=${effectiveAgentMaxTurns}`,
   );
 
   let agentResult;
@@ -424,7 +565,7 @@ export async function processFileIqJob(
       cwd: ctx.cwd ?? undefined,
       additionalDirectories:
         ctx.additionalDirectories.length > 0 ? ctx.additionalDirectories : undefined,
-      maxTurns: ctx.maxTurns,
+      maxTurns: effectiveAgentMaxTurns,
     });
   } catch (err) {
     const msg = normalizeError(err);
@@ -435,9 +576,9 @@ export async function processFileIqJob(
     await updateFileIqExtractionJob(jobId, {
       status: "failed",
       agentSessionId: null,
-      errorCode: "agent_exception",
-      errorMessage: msg,
-      summary: { _timing: { agentDurationMs: Date.now() - agentStartMs, totalMs } },
+          errorCode: "agent_exception",
+          errorMessage: msg,
+      summary: { ...ctx.sourceSummary, _timing: { agentDurationMs: Date.now() - agentStartMs, totalMs } },
     }).catch((dbErr: unknown) => {
       console.error(
         `${LOG} jobId=${jobId} | DB update failed after agent throw | error=${normalizeError(dbErr)}`,
@@ -476,6 +617,7 @@ export async function processFileIqJob(
       catalogSummary = detectProductCatalogSummary(extractedPayload);
     }
   }
+  const supplierName = catalogSummary !== null ? supplierNameForSummary(extractedPayload) : UNKNOWN_SUPPLIER;
 
   const parseDurationMs = Date.now() - parseStartMs;
   console.log(
@@ -534,6 +676,7 @@ export async function processFileIqJob(
       errorCode: agentResult.errorCode,
       errorMessage: agentResult.errorMessage,
       summary: {
+        ...ctx.sourceSummary,
         totalProductsFound,
         agentStatus: agentResult.status,
         numTurns: agentResult.numTurns,
@@ -541,6 +684,7 @@ export async function processFileIqJob(
           schemaType: catalogSummary.schemaType,
           schemaVersion: catalogSummary.schemaVersion,
         }),
+        supplierName,
         _timing: {
           agentDurationMs,
           parseDurationMs,
@@ -559,6 +703,7 @@ export async function processFileIqJob(
 
 async function runWorkerLoop(): Promise<void> {
   console.log(`${LOG} started | poll_interval_ms=${POLL_INTERVAL_MS}`);
+  warnIfFirecrawlMissing();
 
   for (;;) {
     let job;

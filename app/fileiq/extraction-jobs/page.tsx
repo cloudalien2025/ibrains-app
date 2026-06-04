@@ -52,6 +52,11 @@ function extractedCount(job: FileIqJobListRow): string {
   return typeof n === "number" ? String(n) : "—";
 }
 
+function supplierName(job: FileIqJobListRow): string {
+  const value = job.summary?.supplierName;
+  return typeof value === "string" && value.trim() ? value.trim() : "Unknown Supplier";
+}
+
 function SchemaBadge({ job }: { job: FileIqJobListRow }) {
   const schemaType = job.summary?.schemaType;
   const schemaVersion = job.summary?.schemaVersion;
@@ -63,7 +68,26 @@ function SchemaBadge({ job }: { job: FileIqJobListRow }) {
   );
 }
 
-const tableColumns = ["Source Bundle", "Status", "Schema", "Products Extracted", "Brains Notified", "Started"] as const;
+function ValidationBadge({ job }: { job: FileIqJobListRow }) {
+  const agentStatus = job.summary?.agentStatus;
+  if (agentStatus === "fallback_deterministic") {
+    return (
+      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#FEF3C7] text-[#92400E]">
+        Parsed only — not validated
+      </span>
+    );
+  }
+  if (agentStatus === "completed") {
+    return (
+      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#DCFCE7] text-[#166534]">
+        Validated
+      </span>
+    );
+  }
+  return <span className="text-[#94A3B8]">—</span>;
+}
+
+const tableColumns = ["Source Bundle", "Supplier", "Status", "Schema", "Products Extracted", "Validation", "Started"] as const;
 
 export default async function FileIqExtractionJobsPage() {
   let jobs: FileIqJobListRow[] = [];
@@ -134,6 +158,7 @@ export default async function FileIqExtractionJobsPage() {
                     data-testid="fileiq-extraction-job-row"
                   >
                     <td className="py-3 pr-4 font-medium text-[#0F172A]">{job.bundleName}</td>
+                    <td className="py-3 pr-4 text-[#334155]">{supplierName(job)}</td>
                     <td className="py-3 pr-4">
                       <StatusBadge status={job.status} />
                     </td>
@@ -141,7 +166,9 @@ export default async function FileIqExtractionJobsPage() {
                       <SchemaBadge job={job} />
                     </td>
                     <td className="py-3 pr-4 text-[#334155]">{extractedCount(job)}</td>
-                    <td className="py-3 pr-4 text-[#94A3B8]">—</td>
+                    <td className="py-3 pr-4">
+                      <ValidationBadge job={job} />
+                    </td>
                     <td className="py-3 text-[#64748B]">{formatDate(job.createdAt)}</td>
                   </tr>
                 ))

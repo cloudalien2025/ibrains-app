@@ -9,7 +9,7 @@
  */
 
 export type ExtractionRoute =
-  | "deterministic_structured" // local parse only — no Claude agent turn
+  | "deterministic_structured" // local parse first; compact Claude validation pass
   | "hybrid_structured_agent"  // local parse first; agent for ambiguous mapping
   | "agent_unstructured"        // full agent reasoning (PDF, DOCX, image, URL)
   | "chunked_agent";            // multi-doc bundle split into chunks
