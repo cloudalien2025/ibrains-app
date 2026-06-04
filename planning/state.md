@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-06-04 (UTC) — FileIQ worker server-only crash-loop fix + maxTurns raise (DELIVERED)
+Last updated: 2026-06-04 (UTC) — FileIQ extraction prompt schema v1.1 correction (DELIVERED)
 
 ## Program Status
 
@@ -74,7 +74,27 @@ Last updated: 2026-06-04 (UTC) — FileIQ worker server-only crash-loop fix + ma
 - CI Fast-Path Deploy Fix + Concurrency Lock: Completed (direct-to-main, commit `049ce67`). Fixed `next: not found` (exit 127) on fast-path deploys by adding `npm ci --omit=dev` after artifact extraction so `node_modules/.bin/next` is present before service restart. Added `resource_group: production-deploy` to both `deploy_production_fast` and `deploy_production` to serialize concurrent pipeline deploys. Contract test extended with 2 new assertions; 4/4 tests green.
 - FileIQ Worker Job Lifecycle Fix: Completed and merged (`fix/fileiq-worker-job-lifecycle`, merge SHA `d69b50d`, remote + local branch deleted). Replaced unreliable fire-and-forget with a dedicated `fileiq-worker` process. **Post-deploy action required: install `fileiq-worker.service` on production (see Sprint Closure below).**
 - FileIQ Worker server-only crash-loop fix: Completed and merged (`fix/fileiq-worker-top-level-await`, merge SHA `c95bc5f`, remote + local branch deleted). Extracted `fileiq-db-core.ts` + `fileiq-agent-core.ts` (no `server-only`); wrapper files re-export for Next.js routes; worker imports from core modules; maxTurns raised 12→40 for large catalog jobs; 7 Node-importability regression tests added; 52/52 FileIQ tests pass. **Post-deploy action required: `systemctl restart fileiq-worker` on production server.**
-- Current recommended sprint: Restart `fileiq-worker.service` on production (`systemctl restart fileiq-worker`) to pick up the new binaries, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Main is clean at `c95bc5f`.
+- FileIQ Extraction Prompt Schema v1.1 Fix: Completed and merged (`fix/fileiq-prompt-schema-v1-1`, merge SHA `f41eff5`). Corrected `CATALOG_SCHEMA_EXAMPLE` to emit `schemaVersion: "1.1"`, added missing v1.1 fields (`assets.coaExpiryDate`, `agenticVisibility.certifications`), updated prompt text, added inventory-only guidance, added 3 prompt-contract tests; 43/43 FileIQ tests pass. **Post-deploy action required: `systemctl restart fileiq-worker` on production to pick up the corrected prompt.**
+- Current recommended sprint: Restart `fileiq-worker.service` on production (`systemctl restart fileiq-worker`) to pick up the corrected extraction prompt, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Main is clean at `f41eff5`.
+
+## Sprint Closure Update: FileIQ Extraction Prompt Schema v1.1 Fix
+
+- Branch: `fix/fileiq-prompt-schema-v1-1`
+- Date: `2026-06-04 (UTC)`
+- Status: `DELIVERED` — merge SHA `f41eff5`, remote + local branch deleted
+- Root cause: `CATALOG_SCHEMA_EXAMPLE` in `app/api/fileiq/ingest/route.ts` hardcoded `schemaVersion: "1.0"` and the prompt text instructed the agent to `Set schemaVersion to "1.0"`. The TypeScript schema (`lib/fileiq/schema/product-catalog-v1.ts`) had `CURRENT_SCHEMA_VERSION = "1.1"` and two v1.1 additions (`assets.coaExpiryDate`, `agenticVisibility.certifications`), but the prompt was never updated to match.
+- Delivered scope:
+  - `app/api/fileiq/ingest/route.ts`: `CATALOG_SCHEMA_EXAMPLE.schemaVersion` corrected `"1.0"` → `"1.1"`; added `coaExpiryDate: null` to `assets`; added `certifications: []` to `agenticVisibility`; prompt task line "schema v1.0" → "schema v1.1"; prompt instruction `Set schemaVersion to "1.0"` → `"1.1"`; added inventory-only guidance sentence ("If the source is inventory-only, populate inventory, sku, and productName where available; set all other product fields to null or empty arrays.")
+  - `tests/fileiq_phase_1_2_ingestion.test.ts`: 3 new prompt-contract tests — (1) agentPrompt contains `"schemaVersion": "1.1"` for catalog intent, (2) agentPrompt contains no `"schema v1.0"` or `"schemaVersion": "1.0"` references, (3) agentPrompt contains `coaExpiryDate`
+- Test result: 43/43 FileIQ tests pass
+- Boundary confirmation:
+  - no DB schema changes
+  - no migrations
+  - no EcomViper / Walmart / Shopify / DirectoryIQ code changes
+  - no auto-save/publish
+  - no model call during page render
+  - TypeScript schema field names unchanged (no breaking schema changes)
+- **Post-deploy action required:** `systemctl restart fileiq-worker` on production to load the corrected prompt into running worker sessions.
 
 ## Sprint Closure Update: FileIQ Worker server-only Crash-Loop Fix + maxTurns Raise
 
