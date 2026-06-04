@@ -16,11 +16,12 @@
 // running this script.
 
 import { randomUUID } from "node:crypto";
-
-// Dynamic imports let tsx load these without bundler complications.
-const { claimFileIqPendingJob, updateFileIqExtractionJob, insertFileIqRawExtraction } =
-  await import("@/lib/fileiq/fileiq-db");
-const { runFileIqExtractionAgent } = await import("@/lib/fileiq/agent/fileiq-agent");
+import {
+  claimFileIqPendingJob,
+  updateFileIqExtractionJob,
+  insertFileIqRawExtraction,
+} from "@/lib/fileiq/fileiq-db";
+import { runFileIqExtractionAgent } from "@/lib/fileiq/agent/fileiq-agent";
 
 const LOG = "[fileiq:worker]";
 const POLL_INTERVAL_MS = 5_000;
@@ -192,7 +193,11 @@ async function runWorkerLoop(): Promise<void> {
   }
 }
 
-runWorkerLoop().catch((err: unknown) => {
+async function main(): Promise<void> {
+  await runWorkerLoop();
+}
+
+main().catch((err: unknown) => {
   console.error(`${LOG} fatal | error=${normalizeError(err)}`);
   process.exit(1);
 });
