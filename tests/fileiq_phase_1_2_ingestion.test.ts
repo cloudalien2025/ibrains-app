@@ -510,3 +510,77 @@ describe("proxy.ts — /api/fileiq auth protection", () => {
     expect(proxySource).toContain('"/api/fileiq(.*)"');
   });
 });
+
+// ─── Body parse error & filename sanitization ─────────────────────────────────
+
+describe("POST /api/fileiq/ingest — body parse error handling", () => {
+  it("returns 400 with invalid_request when content-type is not multipart form-data", async () => {
+    signedIn();
+    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", {
+      method: "POST",
+      body: "not-a-valid-form",
+      headers: { "content-type": "text/plain" },
+    });
+    const res = await ingestPost(req);
+    const data = (await res.json()) as { error: string; message: string };
+    expect(res.status).toBe(400);
+    expect(data.error).toBe("invalid_request");
+    expect(typeof data.message).toBe("string");
+    expect(data.message.length).toBeGreaterThan(0);
+  });
+
+  it("stores safe disk name without special chars when filename contains & and spaces", async () => {
+    signedIn();
+    const fd = makeFormData({}, [
+      { name: "Roctomic - Supplement-&-Apparel-Catalog.pdf", content: "%PDF-1.4 test content" },
+    ]);
+    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", {
+      method: "POST",
+      body: fd,
+    });
+    const res = await ingestPost(req);
+    const data = (await res.json()) as { status: string };
+    expect(res.status).toBe(200);
+    expect(data.status).toBe("pending");
+
+    const writeCalls = mocks.writeFile.mock.calls as Array<[string, unknown]>;
+    expect(writeCalls).toHaveLength(1);
+    // disk path must not contain & or raw spaces
+    expect(writeCalls[0][0]).not.toMatch(/[& ]/);
+    // extension preserved
+    expect(writeCalls[0][0]).toMatch(/\.pdf$/);
+  });
+
+  it("preserves original filename in source-file metadata", async () => {
+    signedIn();
+    const originalName = "Roctomic - Supplement-&-Apparel-Catalog.pdf";
+    const fd = makeFormData({}, [{ name: originalName, content: "%PDF-1.4 test" }]);
+    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", {
+      method: "POST",
+      body: fd,
+    });
+    await ingestPost(req);
+
+    const fileCalls = mocks.insertFileIqSourceFile.mock.calls as Array<
+      [{ metadata: { originalName: string } }]
+    >;
+    expect(fileCalls[0][0].metadata.originalName).toBe(originalName);
+  });
+
+  it("handles very long extraction intent without failure", async () => {
+    signedIn();
+    const longIntent = "Extract all SKUs, pricing, and inventory for product_catalog schema v1.1. ".repeat(200);
+    const fd = makeFormData({
+      urls: JSON.stringify(["https://example.com/catalog.pdf"]),
+      intent: longIntent,
+    });
+    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", {
+      method: "POST",
+      body: fd,
+    });
+    const res = await ingestPost(req);
+    const data = (await res.json()) as { status: string };
+    expect(res.status).toBe(200);
+    expect(data.status).toBe("pending");
+  });
+});
