@@ -155,12 +155,17 @@ function buildCompactValidationPrompt(
   return [
     `You are finalizing a FileIQ Product Catalog extraction for job ${jobId}.`,
     ``,
-    `The source CSV has been pre-parsed locally. Below is the prepared evidence — ${preparse.productCount} products extracted with ${preparse.confidence} confidence.`,
+    `The source CSV has been pre-parsed locally. Below is the complete prepared evidence — ${preparse.productCount} products extracted with ${preparse.confidence} confidence.`,
+    `PREPARED EVIDENCE.products is the full product list. It is not a sample or summary.`,
     ``,
     `PREPARED EVIDENCE:`,
     JSON.stringify(preparse.payload, null, 2),
+    `END PREPARED EVIDENCE`,
     ``,
-    `TASK: Validate the prepared evidence above. Normalize any field values if needed (e.g. status enums, null fields you can infer from context), fix any obvious mapping errors, and return the final product_catalog v1.1 JSON.`,
+    `TASK: Validate every product row in the prepared evidence above. Normalize any field values if needed (e.g. status enums, null fields you can infer from context), fix any obvious mapping errors, and return the final product_catalog v1.1 JSON.`,
+    `You must preserve all ${preparse.productCount} products from PREPARED EVIDENCE.products. Do not summarize, sample, truncate, or return only the first product.`,
+    `Set totalProductsFound to ${preparse.productCount} and ensure products.length is ${preparse.productCount}.`,
+    `If no normalization is needed, return the prepared evidence JSON unchanged except for any required metadata cleanup.`,
     ``,
     `CRITICAL OUTPUT RULES — follow exactly:`,
     `  1. Output ONLY valid JSON. No prose before or after the JSON.`,
@@ -181,6 +186,8 @@ async function storeDeterministicFallback(
   preparseMs: number,
   jobStartMs: number,
   ctx: WorkerContext,
+  agentDurationMs?: number,
+  fallbackReason?: string,
 ): Promise<void> {
   const catalogSummary = detectProductCatalogSummary(csvParseResult.payload);
 
@@ -224,10 +231,12 @@ async function storeDeterministicFallback(
         }),
         _timing: {
           preparseMs,
+          ...(typeof agentDurationMs === "number" && { agentDurationMs }),
           insertMs,
           totalMs,
           route: ctx.route,
           agentFallback: true,
+          ...(fallbackReason && { fallbackReason }),
         },
       },
     });
@@ -283,7 +292,15 @@ export async function processFileIqJob(
         console.warn(
           `${LOG} jobId=${jobId} | agent validation threw — using deterministic result | error=${normalizeError(err)} durationMs=${agentDurationMs}`,
         );
-        await storeDeterministicFallback(jobId, csvParseResult, preparseMs, jobStartMs, ctx);
+        await storeDeterministicFallback(
+          jobId,
+          csvParseResult,
+          preparseMs,
+          jobStartMs,
+          ctx,
+          agentDurationMs,
+          "agent_exception",
+        );
         return;
       }
 
@@ -296,7 +313,15 @@ export async function processFileIqJob(
         console.warn(
           `${LOG} jobId=${jobId} | agent validation status=${agentResult.status} — using deterministic result`,
         );
-        await storeDeterministicFallback(jobId, csvParseResult, preparseMs, jobStartMs, ctx);
+        await storeDeterministicFallback(
+          jobId,
+          csvParseResult,
+          preparseMs,
+          jobStartMs,
+          ctx,
+          agentDurationMs,
+          `agent_${agentResult.status}`,
+        );
         return;
       }
 
@@ -329,6 +354,28 @@ export async function processFileIqJob(
       console.log(
         `${LOG} jobId=${jobId} | parsed validation result | parseMode=${parseMode} durationMs=${parseDurationMs}`,
       );
+
+      const totalProductsFound =
+        catalogSummary?.totalProductsFound ??
+        (typeof extractedPayload.totalProductsFound === "number"
+          ? extractedPayload.totalProductsFound
+          : csvParseResult.productCount);
+
+      if (totalProductsFound < csvParseResult.productCount) {
+        console.warn(
+          `${LOG} jobId=${jobId} | agent validation returned incomplete product count (${totalProductsFound}/${csvParseResult.productCount}) — using deterministic result`,
+        );
+        await storeDeterministicFallback(
+          jobId,
+          csvParseResult,
+          preparseMs,
+          jobStartMs,
+          ctx,
+          agentDurationMs,
+          "incomplete_agent_product_count",
+        );
+        return;
+      }
 
       // Insert raw extraction
       const insertStartMs = Date.now();
@@ -366,11 +413,6 @@ export async function processFileIqJob(
 
       // Update job
       const totalMs = Date.now() - jobStartMs;
-      const totalProductsFound =
-        catalogSummary?.totalProductsFound ??
-        (typeof extractedPayload.totalProductsFound === "number"
-          ? extractedPayload.totalProductsFound
-          : csvParseResult.productCount);
 
       console.log(
         `${LOG} jobId=${jobId} | done (deterministic+agent) | totalProductsFound=${totalProductsFound} preparseMs=${preparseMs} agentDurationMs=${agentDurationMs} totalMs=${totalMs}`,
