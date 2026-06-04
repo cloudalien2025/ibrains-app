@@ -45,11 +45,21 @@ interface WorkerContext {
   urls?: string[];
 }
 
+const DETERMINISTIC_VALIDATION_MAX_TURNS = 3;
+
 /** Typed result from a successful deterministic CSV preparse. */
 interface CsvPreparseResult {
   payload: Record<string, unknown>;
   productCount: number;
   confidence: "high" | "low";
+}
+
+function resolveAgentMaxTurns(ctx: WorkerContext): number {
+  if (ctx.route === "deterministic_structured") {
+    // Defensive clamp: deterministic CSV validation must never run with 0 turns.
+    return DETERMINISTIC_VALIDATION_MAX_TURNS;
+  }
+  return ctx.maxTurns > 0 ? ctx.maxTurns : 40;
 }
 
 function extractWorkerContext(
@@ -234,9 +244,10 @@ export async function processFileIqJob(
   ctx: WorkerContext,
 ): Promise<void> {
   const jobStartMs = Date.now();
+  const effectiveAgentMaxTurns = resolveAgentMaxTurns(ctx);
 
   console.log(
-    `${LOG} jobId=${jobId} | starting | route=${ctx.route ?? "agent_unstructured"} maxTurns=${ctx.maxTurns} cwd=${ctx.cwd ?? "none"}`,
+    `${LOG} jobId=${jobId} | starting | route=${ctx.route ?? "agent_unstructured"} maxTurns=${effectiveAgentMaxTurns} cwd=${ctx.cwd ?? "none"}`,
   );
 
   // ── Deterministic preparse (structured route) ──────────────────────────────
@@ -252,7 +263,7 @@ export async function processFileIqJob(
       // High confidence — build compact prompt and run Claude for validation
       const compactPrompt = buildCompactValidationPrompt(jobId, csvParseResult);
       console.log(
-        `${LOG} jobId=${jobId} | preparse complete | productCount=${csvParseResult.productCount} preparseMs=${preparseMs} — starting agent validation maxTurns=${ctx.maxTurns}`,
+        `${LOG} jobId=${jobId} | preparse complete | productCount=${csvParseResult.productCount} preparseMs=${preparseMs} — starting agent validation maxTurns=${effectiveAgentMaxTurns}`,
       );
 
       const agentStartMs = Date.now();
@@ -265,7 +276,7 @@ export async function processFileIqJob(
           cwd: ctx.cwd ?? undefined,
           additionalDirectories:
             ctx.additionalDirectories.length > 0 ? ctx.additionalDirectories : undefined,
-          maxTurns: ctx.maxTurns,
+          maxTurns: effectiveAgentMaxTurns,
         });
       } catch (err) {
         const agentDurationMs = Date.now() - agentStartMs;
@@ -412,7 +423,7 @@ export async function processFileIqJob(
   // ── Standard agent path ───────────────────────────────────────────────────
   const agentStartMs = Date.now();
   console.log(
-    `${LOG} jobId=${jobId} | starting agent | schemaType=product_catalog route=${ctx.route ?? "agent_unstructured"} maxTurns=${ctx.maxTurns}`,
+    `${LOG} jobId=${jobId} | starting agent | schemaType=product_catalog route=${ctx.route ?? "agent_unstructured"} maxTurns=${effectiveAgentMaxTurns}`,
   );
 
   let agentResult;
@@ -424,7 +435,7 @@ export async function processFileIqJob(
       cwd: ctx.cwd ?? undefined,
       additionalDirectories:
         ctx.additionalDirectories.length > 0 ? ctx.additionalDirectories : undefined,
-      maxTurns: ctx.maxTurns,
+      maxTurns: effectiveAgentMaxTurns,
     });
   } catch (err) {
     const msg = normalizeError(err);
