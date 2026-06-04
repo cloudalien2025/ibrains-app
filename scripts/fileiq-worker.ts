@@ -20,8 +20,8 @@ import {
   claimFileIqPendingJob,
   updateFileIqExtractionJob,
   insertFileIqRawExtraction,
-} from "@/lib/fileiq/fileiq-db";
-import { runFileIqExtractionAgent } from "@/lib/fileiq/agent/fileiq-agent";
+} from "@/lib/fileiq/fileiq-db-core";
+import { runFileIqExtractionAgent } from "@/lib/fileiq/agent/fileiq-agent-core";
 
 const LOG = "[fileiq:worker]";
 const POLL_INTERVAL_MS = 5_000;
@@ -187,7 +187,7 @@ async function runWorkerLoop(): Promise<void> {
     const additionalDirectories = Array.isArray(ctx["additionalDirectories"])
       ? (ctx["additionalDirectories"] as string[])
       : [];
-    const maxTurns = typeof ctx["maxTurns"] === "number" ? ctx["maxTurns"] : 12;
+    const maxTurns = typeof ctx["maxTurns"] === "number" ? ctx["maxTurns"] : 40;
 
     await processJob(job.id, job.bundleId, agentPrompt, cwd, additionalDirectories, maxTurns);
   }
