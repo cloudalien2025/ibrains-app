@@ -2,7 +2,9 @@
  * FileIQ worker job lifecycle tests.
  *
  * Tests the DB-layer contract (claimFileIqPendingJob) and the full
- * processJob path (agent success / unavailable / exception).
+ * processFileIqJob path (agent success / fenced JSON / raw fallback /
+ * unavailable / exception). Uses the result-parser helpers as real pure
+ * functions (no mock needed); only DB/agent calls are mocked.
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,10 +16,9 @@ const mocks = vi.hoisted(() => ({
   updateFileIqExtractionJob: vi.fn(),
   insertFileIqRawExtraction: vi.fn(),
   runFileIqExtractionAgent: vi.fn(),
+  readFile: vi.fn(),
 }));
 
-// Mock the core modules — these are the paths the worker actually imports
-// from (server-only-free) in production.
 vi.mock("@/lib/fileiq/fileiq-db-core", () => ({
   claimFileIqPendingJob: mocks.claimFileIqPendingJob,
   updateFileIqExtractionJob: mocks.updateFileIqExtractionJob,
@@ -28,9 +29,35 @@ vi.mock("@/lib/fileiq/agent/fileiq-agent-core", () => ({
   runFileIqExtractionAgent: mocks.runFileIqExtractionAgent,
 }));
 
+vi.mock("node:fs/promises", () => ({
+  default: { readFile: mocks.readFile },
+}));
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeClaimedJob(overrides: Partial<{ id: string; bundleId: string; agentPrompt: string }> = {}) {
+function makeWorkerContext(
+  overrides: Partial<{
+    agentPrompt: string;
+    route: string;
+    maxTurns: number;
+    filePaths: Array<{ path: string; type: string }>;
+  }> = {},
+) {
+  return {
+    agentPrompt: overrides.agentPrompt ?? "Extract products from this supplier catalog.",
+    cwd: null,
+    additionalDirectories: [],
+    maxTurns: overrides.maxTurns ?? 40,
+    route: overrides.route ?? "agent_unstructured",
+    routeRationale: "test",
+    filePaths: overrides.filePaths ?? [],
+    urls: [],
+  };
+}
+
+function makeClaimedJob(
+  overrides: Partial<{ id: string; bundleId: string; agentPrompt: string }> = {},
+) {
   return {
     id: overrides.id ?? "job_worker_1",
     bundleId: overrides.bundleId ?? "bundle_worker_1",
@@ -40,12 +67,15 @@ function makeClaimedJob(overrides: Partial<{ id: string; bundleId: string; agent
         cwd: null,
         additionalDirectories: [],
         maxTurns: 40,
+        route: "agent_unstructured",
       },
     },
   };
 }
 
-function agentSuccess(resultText = '{"products":[{"sku":"ACM-001","productName":"Test"}],"totalProductsFound":1,"sourcesProcessed":1,"extractionNotes":"ok"}') {
+function agentSuccess(
+  resultText = '{"products":[{"sku":"ACM-001","productName":"Test"}],"totalProductsFound":1,"sourcesProcessed":1,"extractionNotes":"ok"}',
+) {
   mocks.runFileIqExtractionAgent.mockResolvedValue({
     jobId: "job_worker_1",
     bundleId: "bundle_worker_1",
@@ -87,121 +117,17 @@ function agentFailed() {
   });
 }
 
-// Import the processJob helper — we test the observable side effects via the
-// mock DB/agent calls by invoking the worker's logic through a thin wrapper
-// that mimics what runWorkerLoop does for a single claimed job.
-async function importProcessJob() {
-  const { claimFileIqPendingJob, updateFileIqExtractionJob, insertFileIqRawExtraction } =
-    await import("@/lib/fileiq/fileiq-db-core");
-  const { runFileIqExtractionAgent } = await import("@/lib/fileiq/agent/fileiq-agent-core");
-
-  return async function processJobUnderTest(
-    jobId: string,
-    bundleId: string,
-    agentPrompt: string,
-    cwd: string | null,
-    additionalDirectories: string[],
-    maxTurns: number,
-  ) {
-    let agentResult;
-    try {
-      agentResult = await runFileIqExtractionAgent({
-        jobId,
-        bundleId,
-        prompt: agentPrompt,
-        cwd: cwd ?? undefined,
-        additionalDirectories: additionalDirectories.length > 0 ? additionalDirectories : undefined,
-        maxTurns,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      await updateFileIqExtractionJob(jobId, {
-        status: "failed",
-        agentSessionId: null,
-        errorCode: "agent_exception",
-        errorMessage: msg,
-        summary: {},
-      }).catch(() => {});
-      return;
-    }
-
-    let extractedPayload: Record<string, unknown> = {};
-    let totalProductsFound = 0;
-    let detectedSchemaType: string | null = null;
-    let detectedSchemaVersion: string | null = null;
-
-    if (agentResult.status === "completed" && agentResult.resultText) {
-      try {
-        const parsed: unknown = JSON.parse(agentResult.resultText);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          extractedPayload = parsed as Record<string, unknown>;
-          const count = extractedPayload.totalProductsFound;
-          if (typeof count === "number") totalProductsFound = count;
-          if (
-            extractedPayload.schemaType === "product_catalog" &&
-            typeof extractedPayload.schemaVersion === "string" &&
-            Array.isArray(extractedPayload.products)
-          ) {
-            detectedSchemaType = "product_catalog";
-            detectedSchemaVersion = extractedPayload.schemaVersion as string;
-          }
-        }
-      } catch {
-        extractedPayload = { raw: agentResult.resultText };
-      }
-    }
-
-    await insertFileIqRawExtraction({
-      id: "extraction_test_id",
-      extractionJobId: jobId,
-      sourceFileId: null,
-      artifactType: "agent_result",
-      storageUri: "inline:payload",
-      payload: {
-        ...extractedPayload,
-        _meta: {
-          agentSessionId: agentResult.agentSessionId,
-          numTurns: agentResult.numTurns,
-          totalCostUsd: agentResult.totalCostUsd,
-          agentStatus: agentResult.status,
-        },
-      },
-    });
-
-    const dbStatus = agentResult.status === "completed" ? "completed" : "failed";
-    await updateFileIqExtractionJob(jobId, {
-      status: dbStatus,
-      agentSessionId: agentResult.agentSessionId,
-      errorCode: agentResult.errorCode,
-      errorMessage: agentResult.errorMessage,
-      summary: {
-        totalProductsFound,
-        agentStatus: agentResult.status,
-        numTurns: agentResult.numTurns,
-        ...(detectedSchemaType !== null && {
-          schemaType: detectedSchemaType,
-          schemaVersion: detectedSchemaVersion,
-        }),
-      },
-    });
-  };
-
-  void claimFileIqPendingJob; // silence unused import
-}
+// Import the processFileIqJob function under test after mocks are in place.
+import { processFileIqJob } from "@/scripts/fileiq-worker";
 
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.updateFileIqExtractionJob.mockResolvedValue(undefined);
   mocks.insertFileIqRawExtraction.mockResolvedValue(undefined);
+  mocks.readFile.mockResolvedValue("");
 });
 
 // ─── Node importability regression ───────────────────────────────────────────
-// These tests verify the core modules are importable in a standalone Node
-// environment (i.e. without the Next.js server-only guard). If either core
-// module re-introduces `import "server-only"` the worker will crash-loop.
-//
-// vi.importActual bypasses the mock factory so we test the real module exports,
-// not the mock stubs — that's the point of this regression suite.
 
 describe("fileiq-db-core — Node importability regression", () => {
   it("exports claimFileIqPendingJob without server-only restriction", async () => {
@@ -286,23 +212,22 @@ describe("claimFileIqPendingJob — DB contract", () => {
     expect(workerCtx["agentPrompt"]).toBe("Extract SKUs from this file.");
   });
 
-  it("_worker context stores maxTurns=40 for large catalog jobs", async () => {
+  it("_worker context stores numeric maxTurns", async () => {
     const job = makeClaimedJob();
     mocks.claimFileIqPendingJob.mockResolvedValue(job);
     const { claimFileIqPendingJob } = await import("@/lib/fileiq/fileiq-db-core");
     const result = await claimFileIqPendingJob();
     const workerCtx = result!.summary["_worker"] as Record<string, unknown>;
-    expect(workerCtx["maxTurns"]).toBe(40);
+    expect(typeof workerCtx["maxTurns"]).toBe("number");
   });
 });
 
-// ─── Worker job processing — success path ─────────────────────────────────────
+// ─── Worker processFileIqJob — success path ───────────────────────────────────
 
-describe("worker processJob — agent success", () => {
-  it("calls runFileIqExtractionAgent with jobId, bundleId, and agentPrompt from summary", async () => {
+describe("processFileIqJob — agent success (pure JSON result)", () => {
+  it("calls runFileIqExtractionAgent with jobId, bundleId, prompt, maxTurns", async () => {
     agentSuccess();
-    const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "Extract products.", null, [], 40);
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext({ agentPrompt: "Extract products.", maxTurns: 40 }));
 
     const agentCall = mocks.runFileIqExtractionAgent.mock.calls[0] as [
       { jobId: string; bundleId: string; prompt: string; maxTurns: number },
@@ -315,9 +240,7 @@ describe("worker processJob — agent success", () => {
 
   it("inserts a raw_extraction record on success", async () => {
     agentSuccess();
-    const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
-
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
     expect(mocks.insertFileIqRawExtraction).toHaveBeenCalledTimes(1);
     const rawCall = (mocks.insertFileIqRawExtraction.mock.calls[0] as [
       { artifactType: string; sourceFileId: null }
@@ -328,9 +251,7 @@ describe("worker processJob — agent success", () => {
 
   it("updates job to status=completed on agent success", async () => {
     agentSuccess();
-    const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
-
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
     expect(mocks.updateFileIqExtractionJob).toHaveBeenCalledTimes(1);
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
       string,
@@ -342,9 +263,7 @@ describe("worker processJob — agent success", () => {
 
   it("persists totalProductsFound=1 from parsed agent result", async () => {
     agentSuccess();
-    const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
-
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
       string,
       { summary: { totalProductsFound: number } }
@@ -352,43 +271,141 @@ describe("worker processJob — agent success", () => {
     expect(updateCall.summary.totalProductsFound).toBe(1);
   });
 
-  it("stamps schemaType and schemaVersion when agent returns product_catalog schema", async () => {
+  it("stamps schemaType and schemaVersion for product_catalog result", async () => {
     agentSuccess(JSON.stringify({
       schemaType: "product_catalog",
-      schemaVersion: "1.0",
+      schemaVersion: "1.1",
       products: [{ sku: "X1" }],
       totalProductsFound: 1,
       sourcesProcessed: 1,
       extractionNotes: "ok",
     }));
-    const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
-
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
       string,
       { summary: { schemaType?: string; schemaVersion?: string } }
     ])[1];
     expect(updateCall.summary.schemaType).toBe("product_catalog");
-    expect(updateCall.summary.schemaVersion).toBe("1.0");
+    expect(updateCall.summary.schemaVersion).toBe("1.1");
+  });
+
+  it("job summary includes _timing object with totalMs", async () => {
+    agentSuccess();
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { summary: { _timing?: Record<string, unknown> } }
+    ])[1];
+    expect(updateCall.summary._timing).toBeDefined();
+    expect(typeof updateCall.summary._timing!.totalMs).toBe("number");
   });
 });
 
-// ─── Worker job processing — unavailable (missing API key) ───────────────────
+// ─── Fenced JSON result (Task A key scenario) ─────────────────────────────────
 
-describe("worker processJob — agent unavailable (missing API key)", () => {
+describe("processFileIqJob — fenced JSON result parsing", () => {
+  it("extracts payload from ```json fence when agent wraps output in markdown", async () => {
+    const fencedResult = [
+      "I've read the full inventory report. Here is the FileIQ product_catalog v1.1 extraction:",
+      "",
+      "```json",
+      JSON.stringify({
+        schemaType: "product_catalog",
+        schemaVersion: "1.1",
+        products: Array.from({ length: 154 }, (_, i) => ({ sku: `ROC${i}` })),
+        totalProductsFound: 154,
+        sourcesProcessed: 1,
+        extractionNotes: "ok",
+      }),
+      "```",
+    ].join("\n");
+
+    mocks.runFileIqExtractionAgent.mockResolvedValue({
+      jobId: "job_1",
+      bundleId: "bundle_1",
+      agentSessionId: "sess_fenced",
+      status: "completed",
+      resultText: fencedResult,
+      errorCode: null,
+      errorMessage: null,
+      numTurns: 2,
+      totalCostUsd: 0.05,
+    });
+
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
+
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { status: string; summary: { totalProductsFound: number; schemaType?: string; schemaVersion?: string } }
+    ])[1];
+    expect(updateCall.status).toBe("completed");
+    expect(updateCall.summary.totalProductsFound).toBe(154);
+    expect(updateCall.summary.schemaType).toBe("product_catalog");
+    expect(updateCall.summary.schemaVersion).toBe("1.1");
+  });
+
+  it("stores fenced JSON payload directly (not as { raw: ... })", async () => {
+    const fencedResult = '```json\n{"schemaType":"product_catalog","schemaVersion":"1.1","products":[{"sku":"X1"}],"totalProductsFound":1}\n```';
+    mocks.runFileIqExtractionAgent.mockResolvedValue({
+      jobId: "job_1",
+      bundleId: "bundle_1",
+      agentSessionId: null,
+      status: "completed",
+      resultText: fencedResult,
+      errorCode: null,
+      errorMessage: null,
+      numTurns: 1,
+      totalCostUsd: 0.01,
+    });
+
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
+
+    const rawCall = (mocks.insertFileIqRawExtraction.mock.calls[0] as [
+      { payload: Record<string, unknown> }
+    ])[0];
+    expect(rawCall.payload).not.toHaveProperty("raw");
+    expect(rawCall.payload.schemaType).toBe("product_catalog");
+  });
+});
+
+// ─── Raw fallback ─────────────────────────────────────────────────────────────
+
+describe("processFileIqJob — raw text fallback", () => {
+  it("stores raw text under payload.raw when result is unparseable prose", async () => {
+    mocks.runFileIqExtractionAgent.mockResolvedValue({
+      jobId: "job_1",
+      bundleId: "bundle_1",
+      agentSessionId: null,
+      status: "completed",
+      resultText: "I could not find any structured data in this file.",
+      errorCode: null,
+      errorMessage: null,
+      numTurns: 2,
+      totalCostUsd: 0.01,
+    });
+
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
+
+    const rawCall = (mocks.insertFileIqRawExtraction.mock.calls[0] as [
+      { payload: Record<string, unknown> }
+    ])[0];
+    expect(rawCall.payload).toHaveProperty("raw");
+    expect(typeof rawCall.payload.raw).toBe("string");
+  });
+});
+
+// ─── Agent unavailable (missing API key) ─────────────────────────────────────
+
+describe("processFileIqJob — agent unavailable", () => {
   it("inserts a raw_extraction record even when agent is unavailable", async () => {
     agentUnavailable();
-    const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
-
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
     expect(mocks.insertFileIqRawExtraction).toHaveBeenCalledTimes(1);
   });
 
   it("updates job to status=failed when agent returns unavailable", async () => {
     agentUnavailable();
-    const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
-
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
       string,
       { status: string; errorCode: string; errorMessage: string }
@@ -399,14 +416,12 @@ describe("worker processJob — agent unavailable (missing API key)", () => {
   });
 });
 
-// ─── Worker job processing — agent failed ────────────────────────────────────
+// ─── Agent failed ─────────────────────────────────────────────────────────────
 
-describe("worker processJob — agent failed (non-success terminal result)", () => {
+describe("processFileIqJob — agent failed", () => {
   it("updates job to status=failed when agent returns failed", async () => {
     agentFailed();
-    const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
-
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
       string,
       { status: string; errorCode: string }
@@ -416,14 +431,14 @@ describe("worker processJob — agent failed (non-success terminal result)", () 
   });
 });
 
-// ─── Worker job processing — agent throws ────────────────────────────────────
+// ─── Agent throws ─────────────────────────────────────────────────────────────
 
-describe("worker processJob — agent throws exception", () => {
-  it("updates job to status=failed with errorCode=agent_exception when agent throws", async () => {
-    mocks.runFileIqExtractionAgent.mockRejectedValue(new Error("Subprocess spawn failed: ENOENT"));
-    const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
-
+describe("processFileIqJob — agent throws exception", () => {
+  it("updates job to status=failed with errorCode=agent_exception", async () => {
+    mocks.runFileIqExtractionAgent.mockRejectedValue(
+      new Error("Subprocess spawn failed: ENOENT"),
+    );
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
     expect(mocks.updateFileIqExtractionJob).toHaveBeenCalledTimes(1);
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
       string,
@@ -436,9 +451,60 @@ describe("worker processJob — agent throws exception", () => {
 
   it("does NOT insert a raw_extraction record when agent throws", async () => {
     mocks.runFileIqExtractionAgent.mockRejectedValue(new Error("spawn error"));
-    const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
-
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
     expect(mocks.insertFileIqRawExtraction).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Deterministic CSV fast path ──────────────────────────────────────────────
+
+describe("processFileIqJob — deterministic CSV fast path", () => {
+  it("skips agent when route=deterministic_structured and CSV parses with high confidence", async () => {
+    const csvContent = [
+      "SKU,Product Name,Status,Access Level,MSRP,Comments/ETA",
+      "ROC001,Omega-3,IN STOCK,All Memberships,$29.99,",
+      "ROC002,Vitamin C,LOW STOCK,Scale Plan Only,$19.99,Back in stock Q3",
+    ].join("\n");
+    mocks.readFile.mockResolvedValue(csvContent);
+
+    await processFileIqJob(
+      "job_csv",
+      "bundle_csv",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 0,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    expect(mocks.runFileIqExtractionAgent).not.toHaveBeenCalled();
+    expect(mocks.insertFileIqRawExtraction).toHaveBeenCalledTimes(1);
+    expect(mocks.updateFileIqExtractionJob).toHaveBeenCalledTimes(1);
+
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { status: string; summary: { totalProductsFound: number } }
+    ])[1];
+    expect(updateCall.status).toBe("completed");
+    expect(updateCall.summary.totalProductsFound).toBe(2);
+  });
+
+  it("falls back to agent when deterministic CSV parse returns low confidence", async () => {
+    // Empty CSV → low confidence
+    mocks.readFile.mockResolvedValue("");
+    agentSuccess();
+
+    await processFileIqJob(
+      "job_csv_fallback",
+      "bundle_csv_fallback",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 8,
+        filePaths: [{ path: "/tmp/empty.csv", type: "csv" }],
+      }),
+    );
+
+    // Agent should have been called as fallback
+    expect(mocks.runFileIqExtractionAgent).toHaveBeenCalledTimes(1);
   });
 });
