@@ -156,21 +156,31 @@ export function parseRocktomicInventoryCsv(
     };
   }
 
-  // Detect header row: first row within the first 5 lines that contains
-  // recognizable column names.
+  // Detect header row within the first 100 non-empty lines.
+  // hasSku: column value is exactly a SKU header label (guards against "Total SKUs: 154").
+  // matchCount: number of columns that contain a recognizable label keyword.
+  // A row is a header if hasSku is true OR ≥2 columns match distinct label keywords.
+  // "sku" is intentionally excluded from HEADER_TRIGGERS so that cells like
+  // "Total SKUs: 154" don't inflate matchCount alongside another trigger.
+  const HEADER_TRIGGERS = [
+    "item", "product", "name",
+    "status", "availability", "stock",
+    "access", "membership",
+    "comment", "eta",
+  ] as const;
+
   let headerIdx = -1;
   let headers: string[] = [];
-  for (let i = 0; i < Math.min(5, lines.length); i++) {
-    const cols = splitCsvLine(lines[i]).map((c) => c.toLowerCase());
-    if (
-      cols.some(
-        (c) =>
-          c.includes("sku") ||
-          c.includes("item") ||
-          c.includes("product") ||
-          c.includes("name"),
-      )
-    ) {
+  for (let i = 0; i < Math.min(100, lines.length); i++) {
+    const cols = splitCsvLine(lines[i]).map((c) => c.toLowerCase().trim());
+    // Match "sku", "sku#", "sku #", "item sku", "product sku" but not "total skus: 154"
+    const hasSku = cols.some(
+      (c) => /^sku[\s#]*$/.test(c) || c === "item sku" || c === "product sku",
+    );
+    const matchCount = cols.filter(
+      (c) => HEADER_TRIGGERS.some((t) => c.includes(t)),
+    ).length;
+    if (hasSku || matchCount >= 2) {
       headerIdx = i;
       headers = splitCsvLine(lines[i]).map((c) => c.trim().toLowerCase());
       break;
@@ -178,7 +188,7 @@ export function parseRocktomicInventoryCsv(
   }
 
   if (headerIdx === -1) {
-    parseNotes.push("No header row detected in first 5 lines");
+    parseNotes.push("No header row detected in first 100 lines");
     return {
       payload: buildEmptyProductCatalog("No header row detected", reportDate),
       confidence: "low",
@@ -198,11 +208,14 @@ export function parseRocktomicInventoryCsv(
 
   const colIdx = {
     sku: findCol("sku", "item #", "item#", "item no", "part"),
-    productName: findCol("product name", "product", "name", "description", "title"),
-    status: findCol("status", "availability", "stock"),
-    accessLevel: findCol("access", "membership", "tier", "level"),
+    productName: findCol("product name", "item name", "product", "item", "name", "description", "title"),
+    // "inventory status", "stock status" → matched via "status"; "availability" explicit
+    status: findCol("inventory status", "stock status", "status", "availability", "stock"),
+    // "plan access" → matched via "access"; "membership" explicit
+    accessLevel: findCol("access level", "plan access", "access", "membership", "tier", "level"),
     msrp: findCol("msrp", "retail", "price"),
-    comments: findCol("comment", "eta", "note", "remarks"),
+    // "additional comments" → matched via "comment"; "eta" and "comments" explicit
+    comments: findCol("additional comments", "comments/eta", "comments", "comment", "eta", "note", "remarks"),
     category: findCol("category", "type", "group"),
   };
 
@@ -364,11 +377,21 @@ export function parseRocktomicInventoryCsv(
     });
   }
 
-  const confidence: "high" | "low" = products.length > 0 ? "high" : "low";
-
   if (products.length === 0) {
     parseNotes.push("No product rows found after header");
   }
+
+  // Majority of parsed rows must have both a non-empty SKU and a productName
+  // to qualify as high confidence; status always has a default so is not checked.
+  const wellFormedRows = products.filter(
+    (p) =>
+      typeof p.sku === "string" && (p.sku as string).trim() !== "" &&
+      typeof p.productName === "string" && (p.productName as string).trim() !== "",
+  ).length;
+  const majorityWellFormed =
+    products.length > 0 && wellFormedRows >= products.length / 2;
+  const confidence: "high" | "low" =
+    products.length > 0 && majorityWellFormed ? "high" : "low";
 
   const payload: Record<string, unknown> = {
     schemaType: "product_catalog",
