@@ -469,13 +469,9 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
     agentSuccess(JSON.stringify({
       schemaType: "product_catalog",
       schemaVersion: "1.1",
-      products: Array.from({ length: productCount }, (_, i) => ({
-        sku: `ROC${String(i + 1).padStart(3, "0")}`,
-        productName: `Product ${i + 1}`,
-      })),
-      totalProductsFound: productCount,
-      sourcesProcessed: 1,
-      extractionNotes: "validated",
+      validationStatus: "validated",
+      validatedProductCount: productCount,
+      normalizationNotes: [],
     }));
   }
 
@@ -526,7 +522,8 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
     expect(agentCall.prompt).toContain("1.1");
     expect(agentCall.prompt).toContain("PREPARED EVIDENCE.products is the full product list");
     expect(agentCall.prompt).toContain("preserve all 2 products");
-    expect(agentCall.prompt).toContain("products.length is 2");
+    expect(agentCall.prompt).toContain("validatedProductCount to 2");
+    expect(agentCall.prompt).toContain("Do not return the full product_catalog");
     // Compact prompt should not include the large CATALOG_SCHEMA_EXAMPLE block
     expect(agentCall.prompt).not.toContain("CATALOG_SCHEMA_EXAMPLE");
     expect(agentCall.prompt).not.toContain("FILES — read each using the Read tool");
@@ -696,7 +693,41 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
     expect(evidence.products[0].sku).toBe("ROC001");
     expect(evidence.products[163].sku).toBe("ROC164");
     expect(agentCall.prompt).toContain("preserve all 164 products");
-    expect(agentCall.prompt).toContain("products.length is 164");
+    expect(agentCall.prompt).toContain("validatedProductCount to 164");
+  });
+
+  it("stores the full deterministic product_catalog after compact agent validation succeeds", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccessForCsv();
+
+    await processFileIqJob(
+      "job_csv_validated_full_catalog",
+      "bundle_csv_validated_full_catalog",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const rawCall = (mocks.insertFileIqRawExtraction.mock.calls[0] as [
+      {
+        artifactType: string;
+        payload: {
+          schemaType?: string;
+          schemaVersion?: string;
+          products?: unknown[];
+          totalProductsFound?: number;
+          _meta?: { agentValidation?: { validatedProductCount?: number } };
+        };
+      }
+    ])[0];
+    expect(rawCall.artifactType).toBe("agent_result");
+    expect(rawCall.payload.schemaType).toBe("product_catalog");
+    expect(rawCall.payload.schemaVersion).toBe("1.1");
+    expect(rawCall.payload.products).toHaveLength(2);
+    expect(rawCall.payload.totalProductsFound).toBe(2);
+    expect(rawCall.payload._meta?.agentValidation?.validatedProductCount).toBe(2);
   });
 
   it("does not let an incomplete validation response overwrite full high-confidence preparse output", async () => {
