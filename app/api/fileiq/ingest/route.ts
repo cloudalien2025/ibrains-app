@@ -7,12 +7,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import {
   insertFileIqExtractionJob,
-  insertFileIqRawExtraction,
   insertFileIqSourceBundle,
   insertFileIqSourceFile,
-  updateFileIqExtractionJob,
 } from "@/lib/fileiq/fileiq-db";
-import { runFileIqExtractionAgent } from "@/lib/fileiq/agent/fileiq-agent";
 
 function sha256(data: string | Buffer): string {
   return createHash("sha256").update(data).digest("hex");
@@ -278,6 +275,8 @@ function buildExtractionPrompt(params: {
   return lines.join("\n");
 }
 
+const LOG = "[fileiq:ingest]";
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const { userId, unauthorizedResponse } = await requireSignedInUser();
   if (unauthorizedResponse) return unauthorizedResponse;
@@ -331,6 +330,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const bundleId = crypto.randomUUID();
   const jobId = crypto.randomUUID();
   const bundleName = `${supplierName} – ${new Date().toISOString().slice(0, 10)}`;
+
+  console.log(`${LOG} jobId=${jobId} bundleId=${bundleId} | start | supplier=${supplierId} fileCount=${uploadedFiles.length} urlCount=${urls.length}`);
 
   try {
     await insertFileIqSourceBundle({
@@ -400,14 +401,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  await insertFileIqExtractionJob({
-    id: jobId,
-    bundleId,
-    status: "pending",
-    extractorType: "claude_agent",
-    summary: { fileCount: fileEntries.length, urlCount: urls.length },
-  });
-
   const agentPrompt = buildExtractionPrompt({
     jobId,
     bundleName,
@@ -416,91 +409,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     intent,
   });
 
-  void (async () => {
-    try {
-      const agentResult = await runFileIqExtractionAgent({
-        jobId,
-        bundleId,
-        prompt: agentPrompt,
-        cwd: fileEntries.length > 0 ? tempDir : undefined,
-        additionalDirectories: fileEntries.length > 0 ? [tempDir] : undefined,
+  await insertFileIqExtractionJob({
+    id: jobId,
+    bundleId,
+    status: "pending",
+    extractorType: "claude_agent",
+    summary: {
+      fileCount: fileEntries.length,
+      urlCount: urls.length,
+      // Worker context: picked up by fileiq-worker.ts to reconstruct the agent session.
+      _worker: {
+        agentPrompt,
+        cwd: fileEntries.length > 0 ? tempDir : null,
+        additionalDirectories: fileEntries.length > 0 ? [tempDir] : [],
         maxTurns: 12,
-      });
+      },
+    },
+  });
 
-      let extractedPayload: Record<string, unknown> = {};
-      let totalProductsFound = 0;
-      let detectedSchemaType: string | null = null;
-      let detectedSchemaVersion: string | null = null;
-
-      if (agentResult.status === "completed" && agentResult.resultText) {
-        try {
-          const parsed: unknown = JSON.parse(agentResult.resultText);
-          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            extractedPayload = parsed as Record<string, unknown>;
-            const count = extractedPayload.totalProductsFound;
-            if (typeof count === "number") totalProductsFound = count;
-
-            if (
-              extractedPayload.schemaType === "product_catalog" &&
-              typeof extractedPayload.schemaVersion === "string" &&
-              Array.isArray(extractedPayload.products)
-            ) {
-              detectedSchemaType = "product_catalog";
-              detectedSchemaVersion = extractedPayload.schemaVersion;
-            }
-          }
-        } catch {
-          extractedPayload = { raw: agentResult.resultText };
-        }
-      }
-
-      const extractionId = crypto.randomUUID();
-      await insertFileIqRawExtraction({
-        id: extractionId,
-        extractionJobId: jobId,
-        sourceFileId: null,
-        artifactType: "agent_result",
-        storageUri: "inline:payload",
-        payload: {
-          ...extractedPayload,
-          _meta: {
-            agentSessionId: agentResult.agentSessionId,
-            numTurns: agentResult.numTurns,
-            totalCostUsd: agentResult.totalCostUsd,
-            agentStatus: agentResult.status,
-          },
-        },
-      });
-
-      const dbStatus = agentResult.status === "completed" ? "completed" : "failed";
-      await updateFileIqExtractionJob(jobId, {
-        status: dbStatus,
-        agentSessionId: agentResult.agentSessionId,
-        errorCode: agentResult.errorCode,
-        errorMessage: agentResult.errorMessage,
-        summary: {
-          fileCount: fileEntries.length,
-          urlCount: urls.length,
-          totalProductsFound,
-          agentStatus: agentResult.status,
-          numTurns: agentResult.numTurns,
-          ...(detectedSchemaType !== null && {
-            schemaType: detectedSchemaType,
-            schemaVersion: detectedSchemaVersion,
-          }),
-        },
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      await updateFileIqExtractionJob(jobId, {
-        status: "failed",
-        agentSessionId: null,
-        errorCode: "agent_exception",
-        errorMessage: msg,
-        summary: { fileCount: fileEntries.length, urlCount: urls.length },
-      }).catch(() => {});
-    }
-  })();
+  console.log(`${LOG} jobId=${jobId} bundleId=${bundleId} status=pending | queued | fileCount=${fileEntries.length} urlCount=${urls.length}`);
 
   return NextResponse.json({ jobId, bundleId, status: "pending" });
 }

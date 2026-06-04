@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   updateFileIqExtractionJob: vi.fn(),
   insertFileIqRawExtraction: vi.fn(),
   listRecentFileIqJobs: vi.fn(),
+  claimFileIqPendingJob: vi.fn(),
   runFileIqExtractionAgent: vi.fn(),
   mkdir: vi.fn(),
   writeFile: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("@/lib/fileiq/fileiq-db", () => ({
   updateFileIqExtractionJob: mocks.updateFileIqExtractionJob,
   insertFileIqRawExtraction: mocks.insertFileIqRawExtraction,
   listRecentFileIqJobs: mocks.listRecentFileIqJobs,
+  claimFileIqPendingJob: mocks.claimFileIqPendingJob,
 }));
 
 vi.mock("@/lib/fileiq/agent/fileiq-agent", () => ({
@@ -69,34 +71,6 @@ function signedOut() {
   });
 }
 
-function agentSuccess(resultText = '{"products":[],"totalProductsFound":0,"sourcesProcessed":1,"extractionNotes":"test"}') {
-  mocks.runFileIqExtractionAgent.mockResolvedValue({
-    jobId: "job_1",
-    bundleId: "bundle_1",
-    agentSessionId: "sess_test",
-    status: "completed",
-    resultText,
-    errorCode: null,
-    errorMessage: null,
-    numTurns: 3,
-    totalCostUsd: 0.02,
-  });
-}
-
-function agentUnavailable() {
-  mocks.runFileIqExtractionAgent.mockResolvedValue({
-    jobId: "job_1",
-    bundleId: "bundle_1",
-    agentSessionId: null,
-    status: "unavailable",
-    resultText: null,
-    errorCode: "agent_credentials_missing",
-    errorMessage: "Set ANTHROPIC_API_KEY to run FileIQ extraction sessions.",
-    numTurns: 0,
-    totalCostUsd: null,
-  });
-}
-
 // ─── Import routes after mocks are in place ───────────────────────────────────
 
 import { POST as ingestPost } from "@/app/api/fileiq/ingest/route";
@@ -129,106 +103,89 @@ describe("POST /api/fileiq/ingest — auth guard", () => {
   });
 });
 
-// ─── URL-only ingestion ───────────────────────────────────────────────────────
+// ─── Ingest returns pending immediately ──────────────────────────────────────
+// The ingest route is now fire-and-return: it registers the job as pending and
+// returns immediately.  The agent runs in the separate fileiq-worker process.
 
-describe("POST /api/fileiq/ingest — URL path", () => {
-  it("registers bundle + source files + job, runs agent, writes raw extraction, and returns job summary", async () => {
+describe("POST /api/fileiq/ingest — job registration and pending response", () => {
+  it("returns { jobId, bundleId, status: 'pending' } immediately for a URL-only request", async () => {
     signedIn();
-    agentSuccess('{"products":[{"sku":"ABC-001","productName":"Test Product"}],"totalProductsFound":1,"sourcesProcessed":1,"extractionNotes":"found 1 product"}');
-
     const fd = makeFormData({
-      urls: JSON.stringify(["https://example.com/catalog.pdf", "https://example.com/specs.xlsx"]),
+      urls: JSON.stringify(["https://example.com/catalog.pdf"]),
       supplier_name: "Acme Supplier",
     });
-
     const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", {
       method: "POST",
       body: fd,
     });
 
     const res = await ingestPost(req);
-    const data = (await res.json()) as {
-      bundleId: string;
-      jobId: string;
-      status: string;
-      totalProductsFound: number;
-      urlCount: number;
-      fileCount: number;
-    };
+    const data = (await res.json()) as { bundleId: string; jobId: string; status: string };
 
     expect(res.status).toBe(200);
-    expect(data.status).toBe("completed");
-    expect(data.totalProductsFound).toBe(1);
-    expect(data.urlCount).toBe(2);
-    expect(data.fileCount).toBe(0);
+    expect(data.status).toBe("pending");
     expect(typeof data.bundleId).toBe("string");
     expect(typeof data.jobId).toBe("string");
   });
 
+  it("inserts job with status='pending' (not 'running')", async () => {
+    signedIn();
+    let capturedStatus: string | undefined;
+    mocks.insertFileIqExtractionJob.mockImplementation((row: { status: string }) => {
+      capturedStatus = row.status;
+      return Promise.resolve();
+    });
+
+    const fd = makeFormData({ urls: JSON.stringify(["https://example.com/cat.pdf"]) });
+    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
+    await ingestPost(req);
+
+    expect(capturedStatus).toBe("pending");
+    expect(mocks.insertFileIqExtractionJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores _worker.agentPrompt in job summary so the worker can reconstruct the agent session", async () => {
+    signedIn();
+    let capturedSummary: Record<string, unknown> | undefined;
+    mocks.insertFileIqExtractionJob.mockImplementation(
+      (row: { summary: Record<string, unknown> }) => {
+        capturedSummary = row.summary;
+        return Promise.resolve();
+      },
+    );
+
+    const fd = makeFormData({ urls: JSON.stringify(["https://example.com/catalog.pdf"]) });
+    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
+    await ingestPost(req);
+
+    expect(capturedSummary).toBeDefined();
+    const worker = capturedSummary!["_worker"] as Record<string, unknown>;
+    expect(typeof worker["agentPrompt"]).toBe("string");
+    expect((worker["agentPrompt"] as string).length).toBeGreaterThan(20);
+    expect(typeof worker["maxTurns"]).toBe("number");
+  });
+
+  it("does NOT call runFileIqExtractionAgent (that is the worker's responsibility)", async () => {
+    signedIn();
+    const fd = makeFormData({ urls: JSON.stringify(["https://example.com/catalog.pdf"]) });
+    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
+    await ingestPost(req);
+
+    expect(mocks.runFileIqExtractionAgent).not.toHaveBeenCalled();
+    expect(mocks.updateFileIqExtractionJob).not.toHaveBeenCalled();
+    expect(mocks.insertFileIqRawExtraction).not.toHaveBeenCalled();
+  });
+
   it("creates exactly one source_file record per URL", async () => {
     signedIn();
-    agentSuccess();
     const fd = makeFormData({
       urls: JSON.stringify(["https://example.com/a.pdf", "https://example.com/b.pdf", "https://example.com/c.pdf"]),
     });
     const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
     await ingestPost(req);
     expect(mocks.insertFileIqSourceFile).toHaveBeenCalledTimes(3);
-    // Each call should use the URL as storage_uri
     const calls = mocks.insertFileIqSourceFile.mock.calls as Array<[{ storageUri: string; fileType: string }]>;
     expect(calls.every((c) => c[0].fileType === "url")).toBe(true);
-  });
-
-  it("creates one extraction job (status=running) before the agent runs", async () => {
-    signedIn();
-    let capturedJobStatus: string | undefined;
-    mocks.insertFileIqExtractionJob.mockImplementation((row: { status: string }) => {
-      capturedJobStatus = row.status;
-      return Promise.resolve();
-    });
-    agentSuccess();
-
-    const fd = makeFormData({ urls: JSON.stringify(["https://example.com/cat.pdf"]) });
-    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
-    await ingestPost(req);
-
-    expect(capturedJobStatus).toBe("running");
-    expect(mocks.insertFileIqExtractionJob).toHaveBeenCalledTimes(1);
-  });
-
-  it("writes a raw_extraction record and updates job to completed when agent succeeds", async () => {
-    signedIn();
-    agentSuccess();
-
-    const fd = makeFormData({ urls: JSON.stringify(["https://example.com/catalog.pdf"]) });
-    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
-    await ingestPost(req);
-
-    expect(mocks.insertFileIqRawExtraction).toHaveBeenCalledTimes(1);
-    const rawCall = (mocks.insertFileIqRawExtraction.mock.calls[0] as [{ artifactType: string; sourceFileId: null }])[0];
-    expect(rawCall.artifactType).toBe("agent_result");
-    expect(rawCall.sourceFileId).toBeNull();
-
-    expect(mocks.updateFileIqExtractionJob).toHaveBeenCalledTimes(1);
-    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [string, { status: string }])[1];
-    expect(updateCall.status).toBe("completed");
-  });
-
-  it("updates job to failed when agent is unavailable", async () => {
-    signedIn();
-    agentUnavailable();
-
-    const fd = makeFormData({ urls: JSON.stringify(["https://example.com/catalog.pdf"]) });
-    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
-    const res = await ingestPost(req);
-    const data = (await res.json()) as { status: string; errorCode: string };
-
-    expect(res.status).toBe(200);
-    expect(data.status).toBe("unavailable");
-    expect(data.errorCode).toBe("agent_credentials_missing");
-
-    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [string, { status: string }])[1];
-    expect(updateCall.status).toBe("failed");
   });
 });
 
@@ -237,7 +194,6 @@ describe("POST /api/fileiq/ingest — URL path", () => {
 describe("POST /api/fileiq/ingest — file upload path", () => {
   it("writes uploaded files to /tmp and registers them with correct file type", async () => {
     signedIn();
-    agentSuccess();
 
     const fd = makeFormData({}, [
       { name: "catalog.pdf", content: "%PDF-1.4 content" },
@@ -246,13 +202,13 @@ describe("POST /api/fileiq/ingest — file upload path", () => {
 
     const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
     const res = await ingestPost(req);
-    const data = (await res.json()) as { fileCount: number; status: string };
+    const data = (await res.json()) as { status: string };
 
     expect(res.status).toBe(200);
-    expect(data.fileCount).toBe(2);
+    expect(data.status).toBe("pending");
     expect(mocks.writeFile).toHaveBeenCalledTimes(2);
 
-    const fileCalls = (mocks.insertFileIqSourceFile.mock.calls as Array<[{ fileType: string }]>);
+    const fileCalls = mocks.insertFileIqSourceFile.mock.calls as Array<[{ fileType: string }]>;
     const types = fileCalls.map((c) => c[0].fileType);
     expect(types).toContain("pdf");
     expect(types).toContain("xlsx");
@@ -260,7 +216,6 @@ describe("POST /api/fileiq/ingest — file upload path", () => {
 
   it("can mix files and URLs in the same ingest request", async () => {
     signedIn();
-    agentSuccess();
 
     const fd = makeFormData(
       { urls: JSON.stringify(["https://example.com/spec.pdf"]) },
@@ -269,11 +224,10 @@ describe("POST /api/fileiq/ingest — file upload path", () => {
 
     const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
     const res = await ingestPost(req);
-    const data = (await res.json()) as { fileCount: number; urlCount: number };
+    const data = (await res.json()) as { status: string };
 
     expect(res.status).toBe(200);
-    expect(data.fileCount).toBe(1);
-    expect(data.urlCount).toBe(1);
+    expect(data.status).toBe("pending");
     expect(mocks.insertFileIqSourceFile).toHaveBeenCalledTimes(2);
   });
 });
@@ -363,19 +317,16 @@ describe("GET /api/fileiq/jobs", () => {
   });
 });
 
-// ─── DB helpers contract ─────────────────────────────────────────────────────
+// ─── DB helpers call contract ─────────────────────────────────────────────────
 
 describe("fileiq-db helper call contract", () => {
-  it("ingest route calls DB helpers in order: bundle → file(s) → job → raw_extraction → update", async () => {
+  it("ingest route calls DB helpers in order: bundle → file(s) → job", async () => {
     signedIn();
-    agentSuccess();
 
     const callOrder: string[] = [];
     mocks.insertFileIqSourceBundle.mockImplementation(() => { callOrder.push("bundle"); return Promise.resolve(); });
     mocks.insertFileIqSourceFile.mockImplementation(() => { callOrder.push("file"); return Promise.resolve(); });
     mocks.insertFileIqExtractionJob.mockImplementation(() => { callOrder.push("job"); return Promise.resolve(); });
-    mocks.insertFileIqRawExtraction.mockImplementation(() => { callOrder.push("raw"); return Promise.resolve(); });
-    mocks.updateFileIqExtractionJob.mockImplementation(() => { callOrder.push("update"); return Promise.resolve(); });
 
     const fd = makeFormData({ urls: JSON.stringify(["https://example.com/catalog.pdf"]) });
     const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
@@ -384,13 +335,10 @@ describe("fileiq-db helper call contract", () => {
     expect(callOrder[0]).toBe("bundle");
     expect(callOrder[1]).toBe("file");
     expect(callOrder.indexOf("job")).toBeGreaterThan(callOrder.indexOf("file"));
-    expect(callOrder.indexOf("raw")).toBeGreaterThan(callOrder.indexOf("job"));
-    expect(callOrder[callOrder.length - 1]).toBe("update");
   });
 
   it("bundle record includes correct supplier_id derived from supplier_name", async () => {
     signedIn();
-    agentSuccess();
 
     const fd = makeFormData({
       urls: JSON.stringify(["https://example.com/catalog.pdf"]),
@@ -428,8 +376,6 @@ describe("Phase 1.2 nav and schema state", () => {
 
 describe("proxy.ts — /api/fileiq auth protection", () => {
   it("isProtectedRoute matcher source covers /api/fileiq(.*)", () => {
-    // Verify the protection pattern is present in the proxy source — a
-    // structural assertion that does not require running the full Clerk middleware.
     const { readFileSync } = require("node:fs") as typeof import("node:fs");
     const proxySource = readFileSync(
       new URL("../proxy.ts", import.meta.url).pathname,
