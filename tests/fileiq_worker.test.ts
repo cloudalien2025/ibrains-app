@@ -512,6 +512,8 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
     // Compact prompt should not include the large CATALOG_SCHEMA_EXAMPLE block
     expect(agentCall.prompt).not.toContain("CATALOG_SCHEMA_EXAMPLE");
     expect(agentCall.prompt).not.toContain("FILES — read each using the Read tool");
+    expect(agentCall.prompt).not.toContain(CSV_CONTENT);
+    expect(agentCall.prompt).not.toContain("SKU,Product Name,Status,Access Level,MSRP,Comments/ETA");
   });
 
   it("calls agent with small maxTurns from context (≤4)", async () => {
@@ -533,6 +535,26 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
     ])[0];
     expect(agentCall.maxTurns).toBeLessThanOrEqual(4);
     expect(agentCall.maxTurns).toBeGreaterThan(0);
+  });
+
+  it("forces maxTurns=3 for high-confidence deterministic CSV validation even when worker context has maxTurns=0", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccess();
+
+    await processFileIqJob(
+      "job_csv_maxturns_fix",
+      "bundle_csv_maxturns_fix",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 0,
+        filePaths: [{ path: "/tmp/inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const agentCall = (mocks.runFileIqExtractionAgent.mock.calls[0] as [
+      { maxTurns: number }
+    ])[0];
+    expect(agentCall.maxTurns).toBe(3);
   });
 
   it("job summary includes agentOrchestration=true", async () => {

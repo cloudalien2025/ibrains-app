@@ -72,6 +72,25 @@ function SchemaBadge({ job }: { job: JobRow }) {
   );
 }
 
+function ValidationBadge({ job }: { job: JobRow }) {
+  const agentStatus = job.summary?.agentStatus;
+  if (agentStatus === "fallback_deterministic") {
+    return (
+      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#FEF3C7] text-[#92400E]">
+        Parsed only — not validated
+      </span>
+    );
+  }
+  if (agentStatus === "completed") {
+    return (
+      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-[#DCFCE7] text-[#166534]">
+        Validated
+      </span>
+    );
+  }
+  return <span className="text-[#94A3B8]">—</span>;
+}
+
 function formatRelativeTime(isoString: string): string {
   try {
     const ms = Date.now() - new Date(isoString).getTime();
@@ -84,7 +103,7 @@ function formatRelativeTime(isoString: string): string {
   }
 }
 
-const recentJobColumns = ["Source / Bundle", "Status", "Schema", "Extracted", "Brains Notified", "Submitted"] as const;
+const recentJobColumns = ["Source / Bundle", "Status", "Schema", "Extracted", "Validation", "Submitted"] as const;
 
 function UploadIcon() {
   return (
@@ -531,7 +550,9 @@ export default function FileIqWorkspaceShell() {
                       <SchemaBadge job={job} />
                     </td>
                     <td className="py-3 pr-4 text-[#334155]">{extractedCount(job)}</td>
-                    <td className="py-3 pr-4 text-[#94A3B8]">—</td>
+                    <td className="py-3 pr-4">
+                      <ValidationBadge job={job} />
+                    </td>
                     <td className="py-3 text-[#64748B]">{formatRelativeTime(job.createdAt)}</td>
                   </tr>
                 ))
