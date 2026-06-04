@@ -10,6 +10,7 @@ import {
   insertFileIqSourceBundle,
   insertFileIqSourceFile,
 } from "@/lib/fileiq/fileiq-db";
+import { classifyExtractionJob } from "@/lib/fileiq/performance-router";
 
 function sha256(data: string | Buffer): string {
   return createHash("sha256").update(data).digest("hex");
@@ -18,9 +19,11 @@ function sha256(data: string | Buffer): string {
 function guessFileType(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
   const typeMap: Record<string, string> = {
+    ".csv": "csv",
     ".pdf": "pdf",
     ".docx": "docx",
     ".xlsx": "xlsx",
+    ".xls": "xlsx",
     ".html": "html",
     ".htm": "html",
     ".png": "png",
@@ -206,7 +209,11 @@ function buildExtractionPrompt(params: {
     lines.push(
       "TASK: Extract every product you can find across all sources and return a FileIQ Product Catalog (schema v1.1).",
       "",
-      "Output ONLY valid JSON matching the exact shape below (no markdown, no code fence).",
+      "CRITICAL OUTPUT RULES — follow exactly:",
+      "  1. Output ONLY valid JSON. No prose before or after the JSON.",
+      "  2. Do NOT wrap the JSON in markdown code fences (no ``` or ```json).",
+      "  3. Your entire response must be parseable by JSON.parse().",
+      "",
       "Set schemaType to \"product_catalog\" and schemaVersion to \"1.1\".",
       "Populate every field you can find in the source. Set unknown fields to null or [].",
       "If the source is inventory-only (no product catalog), populate inventory, sku, and productName where available; set all other product fields to null or empty arrays.",
@@ -224,6 +231,11 @@ function buildExtractionPrompt(params: {
   } else {
     lines.push(
       "TASK: Extract every product you can find across all sources.",
+      "",
+      "CRITICAL OUTPUT RULES — follow exactly:",
+      "  1. Output ONLY valid JSON. No prose before or after the JSON.",
+      "  2. Do NOT wrap the JSON in markdown code fences (no ``` or ```json).",
+      "  3. Your entire response must be parseable by JSON.parse().",
       "",
       "For each product extract as much as possible:",
       "  sku                 — product code or SKU (required)",
@@ -403,13 +415,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
   }
 
+  const filePaths = fileEntries.map((f) => ({ path: f.filePath, type: f.type }));
+
+  const routerDecision = classifyExtractionJob({ filePaths, urls, intent });
+
   const agentPrompt = buildExtractionPrompt({
     jobId,
     bundleName,
-    filePaths: fileEntries.map((f) => ({ path: f.filePath, type: f.type })),
+    filePaths,
     urls,
     intent,
   });
+
+  console.log(
+    `${LOG} jobId=${jobId} | router | route=${routerDecision.route} maxTurns=${routerDecision.maxTurns} rationale=${routerDecision.rationale}`,
+  );
 
   await insertFileIqExtractionJob({
     id: jobId,
@@ -419,12 +439,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     summary: {
       fileCount: fileEntries.length,
       urlCount: urls.length,
-      // Worker context: picked up by fileiq-worker.ts to reconstruct the agent session.
       _worker: {
         agentPrompt,
         cwd: fileEntries.length > 0 ? tempDir : null,
         additionalDirectories: fileEntries.length > 0 ? [tempDir] : [],
-        maxTurns: 40,
+        maxTurns: routerDecision.maxTurns,
+        route: routerDecision.route,
+        routeRationale: routerDecision.rationale,
+        filePaths,
+        urls,
       },
     },
   });
