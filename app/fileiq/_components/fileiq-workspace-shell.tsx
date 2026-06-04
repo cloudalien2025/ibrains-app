@@ -402,9 +402,12 @@ export default function FileIqWorkspaceShell() {
       if (parsedUrls.length > 0) fd.append("urls", JSON.stringify(parsedUrls));
       fd.append("intent", intent);
       const res  = await fetch("/api/fileiq/ingest", { method: "POST", body: fd });
-      const data = (await res.json()) as { error?: string; message?: string };
+      const responseType = res.headers.get("content-type") ?? "";
+      const data = responseType.includes("application/json")
+        ? ((await res.json()) as { error?: string; message?: string })
+        : { message: await res.text() };
       if (!res.ok) {
-        setIngestError(data.message ?? "Ingestion failed.");
+        setIngestError(data.message?.trim() || "FileIQ could not queue this upload right now.");
       } else {
         setDroppedFiles([]); setUrlText(""); setIntent("");
         setIngestSuccess("Extraction queued — check the stream below for results.");

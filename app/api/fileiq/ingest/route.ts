@@ -445,15 +445,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { userId, unauthorizedResponse } = await requireSignedInUser();
   if (unauthorizedResponse) return unauthorizedResponse;
 
+  const contentType = request.headers.get("content-type") ?? "";
+  const contentLength = request.headers.get("content-length") ?? "unknown";
+  if (
+    !contentType.includes("multipart/form-data") &&
+    !contentType.includes("application/x-www-form-urlencoded")
+  ) {
+    console.error(
+      `${LOG} unsupported content-type | content-type=${contentType || "none"} content-length=${contentLength} | parse_method_expected=formData`,
+    );
+    return NextResponse.json(
+      {
+        error: "invalid_request",
+        message: "FileIQ uploads must be sent as multipart form data.",
+      },
+      { status: 400 },
+    );
+  }
+
   let formData: FormData;
   try {
     formData = await request.formData();
   } catch (err) {
     const parseErr = err instanceof Error ? err.message : String(err);
-    const ct = request.headers.get("content-type") ?? "none";
-    const cl = request.headers.get("content-length") ?? "unknown";
     console.error(
-      `${LOG} formData parse failed | content-type=${ct} content-length=${cl} | error=${parseErr}`,
+      `${LOG} formData parse failed | content-type=${contentType || "none"} content-length=${contentLength} | parse_method_attempted=formData | error=${parseErr}`,
     );
     return NextResponse.json(
       {
@@ -470,7 +486,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ? intentRaw.trim()
       : undefined;
 
-  const uploadedFiles = formData.getAll("file") as File[];
+  const uploadedFiles = [...formData.getAll("file"), ...formData.getAll("files")].filter(
+    (entry): entry is File => entry instanceof File,
+  );
 
   let urls: string[] = [];
   const urlsRaw = formData.get("urls");

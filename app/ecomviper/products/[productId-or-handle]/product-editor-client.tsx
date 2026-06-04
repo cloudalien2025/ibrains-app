@@ -144,8 +144,19 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
     );
   }
 
+  return <LoadedProductEditorClient initialState={initialState} product={product} />;
+}
+
+function LoadedProductEditorClient({
+  initialState,
+  product,
+}: {
+  initialState: ShopifyProductEditorInitialState;
+  product: NonNullable<ShopifyProductEditorInitialState["currentShopifyListing"]>;
+}) {
   const supplierProduct = initialState.supplierContext.product;
   const sourceFacts = initialState.sourceFacts ?? null;
+  const fileIqContext = initialState.fileIqContext ?? null;
   const baseRecord = useMemo(() => {
     const fallback = createEmptyShopifyPdpIntelligenceRecord({
       shopifyProductId: product.productId,
@@ -221,10 +232,10 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
           ? seeded.coa_testing_categories
           : supplierProduct?.coa?.testingCategories || [],
       coa_verification_status: seeded.coa_verification_status || supplierProduct?.coa?.verificationStatus || "unknown",
-      ships_from: seeded.ships_from || supplierProduct?.shipping?.shipsFrom || "Unknown",
-      processing_time: seeded.processing_time || supplierProduct?.shipping?.processingTime || "Unknown",
-      shipping_time: seeded.shipping_time || supplierProduct?.shipping?.shippingTime || "Unknown",
-      return_policy: seeded.return_policy || supplierProduct?.shipping?.returnPolicy || "Unknown",
+      ships_from: seeded.ships_from || fileIqContext?.shipsFrom || supplierProduct?.shipping?.shipsFrom || "Unknown",
+      processing_time: seeded.processing_time || fileIqContext?.processingTime || supplierProduct?.shipping?.processingTime || "Unknown",
+      shipping_time: seeded.shipping_time || fileIqContext?.shippingTime || supplierProduct?.shipping?.shippingTime || "Unknown",
+      return_policy: seeded.return_policy || fileIqContext?.returnPolicy || supplierProduct?.shipping?.returnPolicy || "Unknown",
       fulfillment_status: seeded.fulfillment_status || supplierProduct?.shipping?.fulfillmentStatus || "unknown",
       price: sourcePrice,
       compare_at_price: sourceCompareAt,
@@ -259,7 +270,7 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
               ...(supplierProduct?.sourceDiagnostics || []),
             ],
     };
-  }, [initialState.pdpIntelligence, initialState.supplierContext, product.handle, product.productId, sourceFacts, supplierProduct]);
+  }, [fileIqContext, initialState.pdpIntelligence, initialState.supplierContext, product.handle, product.productId, sourceFacts, supplierProduct]);
 
   const [record, setRecord] = useState<ShopifyPdpIntelligenceRecord>(baseRecord);
   const [generationStatus, setGenerationStatus] = useState<AsyncStatus>("idle");
@@ -473,6 +484,9 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
             <span className={`rounded-full border px-3 py-1 ${chipTone(initialState.supplierContext.matched)}`}>
               {initialState.supplierContext.matched ? "Supplier Matched" : "Supplier Match Pending"}
             </span>
+            <span className={`rounded-full border px-3 py-1 ${chipTone(Boolean(fileIqContext?.matched))}`}>
+              {fileIqContext?.matched ? "FileIQ Match Found" : "FileIQ Match Not Found"}
+            </span>
             <span className="rounded-full border border-[#D5E2F0] bg-[#F6FAFF] px-3 py-1 text-[#334155]">
               Inventory: {record.availability_status || "Not available yet"}
             </span>
@@ -486,7 +500,9 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
             <p><span className="font-semibold text-[#0B1A36]">Product Type:</span> {displayValue(product.productType, "Not provided by source")}</p>
             <p><span className="font-semibold text-[#0B1A36]">Shopify Status:</span> {displayValue(product.status, "Not provided by source")}</p>
             <p><span className="font-semibold text-[#0B1A36]">Supplier Match:</span> {initialState.supplierContext.matched ? "Matched with supplier catalog" : "Not matched yet"}</p>
+            <p><span className="font-semibold text-[#0B1A36]">FileIQ:</span> {fileIqContext?.matched ? fileIqContext.completenessLabel : "No FileIQ canonical match yet"}</p>
             <p><span className="font-semibold text-[#0B1A36]">Inventory Units:</span> {hasInventoryQuantities ? inventoryCount : "Not provided by source"}</p>
+            <p><span className="font-semibold text-[#0B1A36]">FileIQ Completeness:</span> {fileIqContext?.completenessScore != null ? `${fileIqContext.completenessScore}/8` : "Not available yet"}</p>
             <p>
               <span className="font-semibold text-[#0B1A36]">COA:</span>{" "}
               {record.coa_link ? (
@@ -518,7 +534,9 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
               {hasSelectedTierWholesale ? asMoney(record.estimated_profit, record.currency) : "Select membership tier to calculate"}
             </p>
             <p><span className="font-semibold text-[#0B1A36]">Pricing Status:</span> {pricingStatusLabel || "Not provided by source"}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Inventory Access:</span> {sourceFacts?.fileIq?.inventoryAccessLevel || "Not provided by source"}</p>
             <p><span className="font-semibold text-[#0B1A36]">Last Source Check:</span> {asIso(initialState.supplierContext.lastSupplierCheckAt)}</p>
+            <p><span className="font-semibold text-[#0B1A36]">Last FileIQ Reconcile:</span> {asIso(fileIqContext?.generatedAt || null)}</p>
             <p><span className="font-semibold text-[#0B1A36]">Last Generated:</span> {asIso(record.last_generated_at)}</p>
             <p><span className="font-semibold text-[#0B1A36]">Ships From:</span> {displayValue(record.ships_from, "Not available yet")}</p>
             <p><span className="font-semibold text-[#0B1A36]">Processing Time:</span> {displayValue(record.processing_time, "Not available yet")}</p>
@@ -526,6 +544,11 @@ export default function EcomViperProductEditorClient({ initialState }: { initial
             <p><span className="font-semibold text-[#0B1A36]">Return Policy:</span> {displayValue(record.return_policy, "Not available yet")}</p>
             <p><span className="font-semibold text-[#0B1A36]">Fulfillment:</span> {displayValue(record.fulfillment_status, "Not available yet")}</p>
           </div>
+          {fileIqContext?.warnings.length ? (
+            <p className="mt-3 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] px-3 py-2 text-xs text-[#92400E]">
+              FileIQ warnings: {fileIqContext.warnings.join(", ")}
+            </p>
+          ) : null}
           {!effectiveMembershipTier ? (
             <p className="mt-3 rounded-lg border border-[#DBEAFE] bg-[#EFF6FF] px-3 py-2 text-xs text-[#1E3A8A]">{pricingMessage}</p>
           ) : null}

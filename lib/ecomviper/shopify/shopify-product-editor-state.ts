@@ -37,6 +37,11 @@ import {
 } from "@/lib/ecomviper/shopify/shopify-source-provenance";
 import { listShopifyProductsForUser } from "@/lib/ecomviper/shopify/shopify-import";
 import type { ShopifyProductRecord } from "@/lib/ecomviper/shopify/shopify-types";
+import {
+  getFileIqHydrationForShopifyProduct,
+  type FileIqProductEditorContext,
+  type FileIqProductEditorHydration,
+} from "@/lib/ecomviper/fileiq/fileiq-product-editor-hydration";
 
 interface BuildProductEditorStateOptions {
   userId: string | null;
@@ -70,6 +75,7 @@ export interface ShopifyProductEditorInitialState {
   pdpIntelligence: ShopifyPdpIntelligenceRecord | null;
   sourceFacts?: ShopifyProductEditorSourceFacts | null;
   supplierFactsPanel?: SupplierFactsPanelViewModel | null;
+  fileIqContext?: FileIqProductEditorContext | null;
   supplierContext: {
     matched: boolean;
     matchedSku: string | null;
@@ -188,6 +194,15 @@ export interface ShopifyProductEditorSourceFacts {
     coaLinkStatus: string;
     message: string;
   };
+  fileIq?: {
+    matched: boolean;
+    completenessLabel: string;
+    completenessScore: number | null;
+    readyForEcomViper: boolean;
+    generatedAt: string | null;
+    warnings: string[];
+    inventoryAccessLevel: string | null;
+  };
   missingFields: string[];
   diagnostics: string[];
 }
@@ -267,18 +282,6 @@ function resolveByReference(
   if (byGidTail) return byGidTail;
 
   return null;
-}
-
-function computeShopifyInventoryStatus(product: ShopifyProductRecord): "in_stock" | "low_stock" | "out_of_stock" | "unknown" {
-  const quantities = product.variants
-    .map((variant) => variant.inventoryQuantity)
-    .filter((quantity): quantity is number => typeof quantity === "number" && Number.isFinite(quantity));
-
-  if (!quantities.length) return "unknown";
-  const inStockCount = quantities.filter((quantity) => quantity > 0).length;
-  if (inStockCount === 0) return "out_of_stock";
-  if (inStockCount === quantities.length) return "in_stock";
-  return "low_stock";
 }
 
 function firstVariantPrice(product: ShopifyProductRecord): number | null {
@@ -498,14 +501,24 @@ function buildSourceFacts(input: {
   syncStatus: string | null;
   lastSupplierCheckAt: string | null;
   packageFacts: PackageHydratedFacts | null;
+  fileIqHydration: FileIqProductEditorHydration;
 }): ShopifyProductEditorSourceFacts {
   const supplierProduct = input.supplierProduct;
   const panel = input.supplierFactsPanel;
+  const fileIqPatch = input.fileIqHydration.patch;
+  const fileIqContext = input.fileIqHydration.context;
   const shopifySku = firstVariantSku(input.product);
   const normalizedSku = normalizeRocktomicSku(shopifySku || "");
-  const pricingRecordFound = normalizedRecordFound(supplierProduct, "pricing");
-  const inventoryRecordFound = normalizedRecordFound(supplierProduct, "inventory");
-  const assetsRecordFound = normalizedRecordFound(supplierProduct, "asset");
+  const pricingRecordFound =
+    normalizedRecordFound(supplierProduct, "pricing")
+    || fileIqPatch?.msrp != null
+    || fileIqPatch?.wholesaleCost != null;
+  const inventoryRecordFound =
+    normalizedRecordFound(supplierProduct, "inventory")
+    || Boolean(fileIqPatch?.inventoryStatus || fileIqPatch?.inventoryAccessLevel);
+  const assetsRecordFound =
+    normalizedRecordFound(supplierProduct, "asset")
+    || Boolean(fileIqPatch?.coaUrl || fileIqPatch?.labelTemplateUrl || fileIqPatch?.mockupUrl);
   const selectedMembershipTier = supplierProduct?.pricing?.membershipTier || null;
   const effectiveMembershipTier = resolveDefaultMembershipTier({
     selectedMembershipTier,
@@ -532,6 +545,13 @@ function buildSourceFacts(input: {
   });
   const packageFacts = input.packageFacts;
   const supplementFacts = (() => {
+    if (fileIqPatch?.supplementFactsText) {
+      return {
+        status: "extracted" as const,
+        value: fileIqPatch.supplementFactsText,
+        displayText: fileIqPatch.supplementFactsText,
+      };
+    }
     if (packageFacts) {
       const sf = packageFacts.supplementFactsStatus;
       if (sf === "structured" || sf === "partial") {
@@ -600,19 +620,26 @@ function buildSourceFacts(input: {
     ? pkgActiveIngredients
     : panelActiveIngredients.length
       ? panelActiveIngredients
-      : supplierProduct?.activeIngredients;
+      : fileIqPatch?.activeIngredients?.length
+        ? fileIqPatch.activeIngredients
+        : supplierProduct?.activeIngredients;
   const effectiveIngredientAmounts = pkgIngredientAmounts.length
     ? pkgIngredientAmounts.join(", ")
     : panelIngredientAmounts.length
       ? panelIngredientAmounts.join(", ")
-      : supplierProduct?.amountPerServing;
+      : fileIqPatch?.amountPerServing?.length
+        ? fileIqPatch.amountPerServing.join(", ")
+        : supplierProduct?.amountPerServing;
   const effectiveOtherIngredients = pkgOtherIngredients.length
     ? pkgOtherIngredients.join(", ")
     : panelOtherIngredients.length
       ? panelOtherIngredients.join(", ")
-      : supplierProduct?.otherIngredients;
-  const effectiveServingSize = packageFacts?.servingSize ?? panel?.servingSize ?? supplierProduct?.servingSize;
-  const effectiveServingsPerContainer = packageFacts?.servingsPerContainer ?? panel?.servingsPerContainer ?? supplierProduct?.servingsPerContainer;
+      : fileIqPatch?.otherIngredients
+        ? fileIqPatch.otherIngredients
+        : supplierProduct?.otherIngredients;
+  const effectiveServingSize = fileIqPatch?.servingSize ?? packageFacts?.servingSize ?? panel?.servingSize ?? supplierProduct?.servingSize;
+  const effectiveServingsPerContainer =
+    fileIqPatch?.servingsPerContainer ?? packageFacts?.servingsPerContainer ?? panel?.servingsPerContainer ?? supplierProduct?.servingsPerContainer;
   const activeIngredients = sourceStatusForArray({
     product: supplierProduct,
     values: effectiveActiveIngredients,
@@ -650,17 +677,17 @@ function buildSourceFacts(input: {
   });
   const keyProductFeatures = sourceStatusForArray({
     product: supplierProduct,
-    values: supplierProduct?.productFeatures,
+    values: fileIqPatch?.keyProductFeatures?.length ? fileIqPatch.keyProductFeatures : supplierProduct?.productFeatures,
     fieldName: "Key Product Features",
   });
   const certifications = sourceStatusForArray({
     product: supplierProduct,
-    values: supplierProduct?.certifications,
+    values: fileIqPatch?.certifications?.length ? fileIqPatch.certifications : supplierProduct?.certifications,
     fieldName: "Certifications",
   });
   const manufacturingClaims = sourceStatusForArray({
     product: supplierProduct,
-    values: supplierProduct?.manufacturingClaims,
+    values: fileIqPatch?.manufacturingClaims?.length ? fileIqPatch.manufacturingClaims : supplierProduct?.manufacturingClaims,
     fieldName: "Manufacturing Claims",
   });
   const testingClaims = sourceStatusForArray({
@@ -671,7 +698,7 @@ function buildSourceFacts(input: {
     fieldName: "Testing Claims",
   });
   const inventoryStatus = inventoryRecordFound
-    ? supplierProduct?.inventoryStatus || "unknown"
+    ? fileIqPatch?.inventoryStatus || supplierProduct?.inventoryStatus || "unknown"
     : supplierProduct
       ? "unknown"
       : "source_unavailable";
@@ -680,7 +707,7 @@ function buildSourceFacts(input: {
     selectedMembershipTier,
     effectiveMembershipTier,
     usingDefaultMembershipTier,
-    wholesaleCost,
+    wholesaleCost: wholesaleCost ?? fileIqPatch?.wholesaleCost ?? null,
   });
   const missingFields = [
     !supplierProduct ? "supplier_product_record" : null,
@@ -745,11 +772,11 @@ function buildSourceFacts(input: {
     commerce: {
       shopifyPrice,
       compareAtPrice,
-      wholesaleCost,
-      msrp: supplierProduct?.pricing?.msrp ?? null,
+      wholesaleCost: wholesaleCost ?? fileIqPatch?.wholesaleCost ?? null,
+      msrp: fileIqPatch?.msrp ?? supplierProduct?.pricing?.msrp ?? null,
       estimatedProfit,
       marginPercent,
-      currency: supplierProduct?.pricing?.currency || "USD",
+      currency: fileIqPatch?.currency || supplierProduct?.pricing?.currency || "USD",
       pricingStatusLabel: supplierProduct?.pricing?.pricingStatusLabel
         || (usingDefaultMembershipTier ? "default_tier_pricing_mapped" : pricingRecordFound ? "membership_tier_not_selected" : "pricing_record_not_found"),
       message: pricingMessage,
@@ -759,10 +786,12 @@ function buildSourceFacts(input: {
       displayText: availabilityFromInventoryStatus(inventoryStatus),
     },
     assets: {
-      coaUrl: panel?.assetSummary.coaUrl || packageFacts?.coaUrl || supplierProduct?.coa?.url || null,
-      labelTemplateUrl: supplierProduct?.labelTemplate?.url || null,
-      mockupUrl: supplierProduct?.mockup?.url || null,
-      coaStatus: panel?.assetSummary.coaPresent ? "available" : packageFacts?.coaUrl ? "available" : supplierProduct?.coa?.url ? "available" : supplierProduct?.coa?.status || "pending_source",
+      coaUrl: fileIqPatch?.coaUrl || panel?.assetSummary.coaUrl || packageFacts?.coaUrl || supplierProduct?.coa?.url || null,
+      labelTemplateUrl: fileIqPatch?.labelTemplateUrl || supplierProduct?.labelTemplate?.url || null,
+      mockupUrl: fileIqPatch?.mockupUrl || supplierProduct?.mockup?.url || null,
+      coaStatus:
+        fileIqPatch?.coaUrl ? "available" :
+        panel?.assetSummary.coaPresent ? "available" : packageFacts?.coaUrl ? "available" : supplierProduct?.coa?.url ? "available" : supplierProduct?.coa?.status || "pending_source",
       coaLinkStatus: supplierProduct?.coaLinkStatus || "not_present",
       message: (panel?.assetSummary.coaPresent || supplierProduct?.coa?.url)
         ? "available/extracted"
@@ -773,6 +802,15 @@ function buildSourceFacts(input: {
           : supplierProduct?.coaLinkStatus === "not_present"
             ? "COA Link: not found in catalog row"
             : "Source sync required.",
+    },
+    fileIq: {
+      matched: fileIqContext.matched,
+      completenessLabel: fileIqContext.completenessLabel,
+      completenessScore: fileIqContext.completenessScore,
+      readyForEcomViper: fileIqContext.readyForEcomViper,
+      generatedAt: fileIqContext.generatedAt,
+      warnings: fileIqContext.warnings,
+      inventoryAccessLevel: fileIqContext.inventoryAccessLevel,
     },
     missingFields,
     diagnostics,
@@ -1017,6 +1055,29 @@ export async function buildShopifyProductEditorStateForUser(
       break;
     }
   }
+  const fileIqHydration = await getFileIqHydrationForShopifyProduct({
+    product: resolved.product,
+    supplierId: "rocktomic-labs-llc",
+  }).catch(() => ({
+    context: {
+      matched: false,
+      supplierId: "rocktomic-labs-llc",
+      supplierName: null,
+      supplierSku: null,
+      generatedAt: null,
+      completenessScore: null,
+      completenessLabel: "No FileIQ match",
+      readyForEcomViper: false,
+      warnings: [],
+      sourceUpdatedAt: null,
+      inventoryAccessLevel: null,
+      shipsFrom: null,
+      processingTime: null,
+      shippingTime: null,
+      returnPolicy: null,
+    },
+    patch: null,
+  }));
   const sourceFacts = buildSourceFacts({
     product: resolved.product,
     currentShopifyListing,
@@ -1026,6 +1087,7 @@ export async function buildShopifyProductEditorStateForUser(
     syncStatus,
     lastSupplierCheckAt: supplierSnapshot?.lastCheckedAt ?? null,
     packageFacts,
+    fileIqHydration,
   });
   const supplierInventoryStatus = sourceFacts.inventory.status;
   const syncRequired = !supplierProduct;
@@ -1058,6 +1120,7 @@ export async function buildShopifyProductEditorStateForUser(
         : pdpIntelligence,
     sourceFacts,
     supplierFactsPanel,
+    fileIqContext: fileIqHydration.context,
     supplierContext: {
       matched: supplierMatch?.status === "rocktomic",
       matchedSku: supplierMatch?.matchedSku ?? null,

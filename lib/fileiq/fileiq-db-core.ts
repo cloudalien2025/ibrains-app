@@ -79,6 +79,36 @@ export interface FileIqStoredArtifact {
   createdAt: string;
 }
 
+export interface FileIqSupplierArtifactRecord {
+  artifactId: string;
+  jobId: string;
+  bundleId: string;
+  bundleName: string;
+  supplierId: string;
+  sourceFileId: string | null;
+  sourceFileName: string | null;
+  sourceFileType: string | null;
+  sourceRole: string | null;
+  sourceMetadata: Record<string, unknown>;
+  artifactType: string;
+  storageUri: string;
+  payload: Record<string, unknown>;
+  createdBy: string | null;
+  createdAt: string;
+}
+
+export interface FileIqReconciledCatalogRecord {
+  id: string;
+  supplierId: string;
+  sourceBundleId: string | null;
+  status: string;
+  schemaVersion: string;
+  catalog: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  createdBy: string | null;
+  createdAt: string;
+}
+
 export interface FileIqJobDeletionContext {
   job: FileIqOwnedJob;
   cleanupStorageUris: string[];
@@ -397,4 +427,151 @@ export async function deleteFileIqSourceBundleForUser(
     [bundleId, userId],
   );
   return rows.length > 0;
+}
+
+export async function listLatestCompletedFileIqArtifactsForSupplier(
+  supplierIds: string[],
+  limit: number,
+): Promise<FileIqSupplierArtifactRecord[]> {
+  if (supplierIds.length === 0) return [];
+
+  const rows = await queryEcommerce<{
+    artifact_id: string;
+    extraction_job_id: string;
+    bundle_id: string;
+    bundle_name: string;
+    supplier_id: string;
+    source_file_id: string | null;
+    source_file_name: string | null;
+    source_file_type: string | null;
+    source_role: string | null;
+    source_metadata: unknown;
+    bundle_source_file_name: string | null;
+    bundle_source_file_type: string | null;
+    bundle_source_role: string | null;
+    bundle_source_metadata: unknown;
+    artifact_type: string;
+    storage_uri: string;
+    payload: unknown;
+    created_by: string | null;
+    created_at: string;
+  }>(
+    `SELECT
+       r.id AS artifact_id,
+       r.extraction_job_id,
+       j.bundle_id,
+       b.name AS bundle_name,
+       b.supplier_id,
+       r.source_file_id,
+       sf.file_name AS source_file_name,
+       sf.file_type AS source_file_type,
+       sf.source_role,
+       sf.metadata AS source_metadata,
+       sf_bundle.file_name AS bundle_source_file_name,
+       sf_bundle.file_type AS bundle_source_file_type,
+       sf_bundle.source_role AS bundle_source_role,
+       sf_bundle.metadata AS bundle_source_metadata,
+       r.artifact_type,
+       r.storage_uri,
+       r.payload,
+       b.created_by,
+       r.created_at
+     FROM fileiq_raw_extractions r
+     JOIN fileiq_extraction_jobs j ON j.id = r.extraction_job_id
+     JOIN fileiq_source_bundles b ON b.id = j.bundle_id
+     LEFT JOIN fileiq_source_files sf ON sf.id = r.source_file_id
+     LEFT JOIN LATERAL (
+       SELECT file_name, file_type, source_role, metadata
+       FROM fileiq_source_files bundle_sf
+       WHERE bundle_sf.bundle_id = j.bundle_id
+       ORDER BY bundle_sf.created_at ASC
+       LIMIT 1
+     ) sf_bundle ON true
+     WHERE j.status = 'completed'
+       AND b.supplier_id = ANY($1::text[])
+       AND r.artifact_type = ANY($2::text[])
+     ORDER BY r.created_at DESC
+     LIMIT $3`,
+    [supplierIds, ["agent_result", "deterministic_result"], limit],
+  );
+
+  return rows.map((row) => ({
+    artifactId: row.artifact_id,
+    jobId: row.extraction_job_id,
+    bundleId: row.bundle_id,
+    bundleName: row.bundle_name,
+    supplierId: row.supplier_id,
+    sourceFileId: row.source_file_id,
+    sourceFileName: row.source_file_name ?? row.bundle_source_file_name,
+    sourceFileType: row.source_file_type ?? row.bundle_source_file_type,
+    sourceRole: row.source_role ?? row.bundle_source_role,
+    sourceMetadata:
+      (row.source_metadata as Record<string, unknown>) ??
+      (row.bundle_source_metadata as Record<string, unknown>) ??
+      {},
+    artifactType: row.artifact_type,
+    storageUri: row.storage_uri,
+    payload: (row.payload as Record<string, unknown>) ?? {},
+    createdBy: row.created_by,
+    createdAt: typeof row.created_at === "string" ? row.created_at : String(row.created_at),
+  }));
+}
+
+export async function insertFileIqReconciledCatalog(
+  row: FileIqReconciledCatalogRecord,
+): Promise<void> {
+  await queryEcommerce(
+    `INSERT INTO fileiq_reconciled_catalogs
+       (id, supplier_id, source_bundle_id, status, schema_version, catalog, metadata, created_by, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())`,
+    [
+      row.id,
+      row.supplierId,
+      row.sourceBundleId,
+      row.status,
+      row.schemaVersion,
+      JSON.stringify(row.catalog),
+      JSON.stringify(row.metadata),
+      row.createdBy,
+    ],
+  );
+}
+
+export async function getLatestFileIqReconciledCatalogForSupplier(
+  supplierIds: string[],
+): Promise<FileIqReconciledCatalogRecord | null> {
+  if (supplierIds.length === 0) return null;
+
+  const rows = await queryEcommerce<{
+    id: string;
+    supplier_id: string;
+    source_bundle_id: string | null;
+    status: string;
+    schema_version: string;
+    catalog: unknown;
+    metadata: unknown;
+    created_by: string | null;
+    created_at: string;
+  }>(
+    `SELECT id, supplier_id, source_bundle_id, status, schema_version, catalog, metadata, created_by, created_at
+     FROM fileiq_reconciled_catalogs
+     WHERE supplier_id = ANY($1::text[])
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [supplierIds],
+  );
+
+  if (rows.length === 0) return null;
+  const row = rows[0];
+  return {
+    id: row.id,
+    supplierId: row.supplier_id,
+    sourceBundleId: row.source_bundle_id,
+    status: row.status,
+    schemaVersion: row.schema_version,
+    catalog: (row.catalog as Record<string, unknown>) ?? {},
+    metadata: (row.metadata as Record<string, unknown>) ?? {},
+    createdBy: row.created_by,
+    createdAt: typeof row.created_at === "string" ? row.created_at : String(row.created_at),
+  };
 }
