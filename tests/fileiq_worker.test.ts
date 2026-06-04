@@ -289,6 +289,41 @@ describe("processFileIqJob — agent success (pure JSON result)", () => {
     expect(updateCall.summary.schemaVersion).toBe("1.1");
   });
 
+  it("persists supplier.name from product_catalog result onto the job summary", async () => {
+    agentSuccess(JSON.stringify({
+      schemaType: "product_catalog",
+      schemaVersion: "1.1",
+      supplier: { name: "Acme Labs LLC", supplierName: "Legacy Acme" },
+      products: [{ sku: "X1" }],
+      totalProductsFound: 1,
+      sourcesProcessed: 1,
+      extractionNotes: "ok",
+    }));
+    await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { summary: { supplierName?: string } }
+    ])[1];
+    expect(updateCall.summary.supplierName).toBe("Acme Labs LLC");
+  });
+
+  it("stores Unknown Supplier when no supplier exists in parsed output", async () => {
+    agentSuccess(JSON.stringify({
+      schemaType: "product_catalog",
+      schemaVersion: "1.1",
+      products: [{ sku: "X1" }],
+      totalProductsFound: 1,
+      sourcesProcessed: 1,
+      extractionNotes: "ok",
+    }));
+    await processFileIqJob("job_unknown", "bundle_unknown", makeWorkerContext());
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { summary: { supplierName?: string } }
+    ])[1];
+    expect(updateCall.summary.supplierName).toBe("Unknown Supplier");
+  });
+
   it("job summary includes _timing object with totalMs", async () => {
     agentSuccess();
     await processFileIqJob("job_1", "bundle_1", makeWorkerContext());
@@ -615,6 +650,27 @@ describe("processFileIqJob — deterministic CSV preparse + agent validation", (
     expect(updateCall.summary.localPreparse!.parser).toBe("rocktomic_inventory_csv");
     expect(updateCall.summary.localPreparse!.productsParsed).toBe(2);
     expect(updateCall.summary.localPreparse!.confidence).toBe("high");
+  });
+
+  it("Rocktomic CSV job persists supplierName=Rocktomic Labs LLC after extraction", async () => {
+    mocks.readFile.mockResolvedValue(CSV_CONTENT);
+    agentSuccessForCsv();
+
+    await processFileIqJob(
+      "job_csv_supplier",
+      "bundle_csv_supplier",
+      makeWorkerContext({
+        route: "deterministic_structured",
+        maxTurns: 3,
+        filePaths: [{ path: "/tmp/rocktomic-inventory.csv", type: "csv" }],
+      }),
+    );
+
+    const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
+      string,
+      { summary: { supplierName?: string } }
+    ])[1];
+    expect(updateCall.summary.supplierName).toBe("Rocktomic Labs LLC");
   });
 
   it("_timing includes preparseMs and agentDurationMs", async () => {

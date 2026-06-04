@@ -61,6 +61,11 @@ function extractedCount(job: JobRow): string {
   return typeof n === "number" ? String(n) : "—";
 }
 
+function supplierName(job: JobRow): string {
+  const value = job.summary?.supplierName;
+  return typeof value === "string" && value.trim() ? value.trim() : "Unknown Supplier";
+}
+
 function SchemaBadge({ job }: { job: JobRow }) {
   const schemaType = job.summary?.schemaType;
   const schemaVersion = job.summary?.schemaVersion;
@@ -103,7 +108,7 @@ function formatRelativeTime(isoString: string): string {
   }
 }
 
-const recentJobColumns = ["Source / Bundle", "Status", "Schema", "Extracted", "Validation", "Submitted"] as const;
+const recentJobColumns = ["Source / Bundle", "Supplier", "Status", "Schema", "Extracted", "Validation", "Submitted"] as const;
 
 function UploadIcon() {
   return (
@@ -543,6 +548,7 @@ export default function FileIqWorkspaceShell() {
                     data-testid="fileiq-job-row"
                   >
                     <td className="py-3 pr-4 font-medium text-[#0F172A]">{job.bundleName}</td>
+                    <td className="py-3 pr-4 text-[#334155]">{supplierName(job)}</td>
                     <td className="py-3 pr-4">
                       <StatusBadge status={job.status} />
                     </td>

@@ -66,6 +66,38 @@ export interface FileIqJobListRow {
   completedAt: string | null;
 }
 
+export async function backfillFileIqCompletedJobSuppliers(): Promise<number> {
+  const rows = await queryEcommerce<{ id: string }>(
+    `WITH latest_raw AS (
+       SELECT DISTINCT ON (extraction_job_id)
+              extraction_job_id,
+              payload
+       FROM fileiq_raw_extractions
+       ORDER BY extraction_job_id, created_at DESC
+     ),
+     supplier_names AS (
+       SELECT j.id,
+              COALESCE(
+                NULLIF(latest_raw.payload #>> '{supplier,name}', ''),
+                NULLIF(latest_raw.payload #>> '{supplier,supplierName}', '')
+              ) AS supplier_name
+       FROM fileiq_extraction_jobs j
+       JOIN latest_raw ON latest_raw.extraction_job_id = j.id
+       WHERE j.status = 'completed'
+         AND COALESCE(NULLIF(j.summary ->> 'supplierName', ''), 'Unknown Supplier') = 'Unknown Supplier'
+     )
+     UPDATE fileiq_extraction_jobs j
+     SET summary = jsonb_set(COALESCE(j.summary, '{}'::jsonb), '{supplierName}', to_jsonb(s.supplier_name), true),
+         updated_at = now()
+     FROM supplier_names s
+     WHERE j.id = s.id
+       AND s.supplier_name IS NOT NULL
+     RETURNING j.id`,
+    [],
+  );
+  return rows.length;
+}
+
 export async function insertFileIqSourceBundle(row: FileIqSourceBundleInsert): Promise<void> {
   await queryEcommerce(
     `INSERT INTO fileiq_source_bundles
@@ -177,6 +209,8 @@ export async function claimFileIqPendingJob(): Promise<FileIqClaimedJob | null> 
 }
 
 export async function listRecentFileIqJobs(limit: number): Promise<FileIqJobListRow[]> {
+  await backfillFileIqCompletedJobSuppliers();
+
   const rows = await queryEcommerce<{
     id: string;
     bundle_id: string;

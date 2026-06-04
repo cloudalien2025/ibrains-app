@@ -26,6 +26,8 @@ import {
   detectProductCatalogSummary,
 } from "@/lib/fileiq/result-parser";
 import { parseRocktomicInventoryCsv } from "@/lib/fileiq/csv/rocktomic-inventory-parser";
+import { extractSupplierNameFromPayload, UNKNOWN_SUPPLIER } from "@/lib/fileiq/supplier-detection";
+import { warnIfFirecrawlMissing } from "@/lib/fileiq/sources/url-source";
 
 const LOG = "[fileiq:worker]";
 const POLL_INTERVAL_MS = 5_000;
@@ -43,6 +45,7 @@ interface WorkerContext {
   routeRationale?: string;
   filePaths?: Array<{ path: string; type: string }>;
   urls?: string[];
+  sourceSummary?: Record<string, unknown>;
 }
 
 const DETERMINISTIC_VALIDATION_MAX_TURNS = 3;
@@ -126,6 +129,10 @@ function extractValidationProductCount(payload: Record<string, unknown>): number
   return null;
 }
 
+function supplierNameForSummary(payload: Record<string, unknown>): string {
+  return extractSupplierNameFromPayload(payload) ?? UNKNOWN_SUPPLIER;
+}
+
 function resolveAgentMaxTurns(ctx: WorkerContext): number {
   if (ctx.route === "deterministic_structured") {
     // Defensive clamp: deterministic CSV validation must never run with 0 turns.
@@ -146,6 +153,10 @@ function extractWorkerContext(
     return null;
   }
   const ctx = workerCtx as Record<string, unknown>;
+  const sourceSummary: Record<string, unknown> = {};
+  for (const key of ["fileCount", "urlCount", "supplierName", "fetchMethod", "sourceRef", "sourceRefs", "urlSources"]) {
+    if (summary[key] !== undefined) sourceSummary[key] = summary[key];
+  }
   return {
     agentPrompt: ctx["agentPrompt"] as string,
     cwd: typeof ctx["cwd"] === "string" ? ctx["cwd"] : null,
@@ -160,6 +171,7 @@ function extractWorkerContext(
       ? (ctx["filePaths"] as Array<{ path: string; type: string }>)
       : undefined,
     urls: Array.isArray(ctx["urls"]) ? (ctx["urls"] as string[]) : undefined,
+    sourceSummary,
   };
 }
 
@@ -263,6 +275,7 @@ async function storeDeterministicFallback(
   fallbackReason?: string,
 ): Promise<void> {
   const catalogSummary = detectProductCatalogSummary(csvParseResult.payload);
+  const supplierName = supplierNameForSummary(csvParseResult.payload);
 
   const insertStartMs = Date.now();
   try {
@@ -289,6 +302,7 @@ async function storeDeterministicFallback(
       errorCode: null,
       errorMessage: null,
       summary: {
+        ...ctx.sourceSummary,
         totalProductsFound: csvParseResult.productCount,
         agentStatus: "fallback_deterministic",
         numTurns: 0,
@@ -302,6 +316,7 @@ async function storeDeterministicFallback(
           schemaType: catalogSummary.schemaType,
           schemaVersion: catalogSummary.schemaVersion,
         }),
+        supplierName,
         _timing: {
           preparseMs,
           ...(typeof agentDurationMs === "number" && { agentDurationMs }),
@@ -402,6 +417,7 @@ export async function processFileIqJob(
       const parseStartMs = Date.now();
       let validationPayload: Record<string, unknown> = {};
       const catalogSummary = detectProductCatalogSummary(csvParseResult.payload);
+      const supplierName = supplierNameForSummary(csvParseResult.payload);
       let parseMode = "none";
 
       if (agentResult.resultText) {
@@ -495,6 +511,7 @@ export async function processFileIqJob(
           errorCode: null,
           errorMessage: null,
           summary: {
+            ...ctx.sourceSummary,
             totalProductsFound,
             agentStatus: agentResult.status,
             numTurns: agentResult.numTurns,
@@ -508,6 +525,7 @@ export async function processFileIqJob(
               schemaType: catalogSummary.schemaType,
               schemaVersion: catalogSummary.schemaVersion,
             }),
+            supplierName,
             _timing: {
               preparseMs,
               agentDurationMs,
@@ -558,9 +576,9 @@ export async function processFileIqJob(
     await updateFileIqExtractionJob(jobId, {
       status: "failed",
       agentSessionId: null,
-      errorCode: "agent_exception",
-      errorMessage: msg,
-      summary: { _timing: { agentDurationMs: Date.now() - agentStartMs, totalMs } },
+          errorCode: "agent_exception",
+          errorMessage: msg,
+      summary: { ...ctx.sourceSummary, _timing: { agentDurationMs: Date.now() - agentStartMs, totalMs } },
     }).catch((dbErr: unknown) => {
       console.error(
         `${LOG} jobId=${jobId} | DB update failed after agent throw | error=${normalizeError(dbErr)}`,
@@ -599,6 +617,7 @@ export async function processFileIqJob(
       catalogSummary = detectProductCatalogSummary(extractedPayload);
     }
   }
+  const supplierName = catalogSummary !== null ? supplierNameForSummary(extractedPayload) : UNKNOWN_SUPPLIER;
 
   const parseDurationMs = Date.now() - parseStartMs;
   console.log(
@@ -657,6 +676,7 @@ export async function processFileIqJob(
       errorCode: agentResult.errorCode,
       errorMessage: agentResult.errorMessage,
       summary: {
+        ...ctx.sourceSummary,
         totalProductsFound,
         agentStatus: agentResult.status,
         numTurns: agentResult.numTurns,
@@ -664,6 +684,7 @@ export async function processFileIqJob(
           schemaType: catalogSummary.schemaType,
           schemaVersion: catalogSummary.schemaVersion,
         }),
+        supplierName,
         _timing: {
           agentDurationMs,
           parseDurationMs,
@@ -682,6 +703,7 @@ export async function processFileIqJob(
 
 async function runWorkerLoop(): Promise<void> {
   console.log(`${LOG} started | poll_interval_ms=${POLL_INTERVAL_MS}`);
+  warnIfFirecrawlMissing();
 
   for (;;) {
     let job;
