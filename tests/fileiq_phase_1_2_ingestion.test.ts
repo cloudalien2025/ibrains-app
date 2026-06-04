@@ -372,6 +372,51 @@ describe("Phase 1.2 nav and schema state", () => {
   });
 });
 
+// ─── Prompt schema version contract ──────────────────────────────────────────
+
+describe("POST /api/fileiq/ingest — product catalog prompt schema version", () => {
+  async function captureAgentPrompt(fd: FormData): Promise<string> {
+    let capturedSummary: Record<string, unknown> | undefined;
+    mocks.insertFileIqExtractionJob.mockImplementation(
+      (row: { summary: Record<string, unknown> }) => {
+        capturedSummary = row.summary;
+        return Promise.resolve();
+      },
+    );
+    const req = new NextRequest("https://app.ibrains.ai/api/fileiq/ingest", { method: "POST", body: fd });
+    await ingestPost(req);
+    return (capturedSummary!["_worker"] as Record<string, unknown>)["agentPrompt"] as string;
+  }
+
+  it("agentPrompt instructs agent to output schemaVersion 1.1 for catalog intent", async () => {
+    signedIn();
+    const fd = makeFormData({
+      urls: JSON.stringify(["https://example.com/catalog.pdf"]),
+      intent: "Return a valid FileIQ product_catalog v1.1 JSON envelope",
+    });
+    const agentPrompt = await captureAgentPrompt(fd);
+    expect(agentPrompt).toContain('"schemaVersion": "1.1"');
+  });
+
+  it("agentPrompt does not reference schema v1.0 or schemaVersion 1.0", async () => {
+    signedIn();
+    const fd = makeFormData({ urls: JSON.stringify(["https://example.com/catalog.pdf"]) });
+    const agentPrompt = await captureAgentPrompt(fd);
+    expect(agentPrompt).not.toContain("schema v1.0");
+    expect(agentPrompt).not.toContain('"schemaVersion": "1.0"');
+  });
+
+  it("agentPrompt schema example includes coaExpiryDate (v1.1 assets field)", async () => {
+    signedIn();
+    const fd = makeFormData({
+      urls: JSON.stringify(["https://example.com/catalog.pdf"]),
+      intent: "extract product catalog",
+    });
+    const agentPrompt = await captureAgentPrompt(fd);
+    expect(agentPrompt).toContain("coaExpiryDate");
+  });
+});
+
 // ─── Proxy route protection ───────────────────────────────────────────────────
 
 describe("proxy.ts — /api/fileiq auth protection", () => {

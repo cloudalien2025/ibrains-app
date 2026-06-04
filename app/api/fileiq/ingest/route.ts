@@ -68,7 +68,7 @@ function isProductCatalogIntent(params: {
 const CATALOG_SCHEMA_EXAMPLE = JSON.stringify(
   {
     schemaType: "product_catalog",
-    schemaVersion: "1.0",
+    schemaVersion: "1.1",
     supplier: {
       supplierId: "acme-co",
       supplierName: "Acme Co",
@@ -143,6 +143,7 @@ const CATALOG_SCHEMA_EXAMPLE = JSON.stringify(
           coaUrls: [],
           sheetUrls: [],
           videoUrls: [],
+          coaExpiryDate: null,
         },
         shipping: {
           shipsFromState: null,
@@ -153,7 +154,7 @@ const CATALOG_SCHEMA_EXAMPLE = JSON.stringify(
           internationalAvailable: null,
           hazmat: null,
         },
-        agenticVisibility: { priorityScore: null, tags: [], relatedSkus: [], bundleSuggestions: [], notes: null },
+        agenticVisibility: { priorityScore: null, tags: [], relatedSkus: [], bundleSuggestions: [], notes: null, certifications: [] },
         seo: { metaTitle: null, metaDescription: null, keywords: [], canonicalUrl: null },
         policy: { refundWindowDays: null, refundType: null, returnShippingPaidBy: null, policyNotes: null },
         extraction: { sourceRef: "page 1", sourceFileId: null, extractedAt: null, confidence: null, extractionNotes: null },
@@ -203,11 +204,12 @@ function buildExtractionPrompt(params: {
 
   if (isProductCatalogIntent(params)) {
     lines.push(
-      "TASK: Extract every product you can find across all sources and return a FileIQ Product Catalog (schema v1.0).",
+      "TASK: Extract every product you can find across all sources and return a FileIQ Product Catalog (schema v1.1).",
       "",
       "Output ONLY valid JSON matching the exact shape below (no markdown, no code fence).",
-      "Set schemaType to \"product_catalog\" and schemaVersion to \"1.0\".",
+      "Set schemaType to \"product_catalog\" and schemaVersion to \"1.1\".",
       "Populate every field you can find in the source. Set unknown fields to null or [].",
+      "If the source is inventory-only (no product catalog), populate inventory, sku, and productName where available; set all other product fields to null or empty arrays.",
       "Ground every fact in the source — never invent values.",
     );
 
