@@ -422,7 +422,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         agentPrompt,
         cwd: fileEntries.length > 0 ? tempDir : null,
         additionalDirectories: fileEntries.length > 0 ? [tempDir] : [],
-        maxTurns: 12,
+        maxTurns: 40,
       },
     },
   });

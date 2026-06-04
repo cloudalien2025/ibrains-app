@@ -16,13 +16,15 @@ const mocks = vi.hoisted(() => ({
   runFileIqExtractionAgent: vi.fn(),
 }));
 
-vi.mock("@/lib/fileiq/fileiq-db", () => ({
+// Mock the core modules — these are the paths the worker actually imports
+// from (server-only-free) in production.
+vi.mock("@/lib/fileiq/fileiq-db-core", () => ({
   claimFileIqPendingJob: mocks.claimFileIqPendingJob,
   updateFileIqExtractionJob: mocks.updateFileIqExtractionJob,
   insertFileIqRawExtraction: mocks.insertFileIqRawExtraction,
 }));
 
-vi.mock("@/lib/fileiq/agent/fileiq-agent", () => ({
+vi.mock("@/lib/fileiq/agent/fileiq-agent-core", () => ({
   runFileIqExtractionAgent: mocks.runFileIqExtractionAgent,
 }));
 
@@ -37,7 +39,7 @@ function makeClaimedJob(overrides: Partial<{ id: string; bundleId: string; agent
         agentPrompt: overrides.agentPrompt ?? "Extract products from this supplier catalog.",
         cwd: null,
         additionalDirectories: [],
-        maxTurns: 12,
+        maxTurns: 40,
       },
     },
   };
@@ -85,16 +87,13 @@ function agentFailed() {
   });
 }
 
-// Import the processJob helper — we test the exported helper directly.
-// The full worker loop is not imported here (it starts a poll loop).
+// Import the processJob helper — we test the observable side effects via the
+// mock DB/agent calls by invoking the worker's logic through a thin wrapper
+// that mimics what runWorkerLoop does for a single claimed job.
 async function importProcessJob() {
-  // processJob is not exported by the worker script directly.
-  // We test the observable side effects via the mock DB/agent calls
-  // by invoking the worker's logic through a thin wrapper that mimics
-  // what runWorkerLoop does for a single claimed job.
   const { claimFileIqPendingJob, updateFileIqExtractionJob, insertFileIqRawExtraction } =
-    await import("@/lib/fileiq/fileiq-db");
-  const { runFileIqExtractionAgent } = await import("@/lib/fileiq/agent/fileiq-agent");
+    await import("@/lib/fileiq/fileiq-db-core");
+  const { runFileIqExtractionAgent } = await import("@/lib/fileiq/agent/fileiq-agent-core");
 
   return async function processJobUnderTest(
     jobId: string,
@@ -196,12 +195,73 @@ beforeEach(() => {
   mocks.insertFileIqRawExtraction.mockResolvedValue(undefined);
 });
 
+// ─── Node importability regression ───────────────────────────────────────────
+// These tests verify the core modules are importable in a standalone Node
+// environment (i.e. without the Next.js server-only guard). If either core
+// module re-introduces `import "server-only"` the worker will crash-loop.
+//
+// vi.importActual bypasses the mock factory so we test the real module exports,
+// not the mock stubs — that's the point of this regression suite.
+
+describe("fileiq-db-core — Node importability regression", () => {
+  it("exports claimFileIqPendingJob without server-only restriction", async () => {
+    const mod = await vi.importActual<typeof import("@/lib/fileiq/fileiq-db-core")>(
+      "@/lib/fileiq/fileiq-db-core",
+    );
+    expect(typeof mod.claimFileIqPendingJob).toBe("function");
+  });
+
+  it("exports updateFileIqExtractionJob without server-only restriction", async () => {
+    const mod = await vi.importActual<typeof import("@/lib/fileiq/fileiq-db-core")>(
+      "@/lib/fileiq/fileiq-db-core",
+    );
+    expect(typeof mod.updateFileIqExtractionJob).toBe("function");
+  });
+
+  it("exports insertFileIqRawExtraction without server-only restriction", async () => {
+    const mod = await vi.importActual<typeof import("@/lib/fileiq/fileiq-db-core")>(
+      "@/lib/fileiq/fileiq-db-core",
+    );
+    expect(typeof mod.insertFileIqRawExtraction).toBe("function");
+  });
+
+  it("exports listRecentFileIqJobs without server-only restriction", async () => {
+    const mod = await vi.importActual<typeof import("@/lib/fileiq/fileiq-db-core")>(
+      "@/lib/fileiq/fileiq-db-core",
+    );
+    expect(typeof mod.listRecentFileIqJobs).toBe("function");
+  });
+});
+
+describe("fileiq-agent-core — Node importability regression", () => {
+  it("exports runFileIqExtractionAgent without server-only restriction", async () => {
+    const mod = await vi.importActual<typeof import("@/lib/fileiq/agent/fileiq-agent-core")>(
+      "@/lib/fileiq/agent/fileiq-agent-core",
+    );
+    expect(typeof mod.runFileIqExtractionAgent).toBe("function");
+  });
+
+  it("exports buildFileIqAgentOptions without server-only restriction", async () => {
+    const mod = await vi.importActual<typeof import("@/lib/fileiq/agent/fileiq-agent-core")>(
+      "@/lib/fileiq/agent/fileiq-agent-core",
+    );
+    expect(typeof mod.buildFileIqAgentOptions).toBe("function");
+  });
+
+  it("exports resolveFileIqAgentApiKey without server-only restriction", async () => {
+    const mod = await vi.importActual<typeof import("@/lib/fileiq/agent/fileiq-agent-core")>(
+      "@/lib/fileiq/agent/fileiq-agent-core",
+    );
+    expect(typeof mod.resolveFileIqAgentApiKey).toBe("function");
+  });
+});
+
 // ─── claimFileIqPendingJob DB contract ───────────────────────────────────────
 
 describe("claimFileIqPendingJob — DB contract", () => {
   it("returns null when no pending jobs exist", async () => {
     mocks.claimFileIqPendingJob.mockResolvedValue(null);
-    const { claimFileIqPendingJob } = await import("@/lib/fileiq/fileiq-db");
+    const { claimFileIqPendingJob } = await import("@/lib/fileiq/fileiq-db-core");
     const result = await claimFileIqPendingJob();
     expect(result).toBeNull();
   });
@@ -209,7 +269,7 @@ describe("claimFileIqPendingJob — DB contract", () => {
   it("returns a claimed job with id, bundleId, and summary", async () => {
     const job = makeClaimedJob();
     mocks.claimFileIqPendingJob.mockResolvedValue(job);
-    const { claimFileIqPendingJob } = await import("@/lib/fileiq/fileiq-db");
+    const { claimFileIqPendingJob } = await import("@/lib/fileiq/fileiq-db-core");
     const result = await claimFileIqPendingJob();
     expect(result).not.toBeNull();
     expect(result!.id).toBe("job_worker_1");
@@ -220,10 +280,19 @@ describe("claimFileIqPendingJob — DB contract", () => {
   it("claimed job summary contains _worker.agentPrompt string", async () => {
     const job = makeClaimedJob({ agentPrompt: "Extract SKUs from this file." });
     mocks.claimFileIqPendingJob.mockResolvedValue(job);
-    const { claimFileIqPendingJob } = await import("@/lib/fileiq/fileiq-db");
+    const { claimFileIqPendingJob } = await import("@/lib/fileiq/fileiq-db-core");
     const result = await claimFileIqPendingJob();
     const workerCtx = result!.summary["_worker"] as Record<string, unknown>;
     expect(workerCtx["agentPrompt"]).toBe("Extract SKUs from this file.");
+  });
+
+  it("_worker context stores maxTurns=40 for large catalog jobs", async () => {
+    const job = makeClaimedJob();
+    mocks.claimFileIqPendingJob.mockResolvedValue(job);
+    const { claimFileIqPendingJob } = await import("@/lib/fileiq/fileiq-db-core");
+    const result = await claimFileIqPendingJob();
+    const workerCtx = result!.summary["_worker"] as Record<string, unknown>;
+    expect(workerCtx["maxTurns"]).toBe(40);
   });
 });
 
@@ -233,7 +302,7 @@ describe("worker processJob — agent success", () => {
   it("calls runFileIqExtractionAgent with jobId, bundleId, and agentPrompt from summary", async () => {
     agentSuccess();
     const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "Extract products.", null, [], 12);
+    await processJob("job_1", "bundle_1", "Extract products.", null, [], 40);
 
     const agentCall = mocks.runFileIqExtractionAgent.mock.calls[0] as [
       { jobId: string; bundleId: string; prompt: string; maxTurns: number },
@@ -241,13 +310,13 @@ describe("worker processJob — agent success", () => {
     expect(agentCall[0].jobId).toBe("job_1");
     expect(agentCall[0].bundleId).toBe("bundle_1");
     expect(agentCall[0].prompt).toBe("Extract products.");
-    expect(agentCall[0].maxTurns).toBe(12);
+    expect(agentCall[0].maxTurns).toBe(40);
   });
 
   it("inserts a raw_extraction record on success", async () => {
     agentSuccess();
     const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 12);
+    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
 
     expect(mocks.insertFileIqRawExtraction).toHaveBeenCalledTimes(1);
     const rawCall = (mocks.insertFileIqRawExtraction.mock.calls[0] as [
@@ -260,7 +329,7 @@ describe("worker processJob — agent success", () => {
   it("updates job to status=completed on agent success", async () => {
     agentSuccess();
     const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 12);
+    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
 
     expect(mocks.updateFileIqExtractionJob).toHaveBeenCalledTimes(1);
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
@@ -274,7 +343,7 @@ describe("worker processJob — agent success", () => {
   it("persists totalProductsFound=1 from parsed agent result", async () => {
     agentSuccess();
     const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 12);
+    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
 
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
       string,
@@ -293,7 +362,7 @@ describe("worker processJob — agent success", () => {
       extractionNotes: "ok",
     }));
     const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 12);
+    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
 
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
       string,
@@ -310,7 +379,7 @@ describe("worker processJob — agent unavailable (missing API key)", () => {
   it("inserts a raw_extraction record even when agent is unavailable", async () => {
     agentUnavailable();
     const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 12);
+    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
 
     expect(mocks.insertFileIqRawExtraction).toHaveBeenCalledTimes(1);
   });
@@ -318,7 +387,7 @@ describe("worker processJob — agent unavailable (missing API key)", () => {
   it("updates job to status=failed when agent returns unavailable", async () => {
     agentUnavailable();
     const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 12);
+    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
 
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
       string,
@@ -336,7 +405,7 @@ describe("worker processJob — agent failed (non-success terminal result)", () 
   it("updates job to status=failed when agent returns failed", async () => {
     agentFailed();
     const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 12);
+    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
 
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
       string,
@@ -353,7 +422,7 @@ describe("worker processJob — agent throws exception", () => {
   it("updates job to status=failed with errorCode=agent_exception when agent throws", async () => {
     mocks.runFileIqExtractionAgent.mockRejectedValue(new Error("Subprocess spawn failed: ENOENT"));
     const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 12);
+    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
 
     expect(mocks.updateFileIqExtractionJob).toHaveBeenCalledTimes(1);
     const updateCall = (mocks.updateFileIqExtractionJob.mock.calls[0] as [
@@ -368,7 +437,7 @@ describe("worker processJob — agent throws exception", () => {
   it("does NOT insert a raw_extraction record when agent throws", async () => {
     mocks.runFileIqExtractionAgent.mockRejectedValue(new Error("spawn error"));
     const processJob = await importProcessJob();
-    await processJob("job_1", "bundle_1", "prompt", null, [], 12);
+    await processJob("job_1", "bundle_1", "prompt", null, [], 40);
 
     expect(mocks.insertFileIqRawExtraction).not.toHaveBeenCalled();
   });

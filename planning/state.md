@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-06-04 (UTC) — FileIQ worker job lifecycle fix
+Last updated: 2026-06-04 (UTC) — FileIQ worker server-only crash-loop fix + maxTurns raise
 
 ## Program Status
 
@@ -73,7 +73,8 @@ Last updated: 2026-06-04 (UTC) — FileIQ worker job lifecycle fix
 - FileIQ Phase 1.3 Canonical Product Schema v1.0 + Schema Badges: Completed (4 direct-to-main commits, HEAD `f0b7571`, production deployed). Wired `FileIqProductCatalogV1` TypeScript schema (`lib/fileiq/schema/product-catalog-v1.ts` + `index.ts`) with all nested interfaces and enums (`CURRENT_SCHEMA_VERSION = "1.0"`). Updated `buildExtractionPrompt` to detect product/catalog intent via 7 keywords and emit the full v1.0 JSON shape so the agent outputs `schemaType: "product_catalog"` / `schemaVersion: "1.0"`; non-product intents keep existing flexible format. POST handler detects and validates the catalog schema on parse; stamps `summary.schemaType` / `summary.schemaVersion` in the DB for downstream brain queries. Purple "Catalog v1.0" badge surfaces in both the Command Center job list (client) and the Extraction Jobs SSR page. Also added conversational intent field to Command Center (`21bd4ee`) and async ingest success state feedback. No DB schema changes; no frontend breaking changes.
 - CI Fast-Path Deploy Fix + Concurrency Lock: Completed (direct-to-main, commit `049ce67`). Fixed `next: not found` (exit 127) on fast-path deploys by adding `npm ci --omit=dev` after artifact extraction so `node_modules/.bin/next` is present before service restart. Added `resource_group: production-deploy` to both `deploy_production_fast` and `deploy_production` to serialize concurrent pipeline deploys. Contract test extended with 2 new assertions; 4/4 tests green.
 - FileIQ Worker Job Lifecycle Fix: Completed and merged (`fix/fileiq-worker-job-lifecycle`, merge SHA `d69b50d`, remote + local branch deleted). Replaced unreliable fire-and-forget with a dedicated `fileiq-worker` process. **Post-deploy action required: install `fileiq-worker.service` on production (see Sprint Closure below).**
-- Current recommended sprint: Install `fileiq-worker.service` on production to activate FileIQ extraction, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Main is clean at `d69b50d`.
+- FileIQ Worker server-only crash-loop fix: In progress (`fix/fileiq-worker-top-level-await`, commit `f680e4f`, MR pending pipeline). Extracted `fileiq-db-core.ts` + `fileiq-agent-core.ts` (no server-only); wrapper files re-export for Next.js routes; worker imports from core modules; maxTurns raised 12→40 for large catalog jobs; 7 Node-importability regression tests added; 52/52 FileIQ tests pass.
+- Current recommended sprint: Merge `fix/fileiq-worker-top-level-await` after green pipeline, restart `fileiq-worker.service` on production, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`.
 
 ## Sprint Closure Update: FileIQ Worker Job Lifecycle Fix
 
