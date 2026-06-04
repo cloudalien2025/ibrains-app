@@ -1,6 +1,6 @@
 # Planning State
 
-Last updated: 2026-06-04 (UTC) — FileIQ worker server-only crash-loop fix + maxTurns raise
+Last updated: 2026-06-04 (UTC) — FileIQ worker server-only crash-loop fix + maxTurns raise (DELIVERED)
 
 ## Program Status
 
@@ -73,8 +73,33 @@ Last updated: 2026-06-04 (UTC) — FileIQ worker server-only crash-loop fix + ma
 - FileIQ Phase 1.3 Canonical Product Schema v1.0 + Schema Badges: Completed (4 direct-to-main commits, HEAD `f0b7571`, production deployed). Wired `FileIqProductCatalogV1` TypeScript schema (`lib/fileiq/schema/product-catalog-v1.ts` + `index.ts`) with all nested interfaces and enums (`CURRENT_SCHEMA_VERSION = "1.0"`). Updated `buildExtractionPrompt` to detect product/catalog intent via 7 keywords and emit the full v1.0 JSON shape so the agent outputs `schemaType: "product_catalog"` / `schemaVersion: "1.0"`; non-product intents keep existing flexible format. POST handler detects and validates the catalog schema on parse; stamps `summary.schemaType` / `summary.schemaVersion` in the DB for downstream brain queries. Purple "Catalog v1.0" badge surfaces in both the Command Center job list (client) and the Extraction Jobs SSR page. Also added conversational intent field to Command Center (`21bd4ee`) and async ingest success state feedback. No DB schema changes; no frontend breaking changes.
 - CI Fast-Path Deploy Fix + Concurrency Lock: Completed (direct-to-main, commit `049ce67`). Fixed `next: not found` (exit 127) on fast-path deploys by adding `npm ci --omit=dev` after artifact extraction so `node_modules/.bin/next` is present before service restart. Added `resource_group: production-deploy` to both `deploy_production_fast` and `deploy_production` to serialize concurrent pipeline deploys. Contract test extended with 2 new assertions; 4/4 tests green.
 - FileIQ Worker Job Lifecycle Fix: Completed and merged (`fix/fileiq-worker-job-lifecycle`, merge SHA `d69b50d`, remote + local branch deleted). Replaced unreliable fire-and-forget with a dedicated `fileiq-worker` process. **Post-deploy action required: install `fileiq-worker.service` on production (see Sprint Closure below).**
-- FileIQ Worker server-only crash-loop fix: In progress (`fix/fileiq-worker-top-level-await`, commit `f680e4f`, MR pending pipeline). Extracted `fileiq-db-core.ts` + `fileiq-agent-core.ts` (no server-only); wrapper files re-export for Next.js routes; worker imports from core modules; maxTurns raised 12→40 for large catalog jobs; 7 Node-importability regression tests added; 52/52 FileIQ tests pass.
-- Current recommended sprint: Merge `fix/fileiq-worker-top-level-await` after green pipeline, restart `fileiq-worker.service` on production, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`.
+- FileIQ Worker server-only crash-loop fix: Completed and merged (`fix/fileiq-worker-top-level-await`, merge SHA `c95bc5f`, remote + local branch deleted). Extracted `fileiq-db-core.ts` + `fileiq-agent-core.ts` (no `server-only`); wrapper files re-export for Next.js routes; worker imports from core modules; maxTurns raised 12→40 for large catalog jobs; 7 Node-importability regression tests added; 52/52 FileIQ tests pass. **Post-deploy action required: `systemctl restart fileiq-worker` on production server.**
+- Current recommended sprint: Restart `fileiq-worker.service` on production (`systemctl restart fileiq-worker`) to pick up the new binaries, then `Dead Export & Import Cleanup (EcomViper + Brains)` — QUEUED and ready for a builder (see sprint pack above), then `Test-Only Orphan Modules` and `Stale DirectoryIQ Docs Audit`. Main is clean at `c95bc5f`.
+
+## Sprint Closure Update: FileIQ Worker server-only Crash-Loop Fix + maxTurns Raise
+
+- Branch: `fix/fileiq-worker-top-level-await`
+- Date: `2026-06-04 (UTC)`
+- Status: `DELIVERED` — merge SHA `c95bc5f`, remote + local branch deleted
+- Root cause: `fileiq-worker.service` (standalone tsx) imported `lib/fileiq/fileiq-db.ts` and `lib/fileiq/agent/fileiq-agent.ts`, both of which have `import "server-only"` at the top. In a non-Next.js runtime the `server-only` guard throws immediately with `Error: This module cannot be imported from a Client Component module`, causing the service to crash-loop on every restart.
+- Delivered scope:
+  - `lib/fileiq/fileiq-db-core.ts`: new — all DB interfaces + helpers (`insertFileIqSourceBundle`, `insertFileIqSourceFile`, `insertFileIqExtractionJob`, `updateFileIqExtractionJob`, `insertFileIqRawExtraction`, `claimFileIqPendingJob`, `listRecentFileIqJobs`) with no `server-only` import; worker-safe
+  - `lib/fileiq/fileiq-db.ts`: replaced with 2-line wrapper (`import "server-only"` + `export * from "./fileiq-db-core"`); Next.js app routes continue importing this and retain the server-only guard
+  - `lib/fileiq/agent/fileiq-agent-core.ts`: new — all agent types + functions (`buildFileIqAgentOptions`, `resolveFileIqAgentApiKey`, `runFileIqExtractionAgent`, constants, interfaces) with no `server-only` import; worker-safe
+  - `lib/fileiq/agent/fileiq-agent.ts`: replaced with 2-line wrapper (`import "server-only"` + `export * from "./fileiq-agent-core"`)
+  - `scripts/fileiq-worker.ts`: imports updated from `fileiq-db` → `fileiq-db-core` and `fileiq-agent` → `fileiq-agent-core`; fallback `maxTurns` raised 12 → 40 for jobs created before this fix
+  - `app/api/fileiq/ingest/route.ts`: `_worker.maxTurns` raised 12 → 40; new catalog ingest jobs now allow 40 agent turns (prior job hit `error_max_turns` at 13 turns on 5-file Rocktomic catalog)
+  - `tests/fileiq_worker.test.ts`: mocks updated to target `*-core` module paths; `makeClaimedJob` fixture updated with `maxTurns: 40`; 7 new `Node importability regression` tests using `vi.importActual` verify the core modules export the expected functions without crashing
+- Test result: 52/52 FileIQ tests pass
+- Boundary confirmation:
+  - no DB schema changes
+  - no migrations
+  - no EcomViper / Walmart / Shopify / DirectoryIQ code changes
+  - no auto-save/publish
+  - no model call during page render
+  - FileIQ schema contract v1.1 unchanged
+  - Next.js app routes (`ingest`, `jobs`, extraction-jobs page) continue importing from the `server-only` wrapper files — unchanged behavior
+- **Post-deploy action required:** `systemctl restart fileiq-worker` on production server to load the new worker binary. After restart, the worker will immediately start processing new ingest jobs without crash-looping.
 
 ## Sprint Closure Update: FileIQ Worker Job Lifecycle Fix
 
