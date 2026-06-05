@@ -13,7 +13,15 @@ function listWorkflowFiles() {
 
 describe("GitHub Vercel retirement contract", () => {
   it("keeps Vercel out of active GitHub workflow and package deployment config", () => {
-    expect(fs.existsSync(path.join(process.cwd(), "vercel.json"))).toBe(false);
+    const vercelConfigPath = path.join(process.cwd(), "vercel.json");
+    expect(fs.existsSync(vercelConfigPath)).toBe(true);
+
+    const vercelConfig = JSON.parse(fs.readFileSync(vercelConfigPath, "utf8")) as {
+      git?: { deploymentEnabled?: boolean };
+      github?: { silent?: boolean };
+    };
+    expect(vercelConfig.git?.deploymentEnabled).toBe(false);
+    expect(vercelConfig.github?.silent).toBe(true);
 
     for (const workflowPath of listWorkflowFiles()) {
       const workflow = fs.readFileSync(workflowPath, "utf8");

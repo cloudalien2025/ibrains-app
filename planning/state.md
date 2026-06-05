@@ -5,7 +5,7 @@ Last updated: 2026-06-05 (UTC) — GitHub Vercel retirement flow update (IN PROG
 ## Program Status
 
 - Track: `iBrains multi-app planning architecture and scoped sprint delivery`.
-- GitHub Vercel Integration Retirement: In progress (`chore/remove-vercel-github-flow`). Root cause: GitHub PR `#407` shows a failing external Vercel status even though iBrains production now runs on the DigitalOcean/server systemd path. Repository ruleset `main` currently requires only the GitHub `build` check, not Vercel; repo changes remove the remaining runtime Vercel environment dependency and document that Vercel must not be a required GitHub merge check. Production deploy authority remains `/root/ibrains-app` with `git fetch/reset main`, `npm ci --omit=dev`, migrations, and restarts for `ibrains-app.service` plus `fileiq-worker`.
+- GitHub Vercel Integration Retirement: In progress (`chore/remove-vercel-github-flow`, PR `#408`). Root cause: GitHub PR `#407` shows a failing external Vercel status even though iBrains production now runs on the DigitalOcean/server systemd path. Repository ruleset `main` currently requires only the GitHub `build` check, not Vercel; repo changes add `vercel.json` with Vercel Git deployments disabled, remove the remaining runtime Vercel environment dependency, and document that Vercel must not be a required GitHub merge check. Production deploy authority remains `/root/ibrains-app` with `git fetch/reset main`, `npm ci --omit=dev`, migrations, and restarts for `ibrains-app.service` plus `fileiq-worker`.
 - Sprint 001: Completed (stabilization scope).
 - Sprint 002: Completed (capability detection + telemetry scope).
 - Sprint 003: Completed (deterministic extraction precedence + extraction-source metadata + stable warning codes).

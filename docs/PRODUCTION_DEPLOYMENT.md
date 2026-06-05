@@ -7,7 +7,7 @@
 ## Authoritative Deploy Path
 - Production deploy authority is `.gitlab-ci.yml`.
 - GitHub Actions deploy orchestration is retired for this repository.
-- Vercel preview and production deployments are retired for this repository and must not be required GitHub merge checks.
+- Vercel preview and production deployments are retired for this repository and must not be required GitHub merge checks. `vercel.json` explicitly sets `git.deploymentEnabled` to `false` and silences Vercel GitHub comments/status noise for any still-installed external integration.
 - Merges to the GitLab default branch build a release artifact, write release metadata, deploy over SSH, and run frontdoor integrity smoke checks before the deploy is considered healthy.
 - Production runs from `/root/ibrains-app` on the DigitalOcean/server host under `ibrains-app.service` and `fileiq-worker`.
 
