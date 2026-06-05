@@ -25,14 +25,13 @@ function isTruthyFlag(value: string | undefined): boolean {
 
 export function getSiteForgeStoragePolicy(): SiteForgeStoragePolicy {
   const nodeEnv = (process.env.NODE_ENV ?? "").trim().toLowerCase();
-  const vercelEnv = (process.env.VERCEL_ENV ?? "").trim().toLowerCase();
   const appEnv = (process.env.APP_ENV ?? "").trim().toLowerCase();
   const fallbackFlag = isTruthyFlag(process.env.SITEFORGE_ALLOW_MEMORY_FALLBACK);
 
   const runtimeEnv: SiteForgeRuntimeEnv =
     nodeEnv === "test"
       ? "test"
-      : nodeEnv === "production" || vercelEnv === "production" || appEnv === "production"
+      : nodeEnv === "production" || appEnv === "production"
         ? "production"
         : "development";
 

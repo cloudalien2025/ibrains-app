@@ -82,5 +82,7 @@ Open `http://localhost:3000` for local development.
 
 - Route-signature guard: `scripts/check_route_signatures.sh`
 - Release metadata endpoint: `GET /api/meta/release` (alias `GET /api/_meta/release`)
+- Production deploys run on the DigitalOcean/server systemd flow from `/root/ibrains-app`; Vercel is retired and must not be a required GitHub merge check.
+- Production services: `ibrains-app.service` and `fileiq-worker`; after syncing `main`, run migrations, install production dependencies, and restart both services.
 
 Use `planning/state.md` as the continuity handoff before starting or ending any sprint.

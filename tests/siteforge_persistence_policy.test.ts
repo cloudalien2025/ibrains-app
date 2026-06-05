@@ -75,6 +75,24 @@ describe("siteforge persistence policy", () => {
     expect(summary.fallbackActive).toBe(true);
   });
 
+  it("ignores retired Vercel environment flags for runtime policy", async () => {
+    process.env.NODE_ENV = "development";
+    process.env.VERCEL_ENV = "production";
+    process.env.SITEFORGE_ALLOW_MEMORY_FALLBACK = "1";
+
+    const pool = {
+      query: vi.fn().mockRejectedValue(new Error("db down")),
+    };
+
+    const { getSiteForgeRepository } = await importRepositoryWithPool(pool);
+    const repo = await getSiteForgeRepository();
+    const summary = await repo.getAdminSummary();
+
+    expect(summary.storageMode).toBe("memory");
+    expect(summary.fallbackAllowed).toBe(true);
+    expect(summary.fallbackActive).toBe(true);
+  });
+
   it("keeps healthy postgres mode when tables are available", async () => {
     process.env.NODE_ENV = "production";
 
