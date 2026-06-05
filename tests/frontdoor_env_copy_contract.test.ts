@@ -9,6 +9,6 @@ describe("front door environment copy contract", () => {
 
     expect(source.includes("NEXT_PUBLIC_WORKER_URL")).toBe(true);
     expect(source.includes("Vercel env vars")).toBe(false);
-    expect(source.includes("in the app environment")).toBe(true);
+    expect(source.includes("DEFAULT_WORKER_URL")).toBe(true);
   });
 });

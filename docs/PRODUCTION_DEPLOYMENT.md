@@ -1,4 +1,4 @@
-# Production Deployment (GitLab Authority)
+# Production Deployment (GitLab + systemd Authority)
 
 ## Domain
 - app.ibrains.ai
@@ -7,7 +7,9 @@
 ## Authoritative Deploy Path
 - Production deploy authority is `.gitlab-ci.yml`.
 - GitHub Actions deploy orchestration is retired for this repository.
+- Vercel preview and production deployments are retired for this repository and must not be required GitHub merge checks.
 - Merges to the GitLab default branch build a release artifact, write release metadata, deploy over SSH, and run frontdoor integrity smoke checks before the deploy is considered healthy.
+- Production runs from `/root/ibrains-app` on the DigitalOcean/server host under `ibrains-app.service` and `fileiq-worker`.
 
 ## GitLab CI Variables
 - `DEPLOY_HOST`
@@ -18,25 +20,30 @@
 - `SERVICE_NAME` (optional, defaults to `ibrains-app`)
 - `DEPLOY_KNOWN_HOSTS` (optional, recommended)
 
-## Manual Build + Start
+## Manual Production Sync
 ```bash
 cd /root/ibrains-app
-npm ci
-rm -rf .next
-npm run build
-bash scripts/apply_directoryiq_schema.sh
-sudo systemctl restart ibrains-app
-sudo systemctl status ibrains-app --no-pager
+git fetch origin main
+git reset --hard origin/main
+npm ci --omit=dev
+npm run ecommerce:migrate
+sudo systemctl restart ibrains-app.service
+sudo systemctl restart fileiq-worker
+sudo systemctl status ibrains-app.service --no-pager
+sudo systemctl status fileiq-worker --no-pager
+sudo systemctl show fileiq-worker -p NRestarts -p ActiveState -p SubState -p ExecMainStatus
 ```
 
 Clean `.next` before production builds. Next/Turbopack can leave stale client-manifest or external-package artifacts after repeated hotfix builds; a clean build prevents blank-screen/client-manifest failures after deploy.
 
 ## Service Management
 ```bash
-sudo systemctl start ibrains-app
-sudo systemctl stop ibrains-app
-sudo systemctl restart ibrains-app
-sudo systemctl is-active ibrains-app
+sudo systemctl start ibrains-app.service
+sudo systemctl stop ibrains-app.service
+sudo systemctl restart ibrains-app.service
+sudo systemctl is-active ibrains-app.service
+sudo systemctl restart fileiq-worker
+sudo systemctl status fileiq-worker --no-pager
 ```
 
 ## Logs
